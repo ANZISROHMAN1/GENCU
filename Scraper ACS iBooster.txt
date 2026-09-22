@@ -1,0 +1,311 @@
+// ==UserScript==
+// @name         Scraper ACS iBooster - Ukur Massal (V2.0)
+// @namespace    http://tampermonkey.net/
+// @version      2.0
+// @description  Otomatis mengukur nomor internet ribuan sekaligus di dbaccess-ibooster
+// @author       Anda
+// @match        *://dbaccess-ibooster.telkom.co.id/*
+// @grant        none
+// ==/UserScript==
+
+(function() {
+    'use strict';
+
+    // ==========================================
+    // KONFIGURASI URL GOOGLE APPS SCRIPT
+    // ==========================================
+    // GANTI URL INI dengan URL Web App Apps Script Anda!
+    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxcwhCudJzEE-eONd2npH6qsPjFecyaH6fg7GGHCbLFvfLEZDVZdt4gPFnPApheEk8F/exec';
+    const STATE_KEY = 'acsBulkScraperState';
+
+    function getUI() {
+        let container = document.getElementById('acs-bulk-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'acs-bulk-container';
+            container.style = 'position: fixed; top: 10px; right: 10px; z-index: 99999; width: 340px; padding: 15px; background: #f8fafc; border: 2px solid #8b5cf6; border-radius: 8px; font-family: sans-serif; box-shadow: 0 4px 6px rgba(0,0,0,0.1);';
+            
+            let title = document.createElement('div');
+            title.innerText = '🚀 ACS BULK MEASURE (V2.0)';
+            title.style = 'font-weight: bold; font-size: 15px; margin-bottom: 10px; color: #1e293b; text-align: center;';
+            
+            let statusInfo = document.createElement('div');
+            statusInfo.id = 'acs-bulk-status';
+            statusInfo.style = 'font-size: 13px; color: #475569; margin-bottom: 10px; min-height: 40px; word-wrap: break-word;';
+            statusInfo.innerHTML = 'Siap melakukan Ukur Massal otomatis.';
+            
+            let btnGroup = document.createElement('div');
+            btnGroup.style = 'display: flex; flex-direction: column; gap: 8px;';
+
+            let startBtn = document.createElement('button');
+            startBtn.innerText = '▶️ JALANKAN UKUR MASSAL';
+            startBtn.style = 'background: #10b981; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: bold;';
+            
+            let stopBtn = document.createElement('button');
+            stopBtn.innerText = '⏹️ HENTIKAN ROBOT';
+            stopBtn.style = 'background: #ef4444; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: bold;';
+
+            startBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                localStorage.setItem(STATE_KEY, JSON.stringify({ active: true, step: 'FETCHING_DATA', queue: [] }));
+                startBtn.innerText = 'Mengambil data...';
+                startCrawler();
+            });
+
+            stopBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                localStorage.removeItem(STATE_KEY);
+                alert("Robot berhasil dihentikan!");
+                location.reload();
+            });
+
+            btnGroup.appendChild(startBtn);
+            btnGroup.appendChild(stopBtn);
+            
+            container.appendChild(title);
+            container.appendChild(statusInfo);
+            container.appendChild(btnGroup);
+            
+            document.body.appendChild(container);
+        }
+        return container;
+    }
+
+    function setStatus(msg) {
+        let statusDiv = document.getElementById('acs-bulk-status');
+        if (statusDiv) statusDiv.innerHTML = msg;
+        console.log("ACS Bulk Crawler:", msg.replace(/<[^>]*>?/gm, ''));
+    }
+
+    async function startCrawler() {
+        let state = JSON.parse(localStorage.getItem(STATE_KEY));
+        if (!state || !state.active) return;
+
+        if (state.step === 'FETCHING_DATA') {
+            setStatus("⏳ Menarik database dari Google Sheet...");
+            try {
+                let res = await fetch(SCRIPT_URL);
+                let data = await res.json();
+                
+                if (!data || data.length < 2) {
+                    setStatus("❌ Database kosong.");
+                    localStorage.removeItem(STATE_KEY);
+                    return;
+                }
+                
+                let headers = data[0].map(h => h.toString().toUpperCase());
+                let rxCol = headers.indexOf("RX POWER");
+                
+                let queue = [];
+                for (let i = 1; i < data.length; i++) {
+                    let row = data[i];
+                    if (rxCol === -1 || !row[rxCol] || row[rxCol].toString().trim() === "") {
+                        let sNumMatch = row.find(cell => cell && cell.toString().trim().match(/^1[1-9]\d{10,11}$/));
+                        if (sNumMatch) {
+                            queue.push(sNumMatch.toString().trim());
+                        }
+                    }
+                }
+                
+                // Batasi maksimum 3000 sesuai aturan web
+                if (queue.length > 3000) {
+                    queue = queue.slice(0, 3000);
+                }
+
+                if (queue.length === 0) {
+                    setStatus("✅ Semua nomor inet sudah diukur!");
+                    localStorage.removeItem(STATE_KEY);
+                    return;
+                }
+                
+                state.queue = queue;
+                state.step = 'PASTE_AND_ANALYZE';
+                localStorage.setItem(STATE_KEY, JSON.stringify(state));
+                
+                setStatus(`Menemukan ${queue.length} nomor. Memasukkan ke kolom analisa...`);
+                setTimeout(pasteAndAnalyze, 2000);
+            } catch (e) {
+                setStatus("❌ Gagal mengunduh data: " + e.message);
+                setTimeout(startCrawler, 5000);
+            }
+        }
+    }
+
+    function pasteAndAnalyze() {
+        let state = JSON.parse(localStorage.getItem(STATE_KEY));
+        if (!state || !state.active || state.step !== 'PASTE_AND_ANALYZE') return;
+
+        let textArea = document.querySelector('textarea');
+        if (!textArea) {
+            setStatus("❌ Kolom NO INTERNET (Textarea) tidak ditemukan!");
+            return;
+        }
+
+        let analyzeBtn = Array.from(document.querySelectorAll('button, input[type="button"], input[type="submit"]'))
+                              .find(b => b.innerText.toUpperCase().includes('ANALISA') || (b.value && b.value.toUpperCase().includes('ANALISA')));
+        
+        if (!analyzeBtn) {
+            setStatus("❌ Tombol ANALISA tidak ditemukan!");
+            return;
+        }
+
+        textArea.value = state.queue.join('\n');
+        textArea.dispatchEvent(new Event('input', { bubbles: true }));
+        textArea.dispatchEvent(new Event('change', { bubbles: true }));
+
+        state.step = 'WAITING_RESULT';
+        localStorage.setItem(STATE_KEY, JSON.stringify(state));
+
+        setStatus(`Memulai analisa massal untuk ${state.queue.length} nomor...`);
+        
+        setTimeout(() => {
+            analyzeBtn.click();
+            setTimeout(checkResultDOM, 5000);
+        }, 1500);
+    }
+    
+    function checkResultDOM() {
+        let state = JSON.parse(localStorage.getItem(STATE_KEY));
+        if (!state || !state.active || state.step !== 'WAITING_RESULT') return;
+        
+        // Cari elemen yang mengandung teks "Terukur:" atau "selesai"
+        let statusTextEl = Array.from(document.querySelectorAll('*')).find(el => el.innerText && el.innerText.includes('Terukur:') && el.children.length === 0);
+        let statusText = statusTextEl ? statusTextEl.innerText : document.body.innerText;
+        
+        // Cek jika proses masih berjalan atau sudah selesai
+        if (statusText.toLowerCase().includes('selesai') || statusText.toLowerCase().includes('100%')) {
+            setStatus("✅ Analisa selesai! Sedang mengekstrak data...");
+            setTimeout(extractAndSend, 2000);
+        } else {
+            // Tampilkan progress yang terbaca
+            let progressMatch = statusText.match(/Terukur:.*inet/i);
+            let pText = progressMatch ? progressMatch[0] : "Sedang loading...";
+            setStatus(`⏳ Menunggu hasil analisa...<br><i>${pText}</i>`);
+            
+            setTimeout(checkResultDOM, 3000); // loop waiting
+        }
+    }
+
+    function extractAndSend() {
+        let state = JSON.parse(localStorage.getItem(STATE_KEY));
+        if (!state || !state.active) return;
+
+        let tables = document.querySelectorAll('table');
+        let dataTable = null;
+        
+        for (let tbl of tables) {
+            if (tbl.innerText.toLowerCase().includes('rx') || tbl.innerText.toLowerCase().includes('tx') || tbl.innerText.toLowerCase().includes('inet')) {
+                dataTable = tbl;
+                break;
+            }
+        }
+
+        if (!dataTable) {
+            setStatus("❌ Tabel hasil tidak ditemukan! Pastikan tabel benar-benar muncul.");
+            return;
+        }
+
+        let rows = dataTable.querySelectorAll('tr');
+        // Filter baris yang benar-benar berisi data (punya banyak <td>)
+        let dataRows = Array.from(rows).filter(r => r.querySelectorAll('td').length >= 8);
+        
+        if (dataRows.length === 0) {
+            setStatus("❌ Tabel hasil kosong atau format tidak dikenali.");
+            return;
+        }
+
+        let measurements = [];
+
+        for (let i = 0; i < dataRows.length; i++) {
+            let cells = dataRows[i].querySelectorAll('td');
+            
+            // 1. Cari Nomor Internet
+            let sNum = null;
+            for(let c of cells) {
+                 if(c.innerText.trim().match(/^1[1-9]\d{10,11}$/)) {
+                     sNum = c.innerText.trim();
+                     break;
+                 }
+            }
+            // Jika nomor tidak ada di tabel, asumsikan urutannya sama dengan input textarea
+            if (!sNum && i < state.queue.length) {
+                sNum = state.queue[i];
+            }
+
+            // 2. Cari nilai Rx & Tx menggunakan patokan kolom "ONLINE/OFFLINE" dsb
+            let rx = "Not Found", tx = "Not Found", olt = "Not Found", status = "Not Found";
+            let onlineIdx = Array.from(cells).findIndex(c => {
+                let text = c.innerText.trim().toUpperCase();
+                return ['ONLINE', 'OFFLINE', 'LOS', 'DYING GASP', 'DYING_GASP'].some(s => text.includes(s));
+            });
+            
+            if (onlineIdx > -1) {
+                status = cells[onlineIdx].innerText.trim().toUpperCase();
+                if (cells.length >= onlineIdx + 7) {
+                    // Berdasarkan struktur tabel: [ONLINE], [Serial], [Length], [OLT Tx], [OLT Rx], [ONU Tx], [ONU Rx]
+                    // Kita ambil ONU Rx (index + 6) dan ONU Tx (index + 5)
+                    rx = cells[onlineIdx + 6].innerText.trim();
+                    tx = cells[onlineIdx + 5].innerText.trim();
+                    olt = "GPON";
+                    
+                    // Tambahkan 'dBm' jika itu angka
+                    if (!isNaN(parseFloat(rx))) rx += " dBm";
+                    if (!isNaN(parseFloat(tx))) tx += " dBm";
+                }
+            } else {
+                // Fallback jika format berbeda
+                rx = "Check Manual";
+                tx = "Check Manual";
+            }
+
+            if (sNum) {
+                measurements.push({
+                    serviceNumber: sNum,
+                    rx: rx,
+                    tx: tx,
+                    olt: olt,
+                    status: status
+                });
+            }
+        }
+
+        if (measurements.length === 0) {
+            setStatus("❌ Gagal mengekstrak data dari tabel.");
+            return;
+        }
+
+        setStatus(`Mengirim <b>${measurements.length}</b> hasil ukur ke Google Sheet...`);
+        
+        let payload = {
+            action: 'update_measurement_bulk',
+            measurements: measurements
+        };
+
+        fetch(SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify(payload)
+        })
+        .then(() => {
+            setStatus("🎉 <b>SUKSES!</b> Seluruh data ukur massal berhasil disimpan di Google Sheet.");
+            localStorage.removeItem(STATE_KEY);
+        })
+        .catch(err => {
+            setStatus("❌ Gagal mengirim hasil. Mencoba lagi dalam 5 detik...");
+            setTimeout(extractAndSend, 5000);
+        });
+    }
+
+    setInterval(getUI, 2000);
+
+    setTimeout(() => {
+        let state = JSON.parse(localStorage.getItem(STATE_KEY));
+        if (state && state.active) {
+            if (state.step === 'FETCHING_DATA') startCrawler();
+            else if (state.step === 'PASTE_AND_ANALYZE') pasteAndAnalyze();
+            else if (state.step === 'WAITING_RESULT') checkResultDOM();
+        }
+    }, 3000);
+
+})();

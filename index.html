@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GENCU - General Check Up bOGOR</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
+    <!-- Ionicons for icons -->
+    <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
+    <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="sidebar-header" style="padding: 20px 20px 0; text-align: center; border-bottom: 1px solid var(--border); margin-bottom: 15px; padding-bottom: 15px;">
+                <img src="logo.jpg" alt="GENCU Logo" style="width: 100%; max-width: 120px; border-radius: 12px; margin-bottom: 8px; box-shadow: 0 4px 15px rgba(255, 0, 50, 0.4);">
+                <div style="font-family: 'Orbitron', sans-serif; font-size: 11px; font-weight: 900; color: #ef4444; letter-spacing: 1.5px; text-transform: uppercase; text-shadow: 0 0 5px rgba(239, 68, 68, 0.5);">GENERAL CHECK UP bOGOR</div>
+            </div>
+            <div class="sidebar-menu">
+                <div class="menu-group active">
+                    <div class="menu-title">
+                        Inbox GENCU
+                        <ion-icon name="chevron-up-outline"></ion-icon>
+                    </div>
+                    <nav class="nav-links">
+                        <a href="#" class="nav-item active" id="menuGcuFisik" onclick="showDashboard('GCU FISIK')">⚙️ GCU FISIK</a>
+                        <a href="#" class="nav-item" id="menuGcuLogic" onclick="showDashboard('GCU LOGIC')">💻 GCU LOGIC</a>
+                        <a href="#" class="nav-item" id="menuApprovalKorlap" onclick="showDashboard('APPROVAL KORLAP')">✅ APPROVAL KORLAP</a>
+                        <a href="#" class="nav-item" id="menuCompleted" onclick="showDashboard('COMPLETED')">🏁 COMPLETED</a>
+                    </nav>
+                </div>
+
+                <div class="menu-group active">
+                    <div class="menu-title">
+                        Workflow GGN
+                        <ion-icon name="chevron-up-outline"></ion-icon>
+                    </div>
+                    <nav class="nav-links">
+                        <a href="#" class="nav-item" id="menuKorlap" onclick="showWorkflow('korlap')">👮 Korlap (Assign & Verify)</a>
+                        <a href="#" class="nav-item" id="menuTeknisi" onclick="showWorkflow('teknisi')">🔧 Teknisi (Field)</a>
+                        <a href="#" class="nav-item" id="menuHelpdesk" onclick="showWorkflow('helpdesk')">🎧 Helpdesk (Logic)</a>
+                    </nav>
+                </div>
+            </div>
+            
+            <div style="margin-top: auto; padding: 20px;">
+                <div class="ticket-status-box" style="background: var(--bg-surface); padding: 15px; border-radius: 8px; border: 1px solid var(--border);">
+                    <p style="font-size: 11px; color: var(--text-secondary); margin-bottom: 5px;">ACTIVE TICKET</p>
+                    <p id="activeTicketId" style="font-weight: 600; color: var(--primary);">-</p>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- VIEW: DASHBOARD -->
+            <div id="view-dashboard">
+                <header class="top-header">
+                    <h2>Summary information</h2>
+                    <div class="header-actions">
+                        <span class="total-data">Total data: <strong id="totalDataCount">0</strong></span>
+                        <div class="date-picker">
+                            <ion-icon name="calendar-outline"></ion-icon>
+                            <span id="currentDateRange">Loading...</span>
+                        </div>
+                        <button class="btn-reload" onclick="fetchTickets()">
+                            <ion-icon name="refresh-outline"></ion-icon> Reload
+                        </button>
+                    </div>
+                </header>
+
+                <div class="summary-cards" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px;">
+                    <div class="card summary-card" onclick="showDashboard('GCU FISIK')">
+                        <div class="card-content">
+                            <h1 id="countGcuFisik">0</h1>
+                            <p style="font-weight: 600; color: #ef4444;"><ion-icon name="hardware-chip-outline" style="vertical-align: middle; margin-right: 5px;"></ion-icon>GCU FISIK</p>
+                        </div>
+                    </div>
+                    <div class="card summary-card" onclick="showDashboard('GCU LOGIC')">
+                        <div class="card-content">
+                            <h1 id="countGcuLogic">0</h1>
+                            <p style="font-weight: 600; color: #3b82f6;"><ion-icon name="laptop-outline" style="vertical-align: middle; margin-right: 5px;"></ion-icon>GCU LOGIC</p>
+                        </div>
+                    </div>
+                    <div class="card summary-card" onclick="showDashboard('APPROVAL KORLAP')">
+                        <div class="card-content">
+                            <h1 id="countApprovalKorlap">0</h1>
+                            <p style="font-weight: 600; color: #f59e0b;"><ion-icon name="checkmark-circle-outline" style="vertical-align: middle; margin-right: 5px;"></ion-icon>APPROVAL KORLAP</p>
+                        </div>
+                    </div>
+                    <div class="card summary-card" onclick="showDashboard('COMPLETED')">
+                        <div class="card-content">
+                            <h1 id="countCompleted">0</h1>
+                            <p style="font-weight: 600; color: #10b981;"><ion-icon name="flag-outline" style="vertical-align: middle; margin-right: 5px;"></ion-icon>COMPLETED</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card dashboard-section">
+                    <div class="dashboard-header">
+                        <div>
+                            <h3 id="dashboardTitle">Dashboard</h3>
+                            <p class="subtitle">List Order berdasarkan STO</p>
+                        </div>
+                    </div>
+                    
+                    <div class="table-container" id="ticketTableContainer">
+                        <div class="empty-state" id="emptyState">
+                            <ion-icon name="calendar-sharp"></ion-icon>
+                            <p>Memuat Data Tiket...</p>
+                        </div>
+                        
+                        <table class="data-table" id="ticketTable" style="display: none;">
+                            <thead>
+                                <tr>
+                                    <th>INCIDENT</th>
+                                    <th>SERVICE NUMBER</th>
+                                    <th>STO</th>
+                                    <th>RX POWER</th>
+                                    <th>STATUS / ALARM</th>
+                                    <th>ACTION</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ticketTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW: WORKFLOW -->
+            <div id="view-workflow" style="display: none;">
+                <header class="top-header" style="border-bottom: 1px solid var(--border); padding-bottom: 15px; margin-bottom: 25px;">
+                    <div>
+                        <h2 id="workflowPageTitle" style="font-size: 20px; color: var(--text-primary);">Role Panel</h2>
+                        <p class="subtitle" id="workflowSubtitle" style="color: var(--text-secondary); font-size: 13px; margin-top: 5px;">Manage Ticket</p>
+                    </div>
+                    <button class="btn-action" onclick="showDashboard(state.activeFilter)" style="background: var(--bg-surface); color: var(--text-primary); border: 1px solid var(--border);">
+                        <ion-icon name="arrow-back-outline"></ion-icon> Back to Inbox
+                    </button>
+                </header>
+
+                <div id="workflowContainer">
+                    <!-- Wizard steps will be rendered here -->
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

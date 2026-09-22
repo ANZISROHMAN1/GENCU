@@ -1,0 +1,215 @@
+// ==UserScript==
+// @name         Scraper Tiket GGN - OSS Incident (V4.0 - Auto Crawler)
+// @namespace    http://tampermonkey.net/
+// @version      4.0
+// @description  Berpindah halaman otomatis (crawler) hingga halaman terakhir, lalu kirim ke Sheet per 1 jam.
+// @author       Anda
+// @match        *://oss-incident.telkom.co.id/*
+// @grant        none
+// ==/UserScript==
+
+(function() {
+    'use strict';
+
+    // ==========================================
+    // KONFIGURASI URL GOOGLE APPS SCRIPT
+    // ==========================================
+    // GANTI URL INI dengan URL Web App Apps Script Anda!
+    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxcwhCudJzEE-eONd2npH6qsPjFecyaH6fg7GGHCbLFvfLEZDVZdt4gPFnPApheEk8F/exec';
+    const STATE_KEY = 'ossScraperState';
+
+    function getUI() {
+        let container = document.getElementById('crawler-container');
+        if (!container) {
+            let table = document.querySelector('table');
+            if (table) {
+                container = document.createElement('div');
+                container.id = 'crawler-container';
+                container.style = 'margin-bottom: 15px; padding: 15px; background: #f8fafc; border: 2px solid #3b82f6; border-radius: 8px; font-family: sans-serif;';
+                
+                let title = document.createElement('div');
+                title.innerText = '🤖 ROBOT AUTO-CRAWLER (V4.0)';
+                title.style = 'font-weight: bold; font-size: 16px; margin-bottom: 10px; color: #1e293b;';
+                
+                let statusInfo = document.createElement('div');
+                statusInfo.id = 'crawler-status';
+                statusInfo.style = 'font-size: 13px; color: #475569; margin-bottom: 10px;';
+                
+                let btnGroup = document.createElement('div');
+                btnGroup.style = 'display: flex; gap: 10px;';
+
+                let startBtn = document.createElement('button');
+                startBtn.innerText = '▶️ MULAI AUTO-CRAWLER SEKARANG';
+                startBtn.style = 'background: #10b981; color: white; border: none; padding: 10px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; flex: 1;';
+                
+                let stopBtn = document.createElement('button');
+                stopBtn.innerText = '⏹️ HENTIKAN ROBOT';
+                stopBtn.style = 'background: #ef4444; color: white; border: none; padding: 10px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; flex: 1;';
+
+                startBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    let currentState = { active: true, data: [], firstUrl: location.href, page: 1 };
+                    localStorage.setItem(STATE_KEY, JSON.stringify(currentState));
+                    startBtn.innerText = 'Mempersiapkan robot...';
+                    setTimeout(scrapeCurrentPage, 1000);
+                });
+
+                stopBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    localStorage.removeItem(STATE_KEY);
+                    alert("Robot berhasil dihentikan!");
+                    location.reload();
+                });
+
+                btnGroup.appendChild(startBtn);
+                btnGroup.appendChild(stopBtn);
+                
+                container.appendChild(title);
+                container.appendChild(statusInfo);
+                container.appendChild(btnGroup);
+                
+                table.parentNode.insertBefore(container, table);
+            }
+        }
+        return container;
+    }
+
+    function scrapeCurrentPage() {
+        let state = JSON.parse(localStorage.getItem(STATE_KEY));
+        if (!state || !state.active) return;
+
+        let statusDiv = document.getElementById('crawler-status');
+        if (statusDiv) statusDiv.innerHTML = `Sedang menyedot <b>Halaman ${state.page}</b>... (Tiket terkumpul: ${state.data.length})`;
+
+        // 1. Ekstrak data di halaman saat ini
+        let rows = document.querySelectorAll('table tbody tr');
+        let newTicketsCount = 0;
+
+        rows.forEach((row) => {
+            let cells = row.querySelectorAll('td');
+            let hasINC = false;
+            for (let i = 0; i < Math.min(3, cells.length); i++) {
+                if (cells[i].innerText.toUpperCase().includes('INC')) {
+                    hasINC = true;
+                    break;
+                }
+            }
+            
+            if (cells.length >= 5 && hasINC) {
+                let rowData = [];
+                cells.forEach(cell => {
+                    let clone = cell.cloneNode(true);
+                    let btns = clone.querySelectorAll('button'); // Hapus semua button jika ada
+                    btns.forEach(b => b.remove());
+                    rowData.push(clone.innerText.trim().replace(/\n/g, ' '));
+                });
+                state.data.push(rowData);
+                newTicketsCount++;
+            }
+        });
+
+        // Simpan progress ke memory
+        localStorage.setItem(STATE_KEY, JSON.stringify(state));
+
+        // 2. Deteksi Halaman Terakhir dengan membaca teks "690 items found, displaying 601 to 690."
+        let isLastPage = false;
+        let bodyText = document.body.innerText.replace(/,/g, ''); // Hapus koma pemisah ribuan
+        
+        // Cek pola bahasa inggris (opsional tanpa/dengan koma)
+        let matchEn = bodyText.match(/(\d+)\s+items?\s+found,?\s+displaying\s+\d+\s+to\s+(\d+)/i);
+        // Cek pola bahasa indonesia (berjaga-jaga)
+        let matchId = bodyText.match(/menampilkan\s+\d+\s+(?:sampai|hingga|-)\s+(\d+)\s+dari\s+(\d+)/i);
+        
+        if (matchEn) {
+            let totalItems = parseInt(matchEn[1]);
+            let currentEnd = parseInt(matchEn[2]);
+            if (currentEnd >= totalItems) isLastPage = true;
+        } else if (matchId) {
+            let currentEnd = parseInt(matchId[1]);
+            let totalItems = parseInt(matchId[2]);
+            if (currentEnd >= totalItems) isLastPage = true;
+        }
+
+        // Jika belum halaman terakhir, cari tombol Next Page
+        let nextPageNumber = (state.page + 1).toString();
+        let nextBtn = null;
+        
+        if (!isLastPage) {
+            let paginationContainers = document.querySelectorAll('.pagelinks, .pagination, div.pagelinks, span.pagelinks, .page-numbers, .pagination-container');
+            if (paginationContainers.length > 0) {
+                for (let container of paginationContainers) {
+                    let links = Array.from(container.querySelectorAll('a'));
+                    nextBtn = links.find(a => a.innerText.trim() === nextPageNumber);
+                    if (!nextBtn) nextBtn = links.find(a => a.innerText.trim().toLowerCase() === 'next' || a.innerText.trim() === '>');
+                    if (nextBtn) break;
+                }
+            }
+            if (!nextBtn) {
+                let pageLinks = Array.from(document.querySelectorAll('a')).filter(a => a.href && (a.href.match(/d-\d+-p=\d+/) || a.href.match(/[?&]page=\d+/)));
+                nextBtn = pageLinks.find(a => a.innerText.trim() === nextPageNumber);
+            }
+        }
+
+        if (!isLastPage && nextBtn) {
+            if (statusDiv) statusDiv.innerHTML = `✅ Halaman ${state.page} selesai. Berpindah ke Halaman ${state.page + 1}...`;
+            state.page += 1;
+            localStorage.setItem(STATE_KEY, JSON.stringify(state));
+            
+            setTimeout(() => {
+                if (nextBtn.href && !nextBtn.href.includes('javascript:')) {
+                    window.location.href = nextBtn.href;
+                } else {
+                    nextBtn.click();
+                }
+            }, 2000);
+        } else {
+            // SUDAH DI HALAMAN TERAKHIR
+            if (statusDiv) statusDiv.innerHTML = `🏁 Selesai menyedot semua halaman! Total ${state.data.length} tiket. Mengirim ke Google Sheet...`;
+            sendDataToSheet(state);
+        }
+    }
+
+    function sendDataToSheet(state) {
+        if(state.data.length === 0) {
+            alert("Robot bingung: Tidak ada tiket sama sekali.");
+            localStorage.removeItem(STATE_KEY);
+            return;
+        }
+
+        fetch(SCRIPT_URL, { 
+            method: 'POST', 
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({ tickets: state.data })
+        })
+        .then(() => {
+            let statusDiv = document.getElementById('crawler-status');
+            if (statusDiv) statusDiv.innerHTML = `✅ <b>BERHASIL!</b> ${state.data.length} tiket masuk ke Database.<br>⏳ Robot sedang tidur. Ia akan bangun dan bekerja otomatis <b>1 jam lagi</b>...`;
+            
+            // Reset data, biarkan status tetap active untuk siklus 1 jam
+            state.data = [];
+            state.page = 1;
+            localStorage.setItem(STATE_KEY, JSON.stringify(state));
+
+            // Tunggu 1 Jam (3600000 ms), lalu mulai siklus dari halaman pertama lagi
+            setTimeout(() => {
+                location.href = state.firstUrl; 
+            }, 3600000);
+            
+        }).catch(err => {
+            console.error(err);
+            let statusDiv = document.getElementById('crawler-status');
+            if (statusDiv) statusDiv.innerHTML = `❌ <b>GAGAL MENGIRIM!</b> Coba lagi dalam 1 menit...`;
+            
+            setTimeout(() => sendDataToSheet(state), 60000); 
+        });
+    }
+
+    setInterval(getUI, 2000);
+
+    let currentState = JSON.parse(localStorage.getItem(STATE_KEY));
+    if (currentState && currentState.active) {
+        setTimeout(scrapeCurrentPage, 3000);
+    }
+
+})();
