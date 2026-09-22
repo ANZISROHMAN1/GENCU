@@ -92,10 +92,10 @@ function processData(rows) {
         // 1. Ekstrak STATUS
         for(let c=0; c<row.length; c++) {
             let val = (row[c]||"").toString().toUpperCase().trim();
-            if (["LOS", "DYING GASP", "DYING_GASP", "OFFLINE", "ONLINE"].includes(val)) {
-                status = val;
-                break;
-            }
+            if (val.includes("LOS")) { status = "LOS"; break; }
+            if (val.includes("DYING GASP") || val.includes("DYING_GASP")) { status = "DYING GASP"; break; }
+            if (val.includes("OFFLINE")) { status = "OFFLINE"; break; }
+            if (val.includes("ONLINE")) { status = "ONLINE"; break; }
         }
         
         // 2. Ekstrak STO (3 Huruf Kapital)
