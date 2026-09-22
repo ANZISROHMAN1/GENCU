@@ -924,7 +924,7 @@ function checkAndCreateHeaders(sheetScrape, sheetDB) {
       if (valScrape !== "TIMESTAMP") {
           if (valScrape !== "") sheetScrape.insertRowBefore(1);
           sheetScrape.getRange(1, 1, 1, baseHeaders.length).setValues([baseHeaders]);
-          sheetScrape.getRange(1, 1, 1, baseHeaders.length).setFontWeight("bold").setBackground("#f3f3f3");
+          sheetScrape.getRange(1, 1, 1, baseHeaders.length).setFontWeight("bold").setBackground("#e0f7fa"); // Default biru scraper
       }
   }
   
@@ -933,18 +933,37 @@ function checkAndCreateHeaders(sheetScrape, sheetDB) {
       if (valDB !== "TIMESTAMP") {
           if (valDB !== "") sheetDB.insertRowBefore(1);
           sheetDB.getRange(1, 1, 1, dbHeaders.length).setValues([dbHeaders]);
-          sheetDB.getRange(1, 1, 1, dbHeaders.length).setFontWeight("bold").setBackground("#f3f3f3");
+      }
+      
+      // Berikan warna spesifik ke header DATABASE
+      var lastCol = sheetDB.getLastColumn();
+      if (lastCol > 0) {
+          var headers = sheetDB.getRange(1, 1, 1, lastCol).getValues()[0];
+          for (var c = 0; c < headers.length; c++) {
+              var h = headers[c].toString().toUpperCase().trim();
+              var color = "#f3f3f3"; // default abu-abu
+              if (h === "") {
+                  continue;
+              } else if (["RX POWER", "TX POWER", "OLT"].indexOf(h) !== -1) {
+                  color = "#fff9c4"; // Kuning (Ukur Massal ACS)
+              } else if (h === "ACTION") {
+                  color = "#e8f5e9"; // Hijau (Submit Evidence Teknisi)
+              } else {
+                  color = "#e0f7fa"; // Biru Muda (Data Scraper Telegram)
+              }
+              sheetDB.getRange(1, c + 1).setBackground(color).setFontWeight("bold");
+          }
       }
   }
 }
 
-// FUNGSI UNTUK MENGEMBALIKAN HEADER SECARA MANUAL
+// FUNGSI UNTUK MENGEMBALIKAN/MEWARNAI HEADER SECARA MANUAL
 function forceCreateHeaders() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheetScrape = ss.getSheetByName("SCRAPING INSERA");
   var sheetDB = ss.getSheetByName("DATABASE");
   checkAndCreateHeaders(sheetScrape, sheetDB);
-  SpreadsheetApp.getUi().alert("✅ Header berhasil dibuat ulang!");
+  SpreadsheetApp.getUi().alert("✅ Header berhasil diwarnai & dibuat ulang!");
 }
 
 function testTelegramAuth() {
