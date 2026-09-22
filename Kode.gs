@@ -376,21 +376,26 @@ function submitEvidenceDariWeb(ticketId, summary, unused) {
   var actionCol = -1;
   var summaryCol = -1;
   
-  // Cari kolom
+  // Cari kolom Action & Summary
   for(var c = 0; c < data[0].length; c++) {
-     if(data[0][c].toString().toUpperCase().trim() === "INCIDENT") ticketCol = c;
      if(data[0][c].toString().toUpperCase().trim() === "ACTION") actionCol = c;
      if(data[0][c].toString().toUpperCase().trim() === "SUMMARY") summaryCol = c;
   }
   
-  if (ticketCol === -1) throw "Kolom Incident tidak ditemukan";
-  
-  // Update baris
+  // Update baris: Cari baris mana yang punya ticketId di kolom MANAPUN
   for(var r = 1; r < data.length; r++) {
-     if (data[r][ticketCol].toString().trim() === ticketId) {
+     var found = false;
+     for (var c = 0; c < data[r].length; c++) {
+         if (data[r][c] && data[r][c].toString().trim() === ticketId) {
+             found = true;
+             break;
+         }
+     }
+     
+     if (found) {
          if (actionCol !== -1) {
              sheetDB.getRange(r + 1, actionCol + 1).setValue(summary);
-         } else {
+         } else if (summaryCol !== -1) {
              // Jika kolom action gak ada, taruh di summary
              var oldSum = sheetDB.getRange(r + 1, summaryCol + 1).getValue();
              sheetDB.getRange(r + 1, summaryCol + 1).setValue(oldSum + "\n\n" + summary);
