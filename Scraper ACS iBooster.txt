@@ -66,7 +66,11 @@
             container.appendChild(statusInfo);
             container.appendChild(btnGroup);
             
-            document.body.appendChild(container);
+            if (document.body) {
+                document.body.appendChild(container);
+            } else if (document.documentElement) {
+                document.documentElement.appendChild(container);
+            }
         }
         return container;
     }
@@ -177,11 +181,30 @@
         
         // Cari elemen paling dalam yang mengandung teks "Terukur:" atau "selesai"
         let statusTextEl = null;
-        let allEls = document.querySelectorAll('*');
-        for (let i = allEls.length - 1; i >= 0; i--) {
-            if (allEls[i].innerText && allEls[i].innerText.includes('Terukur:')) {
-                statusTextEl = allEls[i];
-                break; // Mencari dari belakang (last) biasanya mendapatkan child terdalam
+        
+        function findStatusInDoc(doc) {
+            let els = doc.querySelectorAll('*');
+            for (let i = els.length - 1; i >= 0; i--) {
+                if (els[i].innerText && els[i].innerText.includes('Terukur:')) {
+                    return els[i];
+                }
+            }
+            return null;
+        }
+
+        statusTextEl = findStatusInDoc(document);
+        
+        // Cek juga di dalam iframe/frame jika tidak ketemu di document utama
+        if (!statusTextEl) {
+            let iframes = document.querySelectorAll('iframe, frame');
+            for (let iframe of iframes) {
+                try {
+                    let doc = iframe.contentDocument || iframe.contentWindow.document;
+                    if (doc) statusTextEl = findStatusInDoc(doc);
+                } catch (e) {
+                    // Abaikan jika cross-origin
+                }
+                if (statusTextEl) break;
             }
         }
         
