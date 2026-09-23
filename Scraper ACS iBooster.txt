@@ -247,10 +247,20 @@
                         
                         timeText = `<br><br><span style="color:#d97706; font-weight:bold; font-size:12px;">⏳ Estimasi selesai: ${timeStr}</span>`;
                         
-                        // Tampilkan juga langsung di tulisan bawah ACS-nya
-                        if (statusTextEl) {
-                            statusTextEl.innerHTML = pText + ` <span style='color:red; font-weight:bold;'>(⏳ ETA: ${timeStr})</span>`;
+                        // Tampilkan ETA di popup mengambang yang aman dari overwrite ACS
+                        let etaPopup = document.getElementById('acs-eta-popup');
+                        if (!etaPopup) {
+                            etaPopup = document.createElement('div');
+                            etaPopup.id = 'acs-eta-popup';
+                            etaPopup.style.cssText = `
+                                position: fixed; bottom: 20px; left: 20px; z-index: 999999;
+                                background: #fee2e2; padding: 10px 15px; border-radius: 8px;
+                                border: 2px solid #ef4444; color: #b91c1c; font-weight: bold;
+                                font-family: sans-serif; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                            `;
+                            document.documentElement.appendChild(etaPopup);
                         }
+                        etaPopup.innerHTML = `⏳ ETA Selesai: ${timeStr}`;
                     }
                 }
             } else {
