@@ -147,6 +147,14 @@ function processData(rows) {
         }
 
         if (isGangguan) { 
+            let category = 'GCU FISIK';
+            let rowText = row.join(" ").toUpperCase();
+            
+            // Jika teknisi sudah submit evidence via form, pindahkan ke GCU LOGIC
+            if (rowText.includes("EVIDENCE FISIK SUBMITTED")) {
+                category = 'GCU LOGIC';
+            }
+
             parsedTickets.push({
                 incident: ticketId,
                 serviceNumber: sNum !== "-" ? sNum : "Unknown",
@@ -154,7 +162,7 @@ function processData(rows) {
                 rx: rx || "-",
                 tx: tx || "-",
                 status: status || "-",
-                category: 'GCU FISIK'
+                category: category
             });
         }
     }

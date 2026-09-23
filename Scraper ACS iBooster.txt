@@ -99,11 +99,10 @@
                 let queue = [];
                 for (let i = 1; i < data.length; i++) {
                     let row = data[i];
-                    if (rxCol === -1 || !row[rxCol] || row[rxCol].toString().trim() === "") {
-                        let sNumMatch = row.find(cell => cell && cell.toString().trim().match(/^1[1-9]\d{10,11}$/));
-                        if (sNumMatch) {
-                            queue.push(sNumMatch.toString().trim());
-                        }
+                    // Ambil semua nomor internet tanpa mempedulikan apakah kolom RX sudah terisi atau belum
+                    let sNumMatch = row.find(cell => cell && cell.toString().trim().match(/^1[1-9]\d{10,11}$/));
+                    if (sNumMatch) {
+                        queue.push(sNumMatch.toString().trim());
                     }
                 }
                 

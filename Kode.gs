@@ -257,12 +257,24 @@ function doGet(e) {
               </div>
 
               <br><br><br>
+              <div id="statusMsg" style="display:none; position:fixed; top:0; left:0; right:0; padding:15px; z-index:9999; font-size:14px; font-weight:600; text-align:center;"></div>
               <div class="btn-submit-container">
                   <button onclick="submitForm()">Kirim Evidence Fisik</button>
+                  <div style="text-align:center; margin-top:5px; font-size:10px; color:#94a3b8;">v2.1-debug</div>
               </div>
           </div>
 
           <script>
+              function showMsg(msg, type) {
+                  var el = document.getElementById('statusMsg');
+                  el.style.display = 'block';
+                  el.style.background = type === 'error' ? '#fee2e2' : type === 'success' ? '#d1fae5' : '#fef3c7';
+                  el.style.color = type === 'error' ? '#991b1b' : type === 'success' ? '#065f46' : '#92400e';
+                  el.style.borderBottom = '2px solid ' + (type === 'error' ? '#ef4444' : type === 'success' ? '#10b981' : '#f59e0b');
+                  el.innerText = msg;
+                  if(type !== 'loading') { setTimeout(function(){ el.style.display = 'none'; }, 8000); }
+              }
+
               function toggleOthers(id) {
                   var sel = document.getElementById(id);
                   var txt = document.getElementById(id + '_others');
@@ -295,53 +307,62 @@ function doGet(e) {
                   }
               }
 
-              function getVal(id) { return document.getElementById(id).value.trim(); }
+              function getVal(id) { 
+                  var el = document.getElementById(id);
+                  return el ? el.value.trim() : ''; 
+              }
               
               function submitForm() {
-                  var btn = document.querySelector('button');
-                  
-                  var penyebab = getVal('penyebab') === 'Others' ? getVal('penyebab_others') : getVal('penyebab');
-                  var perbaikan = getVal('perbaikan') === 'Others' ? getVal('perbaikan_others') : getVal('perbaikan');
-                  var segmen = getVal('segmen');
-                  
-                  if(!penyebab || !perbaikan || !segmen) {
-                      alert("Harap isi Penyebab, Perbaikan, dan Segmen!");
-                      return;
-                  }
+                  try {
+                      showMsg('Memproses data...', 'loading');
+                      var btn = document.querySelector('button');
 
-                  // Build Evidence String
-                  var summary = "EVIDENCE FISIK SUBMITTED\\n";
-                  summary += "- Penyebab: " + penyebab + "\\n";
-                  summary += "- Perbaikan: " + perbaikan + "\\n";
-                  summary += "- Segmen: " + segmen + "\\n";
-                  summary += "- GCU Jalur: " + (document.getElementById('ev_jalur_status').checked ? "Aman" : "Tidak Aman") + " [" + (getVal('ev_jalur_link')||"-") + "]\\n";
-                  summary += "- GCU ONT: " + (document.getElementById('ev_ont_status').checked ? "Aman" : "Tidak Aman") + " [" + (getVal('ev_ont_link')||"-") + "]\\n";
-                  
-                  var dcCount = parseInt(getVal('dc_count'));
-                  var dcLinks = [];
-                  for(var i=1; i<=dcCount; i++) dcLinks.push(getVal('ev_dc_'+i)||"-");
-                  summary += "- GCU DC ("+dcCount+"): " + dcLinks.join(", ") + "\\n";
-                  
-                  summary += "- SCC/TSC: " + getVal('close_scc') + "\\n";
-                  summary += "- Lokasi/Pelanggan: [" + (getVal('ev_lokasi')||"-") + "]\\n";
+                      var penyebab = getVal('penyebab') === 'Others' ? getVal('penyebab_others') : getVal('penyebab');
+                      var perbaikan = getVal('perbaikan') === 'Others' ? getVal('perbaikan_others') : getVal('perbaikan');
+                      var segmen = getVal('segmen');
+                      
+                      if(!penyebab || !perbaikan || !segmen) {
+                          showMsg('⚠️ Harap isi Penyebab, Perbaikan, dan Segmen terlebih dahulu!', 'error');
+                          return;
+                      }
 
-                  if(document.getElementById('toggle_voice').checked) {
-                      summary += "- VOICE: RJ11/Phone (" + (document.getElementById('voice_status').checked ? "Aman" : "Tidak Aman") + ")\\n";
-                  }
-                  if(document.getElementById('toggle_iptv').checked) {
-                      summary += "- IPTV: Channel (" + (document.getElementById('iptv_channel').checked ? "Aman" : "Tidak Aman") + "), Remote (" + getVal('iptv_remote') + ")\\n";
-                  }
+                      // Build Evidence String
+                      var summary = "EVIDENCE FISIK SUBMITTED\\n";
+                      summary += "- Penyebab: " + penyebab + "\\n";
+                      summary += "- Perbaikan: " + perbaikan + "\\n";
+                      summary += "- Segmen: " + segmen + "\\n";
+                      summary += "- GCU Jalur: " + (document.getElementById('ev_jalur_status').checked ? "Aman" : "Tidak Aman") + " [" + (getVal('ev_jalur_link')||"-") + "]\\n";
+                      summary += "- GCU ONT: " + (document.getElementById('ev_ont_status').checked ? "Aman" : "Tidak Aman") + " [" + (getVal('ev_ont_link')||"-") + "]\\n";
+                      
+                      var dcCount = parseInt(getVal('dc_count') || '1');
+                      var dcLinks = [];
+                      for(var i=1; i<=dcCount; i++) dcLinks.push(getVal('ev_dc_'+i)||"-");
+                      summary += "- GCU DC ("+dcCount+"): " + dcLinks.join(", ") + "\\n";
+                      
+                      summary += "- SCC/TSC: " + (getVal('close_scc') || 'Sukses') + "\\n";
+                      summary += "- Lokasi/Pelanggan: [" + (getVal('ev_lokasi')||"-") + "]\\n";
 
-                  btn.innerText = 'Mengirim Data...';
-                  btn.disabled = true;
-                  
-                  google.script.run.withSuccessHandler(function() {
-                      document.body.innerHTML = '<div class="card" style="text-align:center;"><h2 style="color: #10b981; font-size:40px; margin-bottom:10px;">✅</h2><h3 style="color: #374151;">Berhasil Terkirim!</h3><p style="color: #6b7280; font-size:14px;">Laporan evidence telah tersimpan ke sistem. Tiket diteruskan ke tim Helpdesk.</p></div>';
-                  }).withFailureHandler(function(err) {
-                      alert("Gagal mengirim: " + err);
-                      btn.innerText = 'Kirim Evidence Fisik';
-                      btn.disabled = false;
-                  }).submitEvidenceDariWeb('${ticketId}', summary, "");
+                      if(document.getElementById('toggle_voice') && document.getElementById('toggle_voice').checked) {
+                          summary += "- VOICE: RJ11/Phone (" + (document.getElementById('voice_status').checked ? "Aman" : "Tidak Aman") + ")\\n";
+                      }
+                      if(document.getElementById('toggle_iptv') && document.getElementById('toggle_iptv').checked) {
+                          summary += "- IPTV: Channel (" + (document.getElementById('iptv_channel').checked ? "Aman" : "Tidak Aman") + "), Remote (" + getVal('iptv_remote') + ")\\n";
+                      }
+
+                      btn.innerText = 'Mengirim Data...';
+                      btn.disabled = true;
+                      showMsg('⏳ Mengirim data ke server...', 'loading');
+                      
+                      google.script.run.withSuccessHandler(function() {
+                          document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;min-height:80vh;"><div class="card" style="text-align:center;"><h2 style="color: #10b981; font-size:40px; margin-bottom:10px;">✅</h2><h3 style="color: #374151;">Berhasil Terkirim!</h3><p style="color: #6b7280; font-size:14px;">Laporan evidence telah tersimpan ke sistem.</p></div></div>';
+                      }).withFailureHandler(function(err) {
+                          showMsg('❌ Gagal: ' + err, 'error');
+                          btn.innerText = 'Kirim Evidence Fisik';
+                          btn.disabled = false;
+                      }).submitEvidenceDariWeb('${ticketId}', summary, "");
+                  } catch (err) {
+                      showMsg('❌ ERROR: ' + err.message, 'error');
+                  }
               }
           </script>
       </body>
@@ -729,6 +750,24 @@ function syncInseraToDatabase() {
   
   if (newRows.length > 0) {
       sheetDB.getRange(dbLastRow + 1, 1, newRows.length, newRows[0].length).setValues(newRows);
+  }
+
+  // --- LOGGING SYNC ACTIVITY ---
+  var sheetLog = ss.getSheetByName("SYNC LOG");
+  if (!sheetLog) {
+      sheetLog = ss.insertSheet("SYNC LOG");
+      sheetLog.appendRow(["Tanggal Sync", "Total Tiket Sebelumnya", "Jumlah Tiket Baru Masuk", "Total Tiket Setelahnya"]);
+      sheetLog.getRange("A1:D1").setFontWeight("bold").setBackground("#e2e8f0");
+  }
+  var prevCount = dbLastRow > 0 ? dbLastRow - 1 : 0;
+  var newCount = newRows.length;
+  var newTotal = prevCount + newCount;
+  var dateNow = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
+  
+  sheetLog.appendRow([dateNow, prevCount, newCount, newTotal]);
+  // -----------------------------
+
+  if (newRows.length > 0) {
       SpreadsheetApp.getUi().alert("✅ Berhasil memindahkan " + newRows.length + " tiket baru ke DATABASE.");
   } else {
       SpreadsheetApp.getUi().alert("ℹ️ Semua tiket sudah ada di DATABASE (Tidak ada data baru).");
