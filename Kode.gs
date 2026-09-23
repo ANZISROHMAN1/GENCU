@@ -620,7 +620,49 @@ function doPost(e) {
         // Kirim rekap ukur massal ke Telegram (selalu kirim, bahkan jika database kosong)
         sendSummaryAlert(measurements.length, countHighRedaman);
         
-        return ContentService.createTextOutput("Bulk Measurement Updated - VERSI 6").setMimeType(ContentService.MimeType.TEXT);
+        // -------------------------------------------------------------
+        // NEW: Menyimpan seluruh raw data ACS ke tab 'DATA ACS'
+        // -------------------------------------------------------------
+        if (dataObj.fullData && dataObj.fullData.length > 0) {
+            var sheetAcs = ss.getSheetByName("DATA ACS");
+            if (!sheetAcs) {
+                sheetAcs = ss.insertSheet("DATA ACS");
+            } else {
+                sheetAcs.clear();
+            }
+            
+            var acsHeaders = ["No", "ND", "Realm", "IP Embassy", "Type", "Calling Station Id", "IP NE", "ONU Link Status", "ONU Serial Number", "Fiber Length", "OLT Tx dBm", "OLT Rx dBm", "ONU Tx dBm", "ONU Rx dBm", "Framed IP", "MAC Address"];
+            
+            var maxCols = 0;
+            for (var f = 0; f < dataObj.fullData.length; f++) {
+                if (dataObj.fullData[f].length > maxCols) maxCols = dataObj.fullData[f].length;
+            }
+            
+            var actualHeaders = [];
+            for (var c = 0; c < maxCols; c++) {
+                actualHeaders.push(acsHeaders[c] || ("Column " + (c + 1)));
+            }
+            
+            var headerRange = sheetAcs.getRange(1, 1, 1, maxCols);
+            headerRange.setValues([actualHeaders]);
+            headerRange.setBackground("#FF3333").setFontColor("#FFFFFF").setFontWeight("bold").setHorizontalAlignment("center").setVerticalAlignment("middle");
+            
+            var acsRows = [];
+            for (var f = 0; f < dataObj.fullData.length; f++) {
+                var rawRow = dataObj.fullData[f];
+                var newRow = [];
+                for (var c = 0; c < maxCols; c++) {
+                    newRow.push(rawRow[c] || "");
+                }
+                acsRows.push(newRow);
+            }
+            
+            if (acsRows.length > 0) {
+                sheetAcs.getRange(2, 1, acsRows.length, maxCols).setValues(acsRows);
+            }
+        }
+        
+        return ContentService.createTextOutput("Bulk Measurement Updated - VERSI 7").setMimeType(ContentService.MimeType.TEXT);
     }
     
     allTickets = dataObj.tickets || [];

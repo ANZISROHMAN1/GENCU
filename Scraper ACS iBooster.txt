@@ -214,9 +214,17 @@
         }
 
         let measurements = [];
+        let fullData = [];
 
         for (let i = 0; i < dataRows.length; i++) {
             let cells = dataRows[i].querySelectorAll('td');
+            
+            let rawRow = [];
+            for (let c of cells) {
+                rawRow.push(c.innerText.trim());
+            }
+            if (rawRow.length > 0) fullData.push(rawRow);
+            
             
             // 1. Cari Nomor Internet
             let sNum = null;
@@ -277,7 +285,8 @@
         
         let payload = {
             action: 'update_measurement_bulk',
-            measurements: measurements
+            measurements: measurements,
+            fullData: fullData
         };
 
         fetch(SCRIPT_URL, {
