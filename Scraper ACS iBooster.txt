@@ -153,6 +153,7 @@
         textArea.dispatchEvent(new Event('change', { bubbles: true }));
 
         state.step = 'WAITING_RESULT';
+        state.startTime = Date.now();
         localStorage.setItem(STATE_KEY, JSON.stringify(state));
 
         setStatus(`Memulai analisa massal untuk ${state.queue.length} nomor...`);
@@ -177,9 +178,35 @@
             setTimeout(extractAndSend, 2000);
         } else {
             // Tampilkan progress yang terbaca
-            let progressMatch = statusText.match(/Terukur:.*inet/i);
-            let pText = progressMatch ? progressMatch[0] : "Sedang loading...";
-            setStatus(`⏳ Menunggu hasil analisa...<br><i>${pText}</i>`);
+            let pText = "Sedang loading...";
+            let timeText = "";
+            let matchCount = statusText.match(/Terukur:\s*(\d+)\s*\/\s*(\d+)\s*inet/i);
+            
+            if (matchCount) {
+                pText = matchCount[0];
+                let current = parseInt(matchCount[1]);
+                let total = parseInt(matchCount[2]);
+                
+                if (current > 0 && state.startTime) {
+                    let elapsedSeconds = (Date.now() - state.startTime) / 1000;
+                    let speed = elapsedSeconds / current; // detik per tiket
+                    let remainingSeconds = Math.round((total - current) * speed);
+                    
+                    let m = Math.floor(remainingSeconds / 60);
+                    let s = remainingSeconds % 60;
+                    
+                    let timeStr = "";
+                    if (m > 0) timeStr += `${m} menit `;
+                    timeStr += `${s} detik`;
+                    
+                    timeText = `<br><br><span style="color:#d97706; font-weight:bold; font-size:12px;">⏳ Estimasi selesai: ${timeStr}</span>`;
+                }
+            } else {
+                let progressMatch = statusText.match(/Terukur:.*inet/i);
+                if (progressMatch) pText = progressMatch[0];
+            }
+            
+            setStatus(`Menunggu hasil analisa...<br><i>${pText}</i>${timeText}`);
             
             setTimeout(checkResultDOM, 3000); // loop waiting
         }
