@@ -265,7 +265,7 @@ function renderTable() {
 
     if (displayTickets.length === 0) {
         showEmpty(`Tidak ada tiket di antrean ${state.activeFilter} ${state.statusFilter !== 'ALL' ? 'dengan status ' + state.statusFilter : ''}`);
-        const footerEl = document.getElementById('tableFooterStats');
+        const footerEl = document.getElementById('dashboardStats');
         if (footerEl) footerEl.style.display = 'none';
         return;
     }
@@ -299,7 +299,7 @@ function renderTable() {
         ticketTableBody.appendChild(tr);
     });
 
-    const footerEl = document.getElementById('tableFooterStats');
+    const footerEl = document.getElementById('dashboardStats');
     if (footerEl) {
         footerEl.style.display = 'flex';
         document.getElementById('statOnline').innerText = countOnline;
