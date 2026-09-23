@@ -18,6 +18,16 @@
     const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyz4bDNVEtjazRYRSvs2lXk_40Ee6qhxR64r9UCBXjaWPn6Q9urV8LFSymXXqWHxQs3/exec';
     const STATE_KEY = 'acsBulkScraperState';
 
+    function getTargetBody() {
+        let body = document.body;
+        if (body && body.tagName && body.tagName.toLowerCase() === 'frameset') {
+            try {
+                if (window.frames.length > 0) return window.frames[0].document.body;
+            } catch(e) {}
+        }
+        return body || document.documentElement;
+    }
+
     function getUI() {
         let container = document.getElementById('acs-bulk-container');
         if (!container) {
@@ -66,11 +76,9 @@
             container.appendChild(statusInfo);
             container.appendChild(btnGroup);
             
-            if (document.body) {
-                document.body.appendChild(container);
-            } else if (document.documentElement) {
-                document.documentElement.appendChild(container);
-            }
+            try {
+                getTargetBody().appendChild(container);
+            } catch(e) {}
         }
         return container;
     }
@@ -179,41 +187,24 @@
         let state = JSON.parse(localStorage.getItem(STATE_KEY));
         if (!state || !state.active || state.step !== 'WAITING_RESULT') return;
         
-        // Cari elemen paling dalam yang mengandung teks "Terukur:" atau "selesai"
-        let statusTextEl = null;
+        // Ambil semua teks dari halaman utama dan iframe
+        let statusText = document.body ? document.body.innerText : "";
         
-        function findStatusInDoc(doc) {
-            let els = doc.querySelectorAll('*');
-            for (let i = els.length - 1; i >= 0; i--) {
-                if (els[i].innerText && els[i].innerText.includes('Terukur:')) {
-                    return els[i];
+        let iframes = document.querySelectorAll('iframe, frame');
+        for (let iframe of iframes) {
+            try {
+                let doc = iframe.contentDocument || iframe.contentWindow.document;
+                if (doc && doc.body) {
+                    statusText += " " + doc.body.innerText;
                 }
-            }
-            return null;
-        }
-
-        statusTextEl = findStatusInDoc(document);
-        
-        // Cek juga di dalam iframe/frame jika tidak ketemu di document utama
-        if (!statusTextEl) {
-            let iframes = document.querySelectorAll('iframe, frame');
-            for (let iframe of iframes) {
-                try {
-                    let doc = iframe.contentDocument || iframe.contentWindow.document;
-                    if (doc) statusTextEl = findStatusInDoc(doc);
-                } catch (e) {
-                    // Abaikan jika cross-origin
-                }
-                if (statusTextEl) break;
+            } catch (e) {
+                // Abaikan jika cross-origin
             }
         }
-        
-        let statusText = statusTextEl ? statusTextEl.innerText : document.body.innerText;
         
         // Cek jika proses masih berjalan atau sudah selesai
         if (statusText.toLowerCase().includes('selesai') || statusText.toLowerCase().includes('100%')) {
             setStatus("✅ Analisa selesai! Sedang mengekstrak data...");
-            if (statusTextEl) statusTextEl.innerHTML = "Terukur selesai! 100%";
             setTimeout(extractAndSend, 2000);
         } else {
             // Tampilkan progress yang terbaca
@@ -248,7 +239,14 @@
                         timeText = `<br><br><span style="color:#d97706; font-weight:bold; font-size:12px;">⏳ Estimasi selesai: ${timeStr}</span>`;
                         
                         // Tampilkan ETA di popup mengambang yang aman dari overwrite ACS
-                        let etaPopup = document.getElementById('acs-eta-popup');
+                        // Cari target body (tembus frameset)
+                        let targetBody = document.body;
+                        if (targetBody && targetBody.tagName && targetBody.tagName.toLowerCase() === 'frameset') {
+                            try { if (window.frames.length > 0) targetBody = window.frames[0].document.body; } catch(e) {}
+                        }
+                        if (!targetBody) targetBody = document.documentElement;
+                        
+                        let etaPopup = targetBody.querySelector('#acs-eta-popup');
                         if (!etaPopup) {
                             etaPopup = document.createElement('div');
                             etaPopup.id = 'acs-eta-popup';
@@ -258,9 +256,9 @@
                                 border: 2px solid #ef4444; color: #b91c1c; font-weight: bold;
                                 font-family: sans-serif; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
                             `;
-                            document.documentElement.appendChild(etaPopup);
+                            try { targetBody.appendChild(etaPopup); } catch(e) {}
                         }
-                        etaPopup.innerHTML = `⏳ ETA Selesai: ${timeStr}`;
+                        if (etaPopup) etaPopup.innerHTML = `⏳ ETA Selesai: ${timeStr}`;
                     }
                 }
             } else {
