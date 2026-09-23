@@ -83,7 +83,7 @@ function processData(rows) {
     
     if (incIdx === -1) incIdx = 1; // absolute fallback
     
-    let statusAlarmIdx = headers.indexOf("STATUS ALARM");
+    let statusAlarmIdx = headers.findIndex(h => h === "STATUS ALARM" || h === "ONU LINK STATUS");
     
     for (let i = 1; i < rows.length; i++) {
         let row = rows[i];
@@ -99,13 +99,15 @@ function processData(rows) {
         } 
         
         // Jika dari kolom STATUS ALARM belum ada (belum discrape), fallback cari manual
+        let hasStatusColumn = (statusAlarmIdx !== -1);
         if (status === "-" || status === "") {
             for(let c=0; c<row.length; c++) {
                 let val = (row[c]||"").toString().toUpperCase().trim();
-                if (val === "LOS" || val.match(/\bLOS\b/)) { status = "LOS"; break; }
-                if (val === "DYING GASP" || val.match(/\bDYING_?GASP\b/)) { status = "DYING GASP"; break; }
-                if (val === "OFFLINE" || val.match(/\bOFFLINE\b/)) { status = "OFFLINE"; break; }
-                if (val === "ONLINE" || val.match(/\bONLINE\b/)) { status = "ONLINE"; break; }
+                // Gunakan EXACT match agar tidak salah baca teks keluhan dari kolom SUMMARY
+                if (val === "LOS") { status = "LOS"; break; }
+                if (val === "DYING GASP" || val === "DYING_GASP") { status = "DYING GASP"; break; }
+                if (val === "OFFLINE") { status = "OFFLINE"; break; }
+                if (val === "ONLINE") { status = "ONLINE"; break; }
             }
         }
         
