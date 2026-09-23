@@ -598,7 +598,7 @@ function doPost(e) {
                     oltColData[i][0] = meas.olt;
                     statusColData[i][0] = meas.status; // Save REAL status (LOS, ONLINE, DYING GASP)
                     
-                    var rxNum = parseFloat(meas.rx);
+                    var rxNum = parseFloat(String(meas.rx).replace(',', '.'));
                     var isHighRedaman = (!isNaN(rxNum) && (rxNum < -27 || rxNum > -12));
                     var isLosOrDying = (meas.status === 'LOS' || meas.status === 'DYING GASP' || meas.status === 'DYING_GASP');
                     

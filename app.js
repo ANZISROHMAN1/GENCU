@@ -102,10 +102,10 @@ function processData(rows) {
         if (status === "-" || status === "") {
             for(let c=0; c<row.length; c++) {
                 let val = (row[c]||"").toString().toUpperCase().trim();
-                if (val.includes("LOS")) { status = "LOS"; break; }
-                if (val.includes("DYING GASP") || val.includes("DYING_GASP")) { status = "DYING GASP"; break; }
-                if (val.includes("OFFLINE")) { status = "OFFLINE"; break; }
-                if (val.includes("ONLINE")) { status = "ONLINE"; break; }
+                if (val === "LOS" || val.match(/\bLOS\b/)) { status = "LOS"; break; }
+                if (val === "DYING GASP" || val.match(/\bDYING_?GASP\b/)) { status = "DYING GASP"; break; }
+                if (val === "OFFLINE" || val.match(/\bOFFLINE\b/)) { status = "OFFLINE"; break; }
+                if (val === "ONLINE" || val.match(/\bONLINE\b/)) { status = "ONLINE"; break; }
             }
         }
         
@@ -133,9 +133,9 @@ function processData(rows) {
             let val = (row[c]||"").toString().trim();
             // Hanya ekstrak jika val benar-benar terlihat seperti angka redaman (misal -20, 2.3, -15.2 dBm)
             // Hindari string seperti "3-Medium"
-            let numMatch = val.match(/^-?\d+(\.\d+)?(\s?dBm)?$/i);
+            let numMatch = val.match(/^-?\d+([.,]\d+)?(\s?dBm)?$/i);
             if (numMatch) {
-                let num = parseFloat(val);
+                let num = parseFloat(val.replace(',', '.').replace(/dBm/i, '').trim());
                 if (!isNaN(num)) {
                     // RX biasanya -5 s/d -40
                     if (num < -5 && num > -45 && rx === "") rx = val;
@@ -146,7 +146,7 @@ function processData(rows) {
         }
 
         let isGangguan = false;
-        let rxNum = parseFloat(rx);
+        let rxNum = parseFloat(rx.replace(',', '.'));
         
         // Logika Redaman
         if (!isNaN(rxNum) && (rxNum < -27 || rxNum > -12)) {
@@ -294,9 +294,9 @@ function renderTable() {
 
     displayTickets.forEach(ticket => {
         let st = (ticket.status || "").toUpperCase();
-        if (st.includes('ONLINE')) countOnline++;
-        else if (st.includes('LOS')) countLos++;
-        else if (st.includes('DYING')) countDying++;
+        if (st === 'ONLINE' || st.match(/\bONLINE\b/)) countOnline++;
+        else if (st === 'LOS' || st.match(/\bLOS\b/)) countLos++;
+        else if (st.match(/\bDYING\b/)) countDying++;
 
         let statusBadge = '';
         if (ticket.status === 'LOS' || ticket.status.includes('DYING')) statusBadge = `<span class="badge danger">${ticket.status}</span>`;
