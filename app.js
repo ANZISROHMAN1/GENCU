@@ -3,6 +3,7 @@ const state = {
     tickets: [],
     filteredTickets: [],
     activeFilter: 'GCU FISIK',
+    statusFilter: 'ALL',
     // Active View State
     activeTicketId: null,
     activeSto: null,
@@ -191,6 +192,11 @@ window.showDashboard = function(filterStatus) {
     else if (filterStatus === 'APPROVAL KORLAP') document.getElementById('menuApprovalKorlap').classList.add('active');
     else if (filterStatus === 'COMPLETED') document.getElementById('menuCompleted').classList.add('active');
 
+    // Reset status filter
+    state.statusFilter = 'ALL';
+    const sfEl = document.getElementById('statusFilter');
+    if (sfEl) sfEl.value = 'ALL';
+
     state.filteredTickets = state.tickets.filter(t => t.category === filterStatus);
     renderTable();
 };
@@ -221,17 +227,59 @@ window.selectTicket = function(ticketId, sto) {
     showWorkflow('korlap');
 };
 
+window.applyStatusFilter = function() {
+    const filterVal = document.getElementById('statusFilter').value;
+    state.statusFilter = filterVal;
+    renderTable();
+};
+
 function renderTable() {
     emptyState.style.display = 'none';
     ticketTable.style.display = 'table';
     ticketTableBody.innerHTML = '';
 
-    if (state.filteredTickets.length === 0) {
-        showEmpty(`Tidak ada tiket di antrean ${state.activeFilter}`);
+    let displayTickets = state.filteredTickets;
+    if (state.statusFilter && state.statusFilter !== 'ALL') {
+        displayTickets = state.filteredTickets.filter(ticket => {
+            let badgeText = '';
+            if (ticket.status === 'LOS' || ticket.status.includes('DYING')) badgeText = ticket.status;
+            else if (parseFloat(ticket.rx) < -27) badgeText = 'REDAMAN TINGGI';
+            else badgeText = ticket.status || 'OK';
+
+            if (state.statusFilter === 'REDAMAN TINGGI') return badgeText === 'REDAMAN TINGGI';
+            if (state.statusFilter === 'LOS') return badgeText === 'LOS';
+            if (state.statusFilter === 'DYING GASP') return badgeText.includes('DYING');
+            return badgeText === state.statusFilter;
+        });
+    }
+
+    const badgeEl = document.getElementById('filteredCountBadge');
+    if (badgeEl) {
+        if (state.statusFilter && state.statusFilter !== 'ALL') {
+            badgeEl.style.display = 'inline-block';
+            badgeEl.innerText = displayTickets.length;
+        } else {
+            badgeEl.style.display = 'none';
+        }
+    }
+
+    if (displayTickets.length === 0) {
+        showEmpty(`Tidak ada tiket di antrean ${state.activeFilter} ${state.statusFilter !== 'ALL' ? 'dengan status ' + state.statusFilter : ''}`);
+        const footerEl = document.getElementById('tableFooterStats');
+        if (footerEl) footerEl.style.display = 'none';
         return;
     }
 
-    state.filteredTickets.forEach(ticket => {
+    let countOnline = 0;
+    let countLos = 0;
+    let countDying = 0;
+
+    displayTickets.forEach(ticket => {
+        let st = (ticket.status || "").toUpperCase();
+        if (st.includes('ONLINE')) countOnline++;
+        else if (st.includes('LOS')) countLos++;
+        else if (st.includes('DYING')) countDying++;
+
         let statusBadge = '';
         if (ticket.status === 'LOS' || ticket.status.includes('DYING')) statusBadge = `<span class="badge danger">${ticket.status}</span>`;
         else if (parseFloat(ticket.rx) < -27) statusBadge = `<span class="badge warning">REDAMAN TINGGI</span>`;
@@ -250,6 +298,14 @@ function renderTable() {
         `;
         ticketTableBody.appendChild(tr);
     });
+
+    const footerEl = document.getElementById('tableFooterStats');
+    if (footerEl) {
+        footerEl.style.display = 'flex';
+        document.getElementById('statOnline').innerText = countOnline;
+        document.getElementById('statLos').innerText = countLos;
+        document.getElementById('statDying').innerText = countDying;
+    }
 }
 
 function showEmpty(msg) {
