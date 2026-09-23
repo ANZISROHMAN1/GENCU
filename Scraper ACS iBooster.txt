@@ -168,8 +168,16 @@
         let state = JSON.parse(localStorage.getItem(STATE_KEY));
         if (!state || !state.active || state.step !== 'WAITING_RESULT') return;
         
-        // Cari elemen yang mengandung teks "Terukur:" atau "selesai"
-        let statusTextEl = Array.from(document.querySelectorAll('*')).find(el => el.innerText && el.innerText.includes('Terukur:') && el.children.length === 0);
+        // Cari elemen paling dalam yang mengandung teks "Terukur:" atau "selesai"
+        let statusTextEl = null;
+        let allEls = document.querySelectorAll('*');
+        for (let i = allEls.length - 1; i >= 0; i--) {
+            if (allEls[i].innerText && allEls[i].innerText.includes('Terukur:')) {
+                statusTextEl = allEls[i];
+                break; // Mencari dari belakang (last) biasanya mendapatkan child terdalam
+            }
+        }
+        
         let statusText = statusTextEl ? statusTextEl.innerText : document.body.innerText;
         
         // Cek jika proses masih berjalan atau sudah selesai
