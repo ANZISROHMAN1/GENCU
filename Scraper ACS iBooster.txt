@@ -22,7 +22,19 @@
         let body = document.body;
         if (body && body.tagName && body.tagName.toLowerCase() === 'frameset') {
             try {
-                if (window.frames.length > 0) return window.frames[0].document.body;
+                let bestFrame = null;
+                let maxArea = 0;
+                for (let i = 0; i < window.frames.length; i++) {
+                    try {
+                        let frame = window.frames[i];
+                        let area = frame.innerWidth * frame.innerHeight;
+                        if (area > maxArea && frame.document && frame.document.body) {
+                            maxArea = area;
+                            bestFrame = frame.document.body;
+                        }
+                    } catch(e) {} // Abaikan cross-origin frame
+                }
+                if (bestFrame) return bestFrame;
             } catch(e) {}
         }
         return body || document.documentElement;
@@ -239,12 +251,9 @@
                         timeText = `<br><br><span style="color:#d97706; font-weight:bold; font-size:12px;">⏳ Estimasi selesai: ${timeStr}</span>`;
                         
                         // Tampilkan ETA di popup mengambang yang aman dari overwrite ACS
-                        // Cari target body (tembus frameset)
-                        let targetBody = document.body;
-                        if (targetBody && targetBody.tagName && targetBody.tagName.toLowerCase() === 'frameset') {
-                            try { if (window.frames.length > 0) targetBody = window.frames[0].document.body; } catch(e) {}
-                        }
-                        if (!targetBody) targetBody = document.documentElement;
+                        // Tampilkan ETA di popup mengambang yang aman dari overwrite ACS
+                        // Cari target body (tembus frameset) menggunakan fungsi getTargetBody()
+                        let targetBody = getTargetBody();
                         
                         let etaPopup = targetBody.querySelector('#acs-eta-popup');
                         if (!etaPopup) {
