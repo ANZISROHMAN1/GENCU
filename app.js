@@ -83,6 +83,8 @@ function processData(rows) {
     
     if (incIdx === -1) incIdx = 1; // absolute fallback
     
+    let statusAlarmIdx = headers.indexOf("STATUS ALARM");
+    
     for (let i = 1; i < rows.length; i++) {
         let row = rows[i];
         let ticketId = row[incIdx] ? row[incIdx].toString().trim() : "-";
@@ -91,12 +93,20 @@ function processData(rows) {
         let rx = "", tx = "", status = "-", sto = "-", sNum = "-";
         
         // 1. Ekstrak STATUS
-        for(let c=0; c<row.length; c++) {
-            let val = (row[c]||"").toString().toUpperCase().trim();
-            if (val.includes("LOS")) { status = "LOS"; break; }
-            if (val.includes("DYING GASP") || val.includes("DYING_GASP")) { status = "DYING GASP"; break; }
-            if (val.includes("OFFLINE")) { status = "OFFLINE"; break; }
-            if (val.includes("ONLINE")) { status = "ONLINE"; break; }
+        if (statusAlarmIdx !== -1 && row[statusAlarmIdx]) {
+            let s = row[statusAlarmIdx].toString().toUpperCase().trim();
+            if (s) status = s;
+        } 
+        
+        // Jika dari kolom STATUS ALARM belum ada (belum discrape), fallback cari manual
+        if (status === "-" || status === "") {
+            for(let c=0; c<row.length; c++) {
+                let val = (row[c]||"").toString().toUpperCase().trim();
+                if (val.includes("LOS")) { status = "LOS"; break; }
+                if (val.includes("DYING GASP") || val.includes("DYING_GASP")) { status = "DYING GASP"; break; }
+                if (val.includes("OFFLINE")) { status = "OFFLINE"; break; }
+                if (val.includes("ONLINE")) { status = "ONLINE"; break; }
+            }
         }
         
         // 2. Ekstrak STO (3 Huruf Kapital)

@@ -528,21 +528,30 @@ function doPost(e) {
             sheetDB.insertColumnsAfter(sheetDB.getMaxColumns(), (dbLastCol + 3) - sheetDB.getMaxColumns());
         }
         
-        // Cari header untuk RX, TX, OLT, jika belum ada, buat di kolom paling ujung
+        // Cari header untuk RX, TX, OLT, STATUS ALARM jika belum ada, buat di kolom paling ujung
         var headers = sheetDB.getRange(1, 1, 1, dbLastCol).getValues()[0];
         var rxColIdx = headers.indexOf("RX POWER") + 1;
         var txColIdx = headers.indexOf("TX POWER") + 1;
         var oltColIdx = headers.indexOf("OLT") + 1;
+        var statusColIdx = headers.indexOf("STATUS ALARM") + 1;
         
-        if (rxColIdx === 0) {
-            rxColIdx = dbLastCol + 1; sheetDB.getRange(1, rxColIdx).setValue("RX POWER");
-            txColIdx = rxColIdx + 1;  sheetDB.getRange(1, txColIdx).setValue("TX POWER");
-            oltColIdx = txColIdx + 1; sheetDB.getRange(1, oltColIdx).setValue("OLT");
+        if (rxColIdx === 0 || statusColIdx === 0) {
+            // Delete old if partial exists
+            if (rxColIdx > 0) { rxColIdx = rxColIdx; } else { rxColIdx = dbLastCol + 1; }
+            txColIdx = rxColIdx + 1;
+            oltColIdx = txColIdx + 1;
+            statusColIdx = oltColIdx + 1;
+            
+            sheetDB.getRange(1, rxColIdx).setValue("RX POWER");
+            sheetDB.getRange(1, txColIdx).setValue("TX POWER");
+            sheetDB.getRange(1, oltColIdx).setValue("OLT");
+            sheetDB.getRange(1, statusColIdx).setValue("STATUS ALARM");
             
             // Update the headers array manually since we just added them
             headers[rxColIdx - 1] = "RX POWER";
             headers[txColIdx - 1] = "TX POWER";
             headers[oltColIdx - 1] = "OLT";
+            headers[statusColIdx - 1] = "STATUS ALARM";
         }
         
         var countHighRedaman = 0;
@@ -550,10 +559,11 @@ function doPost(e) {
         if (dbLastRow > 1) {
             var searchRange = sheetDB.getRange(2, 1, dbLastRow - 1, dbLastCol).getValues();
             
-            // Baca kolom RX, TX, OLT secara massal
+            // Baca kolom RX, TX, OLT, STATUS secara massal
             var rxColData = sheetDB.getRange(2, rxColIdx, dbLastRow - 1, 1).getValues();
             var txColData = sheetDB.getRange(2, txColIdx, dbLastRow - 1, 1).getValues();
             var oltColData = sheetDB.getRange(2, oltColIdx, dbLastRow - 1, 1).getValues();
+            var statusColData = sheetDB.getRange(2, statusColIdx, dbLastRow - 1, 1).getValues();
             
             // Buat map agar pencarian cepat O(1)
             var measMap = {};
@@ -586,6 +596,7 @@ function doPost(e) {
                     rxColData[i][0] = meas.rx;
                     txColData[i][0] = meas.tx;
                     oltColData[i][0] = meas.olt;
+                    statusColData[i][0] = meas.status; // Save REAL status (LOS, ONLINE, DYING GASP)
                     
                     var rxNum = parseFloat(meas.rx);
                     var isHighRedaman = (!isNaN(rxNum) && (rxNum < -27 || rxNum > -12));
@@ -603,6 +614,7 @@ function doPost(e) {
             sheetDB.getRange(2, rxColIdx, dbLastRow - 1, 1).setValues(rxColData);
             sheetDB.getRange(2, txColIdx, dbLastRow - 1, 1).setValues(txColData);
             sheetDB.getRange(2, oltColIdx, dbLastRow - 1, 1).setValues(oltColData);
+            sheetDB.getRange(2, statusColIdx, dbLastRow - 1, 1).setValues(statusColData);
         }
         
         // Kirim rekap ukur massal ke Telegram (selalu kirim, bahkan jika database kosong)
