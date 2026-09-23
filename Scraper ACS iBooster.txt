@@ -175,6 +175,7 @@
         // Cek jika proses masih berjalan atau sudah selesai
         if (statusText.toLowerCase().includes('selesai') || statusText.toLowerCase().includes('100%')) {
             setStatus("✅ Analisa selesai! Sedang mengekstrak data...");
+            if (statusTextEl) statusTextEl.innerHTML = "Terukur selesai! 100%";
             setTimeout(extractAndSend, 2000);
         } else {
             // Tampilkan progress yang terbaca
@@ -187,19 +188,32 @@
                 let current = parseInt(matchCount[1]);
                 let total = parseInt(matchCount[2]);
                 
-                if (current > 0 && state.startTime) {
+                if (!state.startTime) {
+                    state.startTime = Date.now();
+                    state.startCount = current;
+                    localStorage.setItem(STATE_KEY, JSON.stringify(state));
+                }
+                
+                if (current > (state.startCount || 0)) {
                     let elapsedSeconds = (Date.now() - state.startTime) / 1000;
-                    let speed = elapsedSeconds / current; // detik per tiket
+                    let speed = elapsedSeconds / (current - (state.startCount || 0)); // detik per tiket
                     let remainingSeconds = Math.round((total - current) * speed);
                     
-                    let m = Math.floor(remainingSeconds / 60);
-                    let s = remainingSeconds % 60;
-                    
-                    let timeStr = "";
-                    if (m > 0) timeStr += `${m} menit `;
-                    timeStr += `${s} detik`;
-                    
-                    timeText = `<br><br><span style="color:#d97706; font-weight:bold; font-size:12px;">⏳ Estimasi selesai: ${timeStr}</span>`;
+                    if (remainingSeconds > 0) {
+                        let m = Math.floor(remainingSeconds / 60);
+                        let s = remainingSeconds % 60;
+                        
+                        let timeStr = "";
+                        if (m > 0) timeStr += `${m} menit `;
+                        timeStr += `${s} detik`;
+                        
+                        timeText = `<br><br><span style="color:#d97706; font-weight:bold; font-size:12px;">⏳ Estimasi selesai: ${timeStr}</span>`;
+                        
+                        // Tampilkan juga langsung di tulisan bawah ACS-nya
+                        if (statusTextEl) {
+                            statusTextEl.innerHTML = pText + ` <span style='color:red; font-weight:bold;'>(⏳ ETA: ${timeStr})</span>`;
+                        }
+                    }
                 }
             } else {
                 let progressMatch = statusText.match(/Terukur:.*inet/i);
@@ -208,7 +222,7 @@
             
             setStatus(`Menunggu hasil analisa...<br><i>${pText}</i>${timeText}`);
             
-            setTimeout(checkResultDOM, 3000); // loop waiting
+            setTimeout(checkResultDOM, 2000); // loop waiting
         }
     }
 
