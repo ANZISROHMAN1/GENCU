@@ -160,7 +160,14 @@
         
         setTimeout(() => {
             analyzeBtn.click();
-            setTimeout(checkResultDOM, 5000);
+            
+            // Fallback: Jika halaman tidak bereaksi, paksa submit form terdekat
+            setTimeout(() => {
+                let form = analyzeBtn.closest('form') || document.querySelector('form');
+                if (form) form.submit();
+            }, 1000);
+            
+            setTimeout(checkResultDOM, 2000);
         }, 1500);
     }
     
