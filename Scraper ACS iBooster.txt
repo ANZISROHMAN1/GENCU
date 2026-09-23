@@ -54,7 +54,7 @@
 
             stopBtn.addEventListener('click', (e) => {
                 e.preventDefault();
-                localStorage.removeItem(STATE_KEY);
+                localStorage.setItem(STATE_KEY, JSON.stringify({ active: false, autoStart: false }));
                 alert("Robot berhasil dihentikan!");
                 location.reload();
             });
@@ -88,8 +88,8 @@
                 let data = await res.json();
                 
                 if (!data || data.length < 2) {
-                    setStatus("❌ Database kosong.");
-                    localStorage.removeItem(STATE_KEY);
+                    setStatus("❌ Database kosong. Mengecek lagi dalam 60 detik...");
+                    setTimeout(startCrawler, 60000);
                     return;
                 }
                 
@@ -112,8 +112,8 @@
                 }
 
                 if (queue.length === 0) {
-                    setStatus("✅ Semua nomor inet sudah diukur!");
-                    localStorage.removeItem(STATE_KEY);
+                    setStatus("✅ Semua nomor inet sudah diukur! Standby mengecek ulang dalam 60 detik...");
+                    setTimeout(startCrawler, 60000);
                     return;
                 }
                 
@@ -352,8 +352,12 @@
             body: JSON.stringify(payload)
         })
         .then(() => {
-            setStatus("🎉 <b>SUKSES!</b> Seluruh data ukur massal berhasil disimpan di Google Sheet.");
-            localStorage.removeItem(STATE_KEY);
+            setStatus("🎉 <b>SUKSES!</b> Data tersimpan. Mengambil data baru dalam 5 detik...");
+            // Ulangi siklus (Looping)
+            state.step = 'FETCHING_DATA';
+            state.queue = [];
+            localStorage.setItem(STATE_KEY, JSON.stringify(state));
+            setTimeout(startCrawler, 5000);
         })
         .catch(err => {
             setStatus("❌ Gagal mengirim hasil. Mencoba lagi dalam 5 detik...");
@@ -365,6 +369,13 @@
 
     setTimeout(() => {
         let state = JSON.parse(localStorage.getItem(STATE_KEY));
+        
+        // Auto-start logic
+        if (!state || state.autoStart === undefined) {
+            state = { active: true, autoStart: true, step: 'FETCHING_DATA', queue: [] };
+            localStorage.setItem(STATE_KEY, JSON.stringify(state));
+        }
+
         if (state && state.active) {
             if (state.step === 'FETCHING_DATA') startCrawler();
             else if (state.step === 'PASTE_AND_ANALYZE') pasteAndAnalyze();
