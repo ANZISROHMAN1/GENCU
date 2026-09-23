@@ -15,7 +15,7 @@
     // KONFIGURASI URL GOOGLE APPS SCRIPT
     // ==========================================
     // GANTI URL INI dengan URL Web App Apps Script Anda!
-    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxcwhCudJzEE-eONd2npH6qsPjFecyaH6fg7GGHCbLFvfLEZDVZdt4gPFnPApheEk8F/exec';
+    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyz4bDNVEtjazRYRSvs2lXk_40Ee6qhxR64r9UCBXjaWPn6Q9urV8LFSymXXqWHxQs3/exec';
     const STATE_KEY = 'acsBulkScraperState';
 
     function getUI() {
