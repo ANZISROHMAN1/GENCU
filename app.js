@@ -268,7 +268,6 @@ function renderTable() {
 
             if (state.statusFilter === 'REDAMAN TINGGI') return badgeText === 'REDAMAN TINGGI';
             if (state.statusFilter === 'LOS') return badgeText === 'LOS';
-            if (state.statusFilter === 'DYING GASP') return badgeText.includes('DYING');
             return badgeText === state.statusFilter;
         });
     }
@@ -292,13 +291,11 @@ function renderTable() {
 
     let countOnline = 0;
     let countLos = 0;
-    let countDying = 0;
 
     displayTickets.forEach(ticket => {
         let st = (ticket.status || "").toUpperCase();
         if (st === 'ONLINE' || st.match(/\bONLINE\b/)) countOnline++;
         else if (st === 'LOS' || st.match(/\bLOS\b/)) countLos++;
-        else if (st.match(/\bDYING\b/)) countDying++;
 
         let statusBadge = '';
         if (ticket.status === 'LOS' || ticket.status.includes('DYING')) statusBadge = `<span class="badge danger">${ticket.status}</span>`;
@@ -324,7 +321,6 @@ function renderTable() {
         footerEl.style.display = 'flex';
         document.getElementById('statOnline').innerText = countOnline;
         document.getElementById('statLos').innerText = countLos;
-        document.getElementById('statDying').innerText = countDying;
     }
 }
 
