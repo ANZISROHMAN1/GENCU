@@ -408,9 +408,10 @@ function renderKorlapFlow() {
     }
 
     let contentAssign = `
-        <p class="info-text">Masukkan NIK Teknisi lapangan yang hadir untuk ditugaskan menangani tiket <strong>${state.activeTicketId}</strong>.</p>
-        <div class="btn-group" style="margin-bottom: 15px;">
-            <input type="text" id="tekSelect" placeholder="Masukkan NIK Teknisi" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); width: 100%; max-width: 300px;">
+        <p class="info-text">Masukkan NIK Teknisi lapangan dan ID Telegram untuk ditugaskan menangani tiket <strong>${state.activeTicketId}</strong>.</p>
+        <div class="btn-group" style="margin-bottom: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
+            <input type="text" id="tekSelect" placeholder="Masukkan NIK Teknisi" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); width: 100%; max-width: 250px;">
+            <input type="text" id="teleSelect" placeholder="Masukkan ID Telegram (Chat ID)" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); width: 100%; max-width: 250px;">
         </div>
         <button class="btn btn-primary" onclick="assignTicketToTelegram(this)">Assign Ticket</button>
     `;
@@ -433,9 +434,11 @@ window.approveTicketFinal = function() {
 
 window.assignTicketToTelegram = function(btn) {
     const tekSelect = document.getElementById('tekSelect');
-    const teknisi = tekSelect.value;
-    if (!teknisi) {
-        alert("Masukkan NIK Teknisi terlebih dahulu!");
+    const teleSelect = document.getElementById('teleSelect');
+    const teknisi = tekSelect.value.trim();
+    const idTele = teleSelect.value.trim();
+    if (!teknisi || !idTele) {
+        alert("Masukkan NIK Teknisi dan ID Telegram terlebih dahulu!");
         return;
     }
     
@@ -448,6 +451,7 @@ window.assignTicketToTelegram = function(btn) {
         action: 'assign_ticket',
         ticketId: state.activeTicketId,
         teknisi: teknisi,
+        idTele: idTele,
         sto: ticket ? ticket.sto : '-',
         rx: ticket ? ticket.rx : '-',
         tx: ticket ? ticket.tx : '-',

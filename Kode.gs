@@ -447,6 +447,7 @@ function doPost(e) {
     // NEW: Handle action 'assign_ticket' dari Dashboard Web (Korlap)
     if (dataObj.action === 'assign_ticket') {
         var teknisiNIK = dataObj.teknisi;
+        var idTele = dataObj.idTele;
         var ticketId = dataObj.ticketId;
         var sNum = dataObj.serviceNumber || "-";
         var sto = dataObj.sto || "-";
@@ -454,10 +455,10 @@ function doPost(e) {
         var tx = dataObj.tx || "-";
         
         var botTokenTg = "8050598199:AAHpPcFNUaLmox5Y6J2Ea0IvDkkPawLsZd8";
-        var chatIdTg = "6874834483"; // Chat ID Default (Grup/Admin) jika NIK tidak ditemukan
+        var chatIdTg = idTele || "6874834483"; // Gunakan ID Tele dari Web, atau fallback
         var teknisiName = teknisiNIK;
         
-        // Cari Chat ID teknisi berdasarkan NIK di tab "TEKNISI"
+        // Cari Nama teknisi berdasarkan NIK di tab "TEKNISI" (opsional, untuk nama)
         var sheetTeknisi = ss.getSheetByName("TEKNISI");
         if (sheetTeknisi) {
             var tekLastRow = sheetTeknisi.getLastRow();
@@ -467,10 +468,7 @@ function doPost(e) {
                     // Asumsi Kolom A: NIK, Kolom B: Nama, Kolom C: Telegram Chat ID
                     if (tekData[i][0].toString().trim() === teknisiNIK.toString().trim()) {
                         teknisiName = tekData[i][1].toString().trim() || teknisiNIK;
-                        var foundChatId = tekData[i][2].toString().trim();
-                        if (foundChatId) {
-                            chatIdTg = foundChatId;
-                        }
+                        // Kita tidak override chatIdTg dari database karena Korlap sudah memasukkan ID di Web
                         break;
                     }
                 }
