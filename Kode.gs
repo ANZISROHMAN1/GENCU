@@ -555,6 +555,7 @@ function doPost(e) {
         }
         
         var countHighRedaman = 0;
+        var stoLosCount = {};
         
         if (dbLastRow > 1) {
             var searchRange = sheetDB.getRange(2, 1, dbLastRow - 1, dbLastCol).getValues();
@@ -605,7 +606,21 @@ function doPost(e) {
                     // Alert jika redaman terlalu tinggi ATAU status LOS / DYING GASP
                     if (isHighRedaman || isLosOrDying) {
                         countHighRedaman++;
-                        sendRedamanAlert(sNum, meas.rx, meas.tx, searchRange[i], meas.status, headers);
+                        
+                        // Ekstrak STO untuk summary
+                        var sto = "-";
+                        for (var c2 = 0; c2 < rowData.length; c2++) {
+                           var ct = (rowData[c2] || "").toString().trim();
+                           if (/^[A-Z]{3}$/.test(ct) && ct !== "INC" && ct !== "YES" && ct !== "REG") {
+                               sto = ct;
+                               break;
+                           }
+                        }
+                        
+                        if (isLosOrDying) {
+                            if (!stoLosCount[sto]) stoLosCount[sto] = 0;
+                            stoLosCount[sto]++;
+                        }
                     }
                 }
             }
@@ -618,7 +633,7 @@ function doPost(e) {
         }
         
         // Kirim rekap ukur massal ke Telegram (selalu kirim, bahkan jika database kosong)
-        sendSummaryAlert(measurements.length, countHighRedaman);
+        sendSummaryAlert(measurements.length, countHighRedaman, stoLosCount);
         
         // -------------------------------------------------------------
         // NEW: Menyimpan seluruh raw data ACS ke tab 'DATA ACS'
@@ -972,7 +987,7 @@ function sendRedamanAlert(sNum, rx, tx, rowData, status, headers) {
   }
 }
 
-function sendSummaryAlert(totalMeasured, totalHigh) {
+function sendSummaryAlert(totalMeasured, totalHigh, stoLosCount) {
   var botToken = "8050598199:AAHpPcFNUaLmox5Y6J2Ea0IvDkkPawLsZd8";
   var chatId = "6874834483";
   
@@ -981,10 +996,21 @@ function sendSummaryAlert(totalMeasured, totalHigh) {
   var textMsg = "✅ <b>UKUR MASSAL SELESAI!</b>\n\n";
   textMsg += "📊 Total Diukur: <b>" + totalMeasured + " Nomor</b>\n";
   textMsg += "🚨 Redaman Tinggi / LOS: <b>" + totalHigh + " Tiket</b>\n";
+  
+  if (stoLosCount) {
+      var stoList = Object.keys(stoLosCount);
+      if (stoList.length > 0) {
+          textMsg += "\n📉 <b>Rincian Tiket LOS:</b>\n";
+          for (var i = 0; i < stoList.length; i++) {
+              textMsg += "🏢 STO " + stoList[i] + ": <b>" + stoLosCount[stoList[i]] + " tiket</b>\n";
+          }
+      }
+  }
+  
   if (totalHigh === 0) {
       textMsg += "\n<i>Semua redaman dalam batas aman (>-27 dBm) dan Online. Tidak ada tiket yang perlu penanganan teknisi.</i> 👍";
   } else {
-      textMsg += "\n<i>" + totalHigh + " alert detail telah dikirimkan ke Teknisi.</i>";
+      textMsg += "\n<i>Mohon segera cek Dashboard Web Gencu untuk detail assign teknisi.</i>";
   }
   
   var url = "https://api.telegram.org/bot" + botToken + "/sendMessage";
