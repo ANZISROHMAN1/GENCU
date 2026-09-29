@@ -31,7 +31,7 @@ const workflowSubtitle = document.getElementById('workflowSubtitle');
 const dispActiveTicketId = document.getElementById('activeTicketId');
 const dashboardTitle = document.getElementById('dashboardTitle');
 
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyz4bDNVEtjazRYRSvs2lXk_40Ee6qhxR64r9UCBXjaWPn6Q9urV8LFSymXXqWHxQs3/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxcwhCudJzEE-eONd2npH6qsPjFecyaH6fg7GGHCbLFvfLEZDVZdt4gPFnPApheEk8F/exec';
 
 function init() {
     const today = new Date();
