@@ -460,10 +460,14 @@ function renderKorlapFlow() {
         <button class="btn btn-primary" onclick="assignTicketToTelegram(this)">Assign Ticket</button>
     `;
 
-    if (state.workflowState.assigned || ticket.category === 'GCU LOGIC') {
-        let assignedTo = state.workflowState.assigned || "Teknisi";
+    if (ticket.category === 'GCU LOGIC') {
+        contentAssign = `<p style="color: var(--success); font-weight: 500;">✅ Tiket berada di antrean GCU LOGIC.</p>
+        <p class="info-text" style="margin-top: 10px;">Status: Menunggu Helpdesk mengeksekusi pengecekan Logic.</p>
+        <button class="btn btn-outline" style="margin-top: 10px;" onclick="showWorkflow('helpdesk')">Simulasikan View Helpdesk ➡️</button>`;
+    } else if (state.workflowState.assigned || ticket.technician !== "-") {
+        let assignedTo = state.workflowState.assigned || ticket.technician;
         contentAssign = `<p style="color: var(--success); font-weight: 500;">✅ Tiket telah di-assign ke NIK: <strong>${assignedTo}</strong>.</p>
-        <p class="info-text" style="margin-top: 10px;">Status: Menunggu Teknisi submit evidence di menu GCU LOGIC.</p>
+        <p class="info-text" style="margin-top: 10px;">Status: Menunggu Teknisi submit evidence fisik.</p>
         <button class="btn btn-outline" style="margin-top: 10px;" onclick="showWorkflow('teknisi')">Simulasikan View Teknisi ➡️</button>`;
     }
 
