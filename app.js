@@ -704,7 +704,7 @@ function renderHelpdeskFlow() {
         <div style="background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 15px;">
             <h4 style="font-size: 14px; font-weight: bold; color: #1e293b; margin-bottom: 10px;">📞 Layanan Voice</h4>
             <div style="display: flex; flex-direction: column; gap: 8px; margin-left: 5px;">
-                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" id="chk_voice1" ${state.workflowState.chk_voice1 ? 'checked' : ''} onchange="updateState('chk_voice1', this.checked)"> Cek Voice Service (Connected, Normal)</label>
+                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" id="chk_voice1" ${state.workflowState.chk_voice1 ? 'checked' : ''} onchange="updateState('chk_voice1', this.checked)"> Executive Summary ACS</label>
             </div>
         </div>
 
