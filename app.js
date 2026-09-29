@@ -177,12 +177,19 @@ function processData(rows) {
             isGangguan = true;
         }
 
+        let rowText = row.join(" ").toUpperCase();
+        
+        // Tetap masukkan ke dashboard jika tiket ini masih dalam tahap GCU LOGIC (belum COMPLETED)
+        if (rowText.includes("EVIDENCE FISIK SUBMITTED") && !rowText.includes("[COMPLETED]")) {
+            isGangguan = true;
+        }
+
         if (isGangguan) {
             let category = 'GCU FISIK';
-            let rowText = row.join(" ").toUpperCase();
 
-            // Jika teknisi sudah submit evidence via form, pindahkan ke GCU LOGIC
-            if (rowText.includes("EVIDENCE FISIK SUBMITTED")) {
+            if (rowText.includes("[COMPLETED]")) {
+                category = 'COMPLETED';
+            } else if (rowText.includes("EVIDENCE FISIK SUBMITTED")) {
                 category = 'GCU LOGIC';
             }
 
@@ -446,9 +453,33 @@ function renderKorlapFlow() {
 }
 
 window.approveTicketFinal = function () {
-    updateTicketCategory(state.activeTicketId, 'COMPLETED');
-    alert(`Tiket ${state.activeTicketId} berhasil di-Approve dan berstatus COMPLETED!`);
-    showDashboard('COMPLETED');
+    const btn = event.target;
+    const oldText = btn.innerText;
+    btn.innerText = "Processing...";
+    btn.disabled = true;
+
+    const payload = {
+        action: 'approve_completed',
+        ticketId: state.activeTicketId
+    };
+
+    fetch(SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: {
+            'Content-Type': 'text/plain'
+        },
+        body: JSON.stringify(payload)
+    }).then(() => {
+        updateTicketCategory(state.activeTicketId, 'COMPLETED');
+        alert(`Tiket ${state.activeTicketId} berhasil di-Approve dan berstatus COMPLETED!`);
+        showDashboard('COMPLETED');
+    }).catch(err => {
+        console.error(err);
+        updateTicketCategory(state.activeTicketId, 'COMPLETED');
+        alert(`Tiket ${state.activeTicketId} berhasil di-Approve secara lokal (offline)`);
+        showDashboard('COMPLETED');
+    });
 };
 
 window.assignTicketToTelegram = function (btn) {
