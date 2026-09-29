@@ -483,6 +483,16 @@ function doPost(e) {
           return ContentService.createTextOutput("Error: " + err).setMimeType(ContentService.MimeType.TEXT);
       }
   }
+
+  // NEW: Handle request_approval action dari Web Dashboard (Helpdesk -> Korlap)
+  if (dataObj.action === 'request_approval') {
+      try {
+          var successMsg = submitEvidenceDariWeb(dataObj.ticketId, "[WAITING APPROVAL KORLAP] - Logic OK, siap di-approve", "");
+          return ContentService.createTextOutput(successMsg).setMimeType(ContentService.MimeType.TEXT);
+      } catch (err) {
+          return ContentService.createTextOutput("Error: " + err).setMimeType(ContentService.MimeType.TEXT);
+      }
+  }
   
   var sheetScrape = ss.getSheetByName(sheetScrapeName);
   if (!sheetScrape) {

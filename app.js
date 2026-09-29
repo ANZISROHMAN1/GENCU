@@ -177,10 +177,8 @@ function processData(rows) {
             isGangguan = true;
         }
 
-        let rowText = row.join(" ").toUpperCase();
-        
-        // Tetap masukkan ke dashboard jika tiket ini masih dalam tahap GCU LOGIC (belum COMPLETED)
-        if (rowText.includes("EVIDENCE FISIK SUBMITTED") && !rowText.includes("[COMPLETED]")) {
+        // Tetap masukkan ke dashboard jika tiket ini masih dalam tahap penanganan
+        if ((rowText.includes("EVIDENCE FISIK SUBMITTED") || rowText.includes("[WAITING APPROVAL KORLAP]")) && !rowText.includes("[COMPLETED]")) {
             isGangguan = true;
         }
 
@@ -189,6 +187,8 @@ function processData(rows) {
 
             if (rowText.includes("[COMPLETED]")) {
                 category = 'COMPLETED';
+            } else if (rowText.includes("[WAITING APPROVAL KORLAP]")) {
+                category = 'APPROVAL KORLAP';
             } else if (rowText.includes("EVIDENCE FISIK SUBMITTED")) {
                 category = 'GCU LOGIC';
             }
@@ -589,7 +589,7 @@ function renderHelpdeskFlow() {
     if (state.workflowState.logicOk) {
         let contentClose = `
             <p style="color: var(--success); font-weight: 500;">🎉 Logic sudah OK! Tiket siap diserahkan kembali ke Korlap untuk persetujuan akhir.</p>
-            <button class="btn btn-primary" onclick="alert('Tiket dikirim ke Korlap!'); updateTicketCategory(state.activeTicketId, 'APPROVAL KORLAP'); showDashboard('APPROVAL KORLAP');">Ajukan Approval Korlap</button>
+            <button class="btn btn-primary" onclick="window.requestApprovalBackend(event)">Ajukan Approval Korlap</button>
         `;
         workflowContainer.appendChild(createStep('step-h2', 'Selesaikan Pengecekan Logic', contentClose));
     }
@@ -598,3 +598,32 @@ function renderHelpdeskFlow() {
 // Boot
 init();
 
+
+window.requestApprovalBackend = function (event) {
+    const btn = event.target;
+    const oldText = btn.innerText;
+    btn.innerText = "Mengirim...";
+    btn.disabled = true;
+
+    const payload = {
+        action: 'request_approval',
+        ticketId: state.activeTicketId
+    };
+
+    fetch(SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: {
+            'Content-Type': 'text/plain'
+        },
+        body: JSON.stringify(payload)
+    }).then(() => {
+        updateTicketCategory(state.activeTicketId, 'APPROVAL KORLAP');
+        alert("Tiket dikirim ke Korlap!");
+        showDashboard('APPROVAL KORLAP');
+    }).catch(err => {
+        alert("Gagal koneksi ke server!");
+        btn.innerText = oldText;
+        btn.disabled = false;
+    });
+};
