@@ -298,7 +298,12 @@ window.selectTicket = function (ticketId, sto) {
         if (ticket.category === 'GCU LOGIC') {
             targetRole = 'helpdesk';
         } else if (ticket.category === 'GCU FISIK') {
-            targetRole = 'teknisi'; // Otomatis ke Teknisi agar bisa langsung upload foto
+            // Jika belum di-assign, arahkan ke Korlap. Jika sudah, arahkan ke Teknisi.
+            if (!ticket.technician || ticket.technician === '-') {
+                targetRole = 'korlap';
+            } else {
+                targetRole = 'teknisi';
+            }
         } else if (ticket.category === 'APPROVAL KORLAP') {
             targetRole = 'korlap';
         }
