@@ -86,13 +86,19 @@ function processData(rows) {
     let statusAlarmIdx = headers.findIndex(h => h === "STATUS ALARM" || h === "ONU LINK STATUS");
     let workzoneIdx = headers.indexOf("WORKZONE");
     let technicianIdx = headers.findIndex(h => h === "TECHNICIAN" || h === "NAMA TEKNISI");
+    let customerNameIdx = headers.findIndex(h => h.includes("CONTACT NAM") || h.includes("CUSTOMER NAM"));
 
     for (let i = 1; i < rows.length; i++) {
         let row = rows[i];
         let ticketId = row[incIdx] ? row[incIdx].toString().trim() : "-";
         if (!ticketId.match(/^(INC|1-SV)/)) continue;
 
-        let rx = "", tx = "", status = "-", sto = "-", sNum = "-";
+        let rx = "", tx = "", status = "-", sto = "-", sNum = "-", customerName = "-";
+
+        if (customerNameIdx !== -1 && row[customerNameIdx]) {
+            let val = row[customerNameIdx].toString().trim();
+            if (val) customerName = val;
+        }
 
         // 1. Ekstrak STATUS
         if (statusAlarmIdx !== -1 && row[statusAlarmIdx]) {
@@ -222,7 +228,8 @@ function processData(rows) {
                 rx: rx || "-",
                 tx: tx || "-",
                 status: status || "-",
-                category: category
+                category: category,
+                customerName: customerName
             });
         }
     }
@@ -376,7 +383,10 @@ function renderTable() {
         let tr = document.createElement('tr');
         tr.innerHTML = `
             <td><strong>${ticket.incident}</strong></td>
-            <td>${ticket.serviceNumber}</td>
+            <td>
+                <div style="font-weight: 500;">${ticket.serviceNumber}</div>
+                <div style="font-size: 11px; color: var(--text-secondary);">${ticket.customerName}</div>
+            </td>
             <td>${ticket.sto}</td>
             <td>${ticket.technician !== "-" ? `<span style="background:#e0f2fe;color:#0284c7;padding:2px 6px;border-radius:4px;font-size:12px;font-weight:bold;">${ticket.technician}</span>` : `<span style="color:#9ca3af;font-size:12px;">-</span>`}</td>
             <td>${ticket.rx}</td>
@@ -603,7 +613,8 @@ window.assignTicketToTelegram = function (btn) {
         sto: ticket ? ticket.sto : '-',
         rx: ticket ? ticket.rx : '-',
         tx: ticket ? ticket.tx : '-',
-        serviceNumber: ticket ? ticket.serviceNumber : '-'
+        serviceNumber: ticket ? ticket.serviceNumber : '-',
+        customerName: ticket ? ticket.customerName : '-'
     };
 
     fetch(SCRIPT_URL, {

@@ -205,8 +205,8 @@ function doGet(e) {
                       <div class="switch-container">
                           <span class="switch-label">Status Jalur:</span>
                           <div style="display: flex; align-items: center;">
-                              <label class="switch"><input type="checkbox" id="ev_jalur_status" checked onchange="updateSwitchText(this)"><span class="slider"></span></label>
-                              <span class="status-text aman-text" id="ev_jalur_status_text">Aman</span>
+                              <label class="switch"><input type="checkbox" id="ev_jalur_status" onchange="updateSwitchText(this)"><span class="slider"></span></label>
+                              <span class="status-text tidak-aman-text" id="ev_jalur_status_text">Tidak Aman</span>
                           </div>
                       </div>
                   </div>
@@ -217,8 +217,8 @@ function doGet(e) {
                       <div class="switch-container">
                           <span class="switch-label">Status ONT:</span>
                           <div style="display: flex; align-items: center;">
-                              <label class="switch"><input type="checkbox" id="ev_ont_status" checked onchange="updateSwitchText(this)"><span class="slider"></span></label>
-                              <span class="status-text aman-text" id="ev_ont_status_text">Aman</span>
+                              <label class="switch"><input type="checkbox" id="ev_ont_status" onchange="updateSwitchText(this)"><span class="slider"></span></label>
+                              <span class="status-text tidak-aman-text" id="ev_ont_status_text">Tidak Aman</span>
                           </div>
                       </div>
                   </div>
@@ -260,8 +260,8 @@ function doGet(e) {
                   <div id="voice_panel" class="hidden switch-container">
                       <span class="switch-label">Cek RJ11 / Phone Tes:</span>
                       <div style="display: flex; align-items: center;">
-                          <label class="switch"><input type="checkbox" id="voice_status" checked onchange="updateSwitchText(this)"><span class="slider"></span></label>
-                          <span class="status-text aman-text" id="voice_status_text">Aman</span>
+                          <label class="switch"><input type="checkbox" id="voice_status" onchange="updateSwitchText(this)"><span class="slider"></span></label>
+                          <span class="status-text tidak-aman-text" id="voice_status_text">Tidak Aman</span>
                       </div>
                   </div>
 
@@ -273,8 +273,8 @@ function doGet(e) {
                       <div class="switch-container" style="margin-bottom: 15px; border:none; background:transparent; padding:0;">
                           <span class="switch-label">Cek Channel:</span>
                           <div style="display: flex; align-items: center;">
-                              <label class="switch"><input type="checkbox" id="iptv_channel" checked onchange="updateSwitchText(this)"><span class="slider"></span></label>
-                              <span class="status-text aman-text" id="iptv_channel_text">Aman</span>
+                              <label class="switch"><input type="checkbox" id="iptv_channel" onchange="updateSwitchText(this)"><span class="slider"></span></label>
+                              <span class="status-text tidak-aman-text" id="iptv_channel_text">Tidak Aman</span>
                           </div>
                       </div>
                       <label>Cek Remote</label>
@@ -680,6 +680,7 @@ function doPost(e) {
         var idTele = dataObj.idTele;
         var ticketId = dataObj.ticketId;
         var sNum = dataObj.serviceNumber || "-";
+        var custName = dataObj.customerName || "-";
         var sto = dataObj.sto || "-";
         var rx = dataObj.rx || "-";
         var tx = dataObj.tx || "-";
@@ -714,23 +715,25 @@ function doPost(e) {
         textMsg += "Halo <b>" + escapeHTML(teknisiName) + "</b>, Anda ditugaskan untuk tiket berikut:\n\n";
         textMsg += "🎫 <b>INCIDENT:</b> <code>" + escapeHTML(ticketId) + "</code>\n";
         textMsg += "🔌 <b>NO INET:</b> <code>" + escapeHTML(sNum) + "</code>\n";
+        textMsg += "👤 <b>CUSTOMER:</b> <code>" + escapeHTML(custName) + "</code>\n";
         textMsg += "🏢 <b>STO:</b> <code>" + escapeHTML(sto) + "</code>\n";
         textMsg += "🔴 <b>RX POWER:</b> <code>" + escapeHTML(rx) + "</code>\n";
         textMsg += "🟢 <b>TX POWER:</b> <code>" + escapeHTML(tx) + "</code>\n\n";
         
-        textMsg += "👉 <b>PILIH TINDAKAN:</b>\n\n";
-        textMsg += "🛠️ <b>1. GCU FISIK (Isi Form Redaman)</b>\n";
-        textMsg += "<a href=\"" + evidenceLink + "\">Klik di sini untuk Isi Form GCU FISIK</a>\n\n";
-        
-        textMsg += "💻 <b>2. GCU LOGIC (Tersolusikan via Logic)</b>\n";
-        textMsg += "<a href=\"" + logicLink + "\">Klik di sini untuk Set ke GCU LOGIC</a>\n\n";
-        
-        textMsg += "Silakan pilih salah satu opsi di atas sesuai dengan penanganan yang dilakukan!";
+        textMsg += "Silakan klik salah satu tombol di bawah sesuai dengan penanganan yang dilakukan!";
         
         var payloadTg = {
             "chat_id": chatIdTg,
             "text": textMsg,
-            "parse_mode": "HTML"
+            "parse_mode": "HTML",
+            "reply_markup": {
+                "inline_keyboard": [
+                    [
+                        { "text": "🛠️ GCU FISIK", "url": evidenceLink },
+                        { "text": "💻 GCU LOGIC", "url": logicLink }
+                    ]
+                ]
+            }
         };
         
         try {
