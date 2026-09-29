@@ -84,6 +84,7 @@ function processData(rows) {
     if (incIdx === -1) incIdx = 1; // absolute fallback
     
     let statusAlarmIdx = headers.findIndex(h => h === "STATUS ALARM" || h === "ONU LINK STATUS");
+    let workzoneIdx = headers.indexOf("WORKZONE");
     
     for (let i = 1; i < rows.length; i++) {
         let row = rows[i];
@@ -111,12 +112,29 @@ function processData(rows) {
             }
         }
         
-        // 2. Ekstrak STO (3 Huruf Kapital)
-        for(let c=0; c<row.length; c++) {
-            let val = (row[c]||"").toString().trim();
-            if (/^[A-Z]{3}$/.test(val) && !["INC","YES","REG","LOS","ONU","OLT","FBB","TTR","TIF","ASR"].includes(val)) {
-                sto = val;
-                break;
+        // 2. Ekstrak STO
+        if (workzoneIdx !== -1 && row[workzoneIdx]) {
+            sto = row[workzoneIdx].toString().toUpperCase().trim();
+        } else {
+            // Fallback: Paling akurat dari RK Information misal ODC-BKS-FA
+            for(let c=0; c<row.length; c++) {
+                let val = (row[c]||"").toString().trim();
+                let rkMatch = val.match(/OD[CP]-([A-Z]{3})-/i);
+                if (rkMatch) {
+                    sto = rkMatch[1].toUpperCase();
+                    break;
+                }
+            }
+            
+            // Fallback jika tidak ada ODC/ODP, cari 3 huruf kapital
+            if (sto === "-") {
+                for(let c=0; c<row.length; c++) {
+                    let val = (row[c]||"").toString().trim();
+                    if (/^[A-Z]{3}$/.test(val) && !["INC","YES","REG","LOS","ONU","OLT","FBB","TTR","TIF","ASR","RBS","DGS","WIB"].includes(val)) {
+                        sto = val;
+                        break;
+                    }
+                }
             }
         }
         
