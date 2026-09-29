@@ -186,6 +186,8 @@ function processData(rows) {
             }
         }
         
+        let rowText = row.join(" ").toUpperCase();
+        
         // Tetap masukkan ke dashboard jika tiket ini masih dalam tahap penanganan
         if ((rowText.includes("EVIDENCE FISIK SUBMITTED") || rowText.includes("[WAITING APPROVAL KORLAP]")) && !rowText.includes("[COMPLETED]")) {
             isGangguan = true;
