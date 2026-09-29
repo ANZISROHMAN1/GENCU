@@ -1,6 +1,34 @@
 function doGet(e) {
-  // Jika URL diakses dengan parameter apapun (berarti dipanggil dari link Telegram Teknisi)
-  if (e && e.parameter && Object.keys(e.parameter).length > 0) {
+  // Handle action mark_gcu_logic (langsung selesai via logic)
+  if (e && e.parameter && e.parameter.action === 'mark_gcu_logic') {
+      var ticketId = e.parameter.ticket || "";
+      try {
+          submitEvidenceDariWeb(ticketId, "[EVIDENCE FISIK SUBMITTED] - Solved via GCU LOGIC", "");
+          var successHtml = `
+          <html>
+          <head>
+              <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
+              <style>body{font-family:sans-serif;text-align:center;padding:50px 20px;background:#f4f7f6;color:#333;}</style>
+          </head>
+          <body>
+              <h1 style="color:#10b981;font-size:50px;margin:0;">✅</h1>
+              <h3>Berhasil!</h3>
+              <p>Tiket <b>${ticketId}</b> telah ditandai sebagai GCU LOGIC.</p>
+              <p style="font-size:12px;color:#666;">Silakan tutup halaman ini.</p>
+          </body>
+          </html>
+          `;
+          return HtmlService.createHtmlOutput(successHtml)
+            .setTitle("GCU LOGIC Sukses")
+            .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+            .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+      } catch(err) {
+          return ContentService.createTextOutput("Error: " + err).setMimeType(ContentService.MimeType.TEXT);
+      }
+  }
+
+  // Jika URL diakses dengan parameter 'ticket' atau 'inet' (berarti dipanggil dari link Telegram Teknisi)
+  if (e && e.parameter && (e.parameter.ticket || e.parameter.inet)) {
       var ticketId = e.parameter.ticket || "";
       var inet = e.parameter.inet || "";
       var rx = e.parameter.rx || "";
@@ -376,7 +404,8 @@ function doGet(e) {
 
   // DEFAULT API BEHAVIOR (JSON Output)
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheetDB = ss.getSheetByName("DATABASE");
+  var targetSheetName = (e && e.parameter && e.parameter.source === 'all') ? "DATABASE ALL TICKET" : "DATABASE";
+  var sheetDB = ss.getSheetByName(targetSheetName);
   if (!sheetDB) return ContentService.createTextOutput("[]").setMimeType(ContentService.MimeType.JSON);
   
   var dbLastRow = sheetDB.getLastRow();
@@ -429,20 +458,31 @@ function submitEvidenceDariWeb(ticketId, summary, unused) {
 
 function doPost(e) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheetScrape = ss.getSheetByName("SCRAPING INSERA");
-  var sheetDB = ss.getSheetByName("DATABASE"); 
   
-  if (!sheetDB) {
-    return ContentService.createTextOutput("Error: Buat dulu tab bernama DATABASE!").setMimeType(ContentService.MimeType.TEXT);
-  }
-
-  checkAndCreateHeaders(sheetScrape, sheetDB);
-
   var payload = "";
   var allTickets = [];
+  var dataObj = {};
+  
   try {
     payload = e.postData.contents;
-    var dataObj = JSON.parse(payload);
+    dataObj = JSON.parse(payload);
+  } catch(err) {
+    return ContentService.createTextOutput("Error parsing data: " + err.message).setMimeType(ContentService.MimeType.TEXT);
+  }
+  
+  // Penentuan nama sheet berdasarkan source
+  var sheetScrapeName = (dataObj.source === 'oss_all_ticket_canggih') ? "ALL TICKET INSERA" : "SCRAPING INSERA";
+  var sheetDBName = (dataObj.source === 'oss_all_ticket_canggih') ? "DATABASE ALL TICKET" : "DATABASE";
+  
+  var sheetScrape = ss.getSheetByName(sheetScrapeName);
+  if (!sheetScrape) {
+      sheetScrape = ss.insertSheet(sheetScrapeName);
+  }
+  
+  var sheetDB = ss.getSheetByName(sheetDBName); 
+  if (!sheetDB) {
+      sheetDB = ss.insertSheet(sheetDBName);
+  }
     
     // NEW: Handle action 'assign_ticket' dari Dashboard Web (Korlap)
     if (dataObj.action === 'assign_ticket') {
@@ -478,6 +518,7 @@ function doPost(e) {
         // Gunakan SCRIPT_URL statis untuk mencegah error getUrl()
         var webAppUrl = "https://script.google.com/macros/s/AKfycbyz4bDNVEtjazRYRSvs2lXk_40Ee6qhxR64r9UCBXjaWPn6Q9urV8LFSymXXqWHxQs3/exec";
         var evidenceLink = webAppUrl + "?action=form_evidence&ticket=" + encodeURIComponent(ticketId) + "&inet=" + encodeURIComponent(sNum) + "&rx=" + encodeURIComponent(rx) + "&tx=" + encodeURIComponent(tx);
+        var logicLink = webAppUrl + "?action=mark_gcu_logic&ticket=" + encodeURIComponent(ticketId);
         
         var textMsg = "👨‍🔧 <b>NEW ASSIGNMENT TICKET!</b>\n\n";
         textMsg += "Halo <b>" + escapeHTML(teknisiName) + "</b>, Anda ditugaskan untuk tiket berikut:\n\n";
@@ -486,8 +527,15 @@ function doPost(e) {
         textMsg += "🏢 <b>STO:</b> <code>" + escapeHTML(sto) + "</code>\n";
         textMsg += "🔴 <b>RX POWER:</b> <code>" + escapeHTML(rx) + "</code>\n";
         textMsg += "🟢 <b>TX POWER:</b> <code>" + escapeHTML(tx) + "</code>\n\n";
-        textMsg += "👉 <b>SUBMIT EVIDENCE:</b>\n<a href=\"" + evidenceLink + "\">Klik di sini untuk Submit Evidence</a>\n\n";
-        textMsg += "Silakan cek redaman fisik & isi form di link atas jika sudah disolusikan!";
+        
+        textMsg += "👉 <b>PILIH TINDAKAN:</b>\n\n";
+        textMsg += "🛠️ <b>1. GCU FISIK (Isi Form Redaman)</b>\n";
+        textMsg += "<a href=\"" + evidenceLink + "\">Klik di sini untuk Isi Form GCU FISIK</a>\n\n";
+        
+        textMsg += "💻 <b>2. GCU LOGIC (Tersolusikan via Logic)</b>\n";
+        textMsg += "<a href=\"" + logicLink + "\">Klik di sini untuk Set ke GCU LOGIC</a>\n\n";
+        
+        textMsg += "Silakan pilih salah satu opsi di atas sesuai dengan penanganan yang dilakukan!";
         
         var payloadTg = {
             "chat_id": chatIdTg,
@@ -513,6 +561,10 @@ function doPost(e) {
             return ContentService.createTextOutput("No measurements").setMimeType(ContentService.MimeType.TEXT);
         }
         
+        var targetSheetName = (dataObj.source === 'all') ? "DATABASE ALL TICKET" : "DATABASE";
+        var sheetDB = ss.getSheetByName(targetSheetName);
+        if (!sheetDB) return ContentService.createTextOutput("Target sheet not found").setMimeType(ContentService.MimeType.TEXT);
+
         var dbLastRow = sheetDB.getLastRow();
         var dbLastCol = sheetDB.getLastColumn();
         
@@ -532,6 +584,8 @@ function doPost(e) {
         var txColIdx = headers.indexOf("TX POWER") + 1;
         var oltColIdx = headers.indexOf("OLT") + 1;
         var statusColIdx = headers.indexOf("STATUS ALARM") + 1;
+        var workzoneIdx = headers.indexOf("WORKZONE");
+        var statusDateIdx = headers.indexOf("STATUS DATE");
         
         if (rxColIdx === 0 || statusColIdx === 0) {
             // Delete old if partial exists
@@ -603,25 +657,58 @@ function doPost(e) {
                     
                     // Alert jika redaman terlalu tinggi ATAU status LOS / DYING GASP
                     if (isHighRedaman || isLosOrDying) {
-                        countHighRedaman++;
-                        
-                        // Ekstrak STO untuk summary
-                        var sto = "-";
-                        for (var c2 = 0; c2 < rowData.length; c2++) {
-                           var ct = (rowData[c2] || "").toString().trim();
-                           if (/^[A-Z]{3}$/.test(ct) && ct !== "INC" && ct !== "YES" && ct !== "REG") {
-                               sto = ct;
-                               break;
-                           }
+                        // Cek umur tiket (Maksimal 30 Hari)
+                        var isUnder30Days = true;
+                        if (statusDateIdx !== -1 && rowData[statusDateIdx]) {
+                            var ticketDate = new Date(rowData[statusDateIdx]);
+                            var now = new Date();
+                            var diffTime = Math.abs(now - ticketDate);
+                            var diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                            if (diffDays > 30) {
+                                isUnder30Days = false;
+                            }
                         }
                         
-                        if (isLosOrDying) {
-                            if (!stoLosCount[sto]) stoLosCount[sto] = 0;
-                            stoLosCount[sto]++;
+                        if (isUnder30Days) {
+                            countHighRedaman++;
+                            
+                            // Ekstrak STO untuk summary
+                            var sto = "-";
+                        
+                        if (workzoneIdx !== -1 && rowData[workzoneIdx]) {
+                            sto = rowData[workzoneIdx].toString().toUpperCase().trim();
+                        } else {
+                            // Paling akurat dari ODC-XXX / ODP-XXX
+                            for (var c2 = 0; c2 < rowData.length; c2++) {
+                               var ct = (rowData[c2] || "").toString().trim();
+                               var rkMatch = ct.match(/OD[CP]-([A-Z]{3})-/i);
+                               if (rkMatch) {
+                                   sto = rkMatch[1].toUpperCase();
+                                   break;
+                               }
+                            }
+                            
+                            // Fallback STO
+                            if (sto === "-") {
+                                for (var c2 = 0; c2 < rowData.length; c2++) {
+                                   var ct = (rowData[c2] || "").toString().trim();
+                                   if (/^[A-Z]{3}$/.test(ct) && !["INC","YES","REG","LOS","ONU","OLT","FBB","TTR","TIF","ASR","RBS","DGS","WIB"].includes(ct)) {
+                                       sto = ct;
+                                       break;
+                                   }
+                                }
+                            }
                         }
-                    }
-                }
-            }
+                        
+                        if (!stoLosCount[sto]) stoLosCount[sto] = [];
+                        stoLosCount[sto].push({
+                            inet: sNum,
+                            val: isLosOrDying ? meas.status : (meas.rx + " dBm")
+                        });
+                    } // end isUnder30Days
+                } // end if (isHighRedaman || isLosOrDying)
+            } // end if (sNum)
+        } // end loop searchRange
             
             // Tulis kembali seluruh kolom sekaligus (Bulk Update)
             sheetDB.getRange(2, rxColIdx, dbLastRow - 1, 1).setValues(rxColData);
@@ -630,8 +717,10 @@ function doPost(e) {
             sheetDB.getRange(2, statusColIdx, dbLastRow - 1, 1).setValues(statusColData);
         }
         
-        // Kirim rekap ukur massal ke Telegram (selalu kirim, bahkan jika database kosong)
-        sendSummaryAlert(measurements.length, countHighRedaman, stoLosCount);
+        // Hanya kirim Telegram jika ada tiket bermasalah yang terdeteksi
+        if (countHighRedaman > 0) {
+            sendSummaryAlert(measurements.length, countHighRedaman, stoLosCount);
+        }
         
         // -------------------------------------------------------------
         // NEW: Menyimpan seluruh raw data ACS ke tab 'DATA ACS'
@@ -678,10 +767,7 @@ function doPost(e) {
         return ContentService.createTextOutput("Bulk Measurement Updated - VERSI 7").setMimeType(ContentService.MimeType.TEXT);
     }
     
-    allTickets = dataObj.tickets || [];
-  } catch(err) {
-    return ContentService.createTextOutput("Error parsing data: " + err.message).setMimeType(ContentService.MimeType.TEXT);
-  }
+    allTickets = dataObj.tickets || dataObj.data || [];
 
   if (allTickets.length === 0) {
     return ContentService.createTextOutput("No data received").setMimeType(ContentService.MimeType.TEXT);
@@ -697,7 +783,14 @@ function doPost(e) {
   }
   
   var rowsToInsert = [];
-  allTickets.forEach(function(ticketData) {
+  var dynamicHeaders = null;
+  allTickets.forEach(function(ticketData, index) {
+    // Tangkap header dari scraper secara dinamis (berapapun jumlah kolomnya)
+    if (index === 0 && ticketData[0] && ticketData[0].toString().toUpperCase().includes('PARENT')) {
+        dynamicHeaders = ["TIMESTAMP"].concat(ticketData);
+        return; 
+    }
+    
     rowsToInsert.push([new Date()].concat(ticketData));
   });
   
@@ -707,30 +800,53 @@ function doPost(e) {
     sheetScrape.insertRowsAfter(sheetScrape.getMaxRows(), requiredScrapeRows - sheetScrape.getMaxRows());
   }
 
+  // Update header SCRAPING INSERA secara dinamis
+  if (dynamicHeaders) {
+      if (sheetScrape.getMaxColumns() < dynamicHeaders.length) {
+          sheetScrape.insertColumnsAfter(sheetScrape.getMaxColumns(), dynamicHeaders.length - sheetScrape.getMaxColumns());
+      }
+      sheetScrape.getRange(1, 1, 1, dynamicHeaders.length).setValues([dynamicHeaders]);
+      sheetScrape.getRange(1, 1, 1, dynamicHeaders.length).setFontWeight("bold").setBackground("#e0f7fa");
+  }
+
   // Tulis semua baris hasil scraping ke tab SCRAPING INSERA sekaligus mulai dari baris ke-2
-  sheetScrape.getRange(2, 1, rowsToInsert.length, rowsToInsert[0].length).setValues(rowsToInsert);
+  if (rowsToInsert.length > 0) {
+      sheetScrape.getRange(2, 1, rowsToInsert.length, rowsToInsert[0].length).setValues(rowsToInsert);
+  }
 
 
   // 2. UPDATE DATABASE & CEK DUPLIKASI
   var dbLastRow = sheetDB.getLastRow();
+  
+  // Update header DATABASE secara dinamis + Ukur Masal di paling ujung
+  if (dynamicHeaders) {
+      var dbFullHeaders = dynamicHeaders.concat(["RX POWER", "TX POWER", "OLT", "STATUS ALARM"]);
+      if (sheetDB.getMaxColumns() < dbFullHeaders.length) {
+          sheetDB.insertColumnsAfter(sheetDB.getMaxColumns(), dbFullHeaders.length - sheetDB.getMaxColumns());
+      }
+      sheetDB.getRange(1, 1, 1, dbFullHeaders.length).setValues([dbFullHeaders]);
+      sheetDB.getRange(1, 1, 1, dbFullHeaders.length).setFontWeight("bold").setBackground("#f3f3f3");
+      sheetDB.getRange(1, dbFullHeaders.length - 3, 1, 4).setBackground("#fff9c4"); // Kuning untuk 4 kolom terakhir (ukur masal)
+  }
+
   var existingIncidents = [];
   if (dbLastRow > 1) {
-    // Asumsi nomor tiket ada di kolom B (kolom ke-2) tab DATABASE
-    var dbIncData = sheetDB.getRange(2, 2, dbLastRow - 1, 1).getValues();
-    existingIncidents = dbIncData.map(function(r) { return r[0]; });
+    // Nomor INCIDENT ada di kolom C (kolom ke-3) tab DATABASE karena A=TIMESTAMP, B=C_PARENT_ID
+    var dbIncData = sheetDB.getRange(2, 3, dbLastRow - 1, 1).getValues();
+    existingIncidents = dbIncData.map(function(r) { return r[0] ? r[0].toString().trim() : ""; });
   }
 
   var newTicketsForDB = [];
   allTickets.forEach(function(ticketData) {
-    var ticketId = ticketData[0]; // INCIDENT biasanya elemen pertama (index 0)
+    var ticketId = ticketData[1] ? ticketData[1].toString().trim() : ""; // Kolom INCIDENT dari scraper (index 1)
     
     // Jika tiket ini BELUM ADA di database
     if (existingIncidents.indexOf(ticketId) === -1) {
        newTicketsForDB.push([new Date()].concat(ticketData));
        
        // 3. LOGIKA TELEGRAM BOT
-       // Karena "Gaul" ternyata ada di dalam teks kolom SUMMARY (indeks 2), kita akan mendeteksinya dari sana!
-       var summaryText = ticketData[2] ? ticketData[2].toString().toUpperCase() : "";
+       // Karena "Gaul" ada di teks kolom SUMMARY (indeks 3), kita mendeteksinya dari sana
+       var summaryText = ticketData[3] ? ticketData[3].toString().toUpperCase() : "";
        var isGaul = summaryText.indexOf("GAUL") !== -1 || summaryText.indexOf("_GAUL_") !== -1;
        
        if (isGaul) {
@@ -985,7 +1101,7 @@ function sendRedamanAlert(sNum, rx, tx, rowData, status, headers) {
   }
 }
 
-function sendSummaryAlert(totalMeasured, totalHigh, stoLosCount) {
+function sendSummaryAlert(totalMeasured, totalHigh, stoBadTickets) {
   var botToken = "8050598199:AAHpPcFNUaLmox5Y6J2Ea0IvDkkPawLsZd8";
   var chatId = "6874834483";
   
@@ -995,12 +1111,20 @@ function sendSummaryAlert(totalMeasured, totalHigh, stoLosCount) {
   textMsg += "📊 Total Diukur: <b>" + totalMeasured + " Nomor</b>\n";
   textMsg += "🚨 Redaman Tinggi / LOS: <b>" + totalHigh + " Tiket</b>\n";
   
-  if (stoLosCount) {
-      var stoList = Object.keys(stoLosCount);
+  if (stoBadTickets) {
+      var stoList = Object.keys(stoBadTickets);
       if (stoList.length > 0) {
-          textMsg += "\n📉 <b>Rincian Tiket LOS:</b>\n";
+          textMsg += "\n📉 <b>Rincian Tiket Bermasalah per STO:</b>\n";
           for (var i = 0; i < stoList.length; i++) {
-              textMsg += "🏢 STO " + stoList[i] + ": <b>" + stoLosCount[stoList[i]] + " tiket</b>\n";
+              var stoName = stoList[i];
+              var tickets = stoBadTickets[stoName];
+              textMsg += "🏢 STO <b>" + stoName + "</b> (" + tickets.length + " tiket):\n";
+              
+              // Tampilkan daftar tiketnya
+              for (var j = 0; j < tickets.length; j++) {
+                  textMsg += " ├ <code>" + tickets[j].inet + "</code> ➔ " + tickets[j].val + "\n";
+              }
+              textMsg += "\n";
           }
       }
   }
@@ -1033,8 +1157,9 @@ function sendSummaryAlert(totalMeasured, totalHigh, stoLosCount) {
 }
 
 function checkAndCreateHeaders(sheetScrape, sheetDB) {
-  var baseHeaders = ["TIMESTAMP", "INCIDENT", "TTR CUSTOMER", "SUMMARY", "REPORTED DATE", "OWNER GROUP", "OWNER", "CUSTOMER SEGMENT", "SERVICE TYPE", "WITEL", "WORKZONE", "STATUS", "ACTION", "TICKET_ID", "LID", "UID"];
-  var dbHeaders = baseHeaders.concat(["RX POWER", "TX POWER", "OLT"]);
+  // Update header agar sesuai dengan tarikan Insera terbaru
+  var baseHeaders = ["TIMESTAMP", "C_PARENT_ID", "INCIDENT", "ITR CUSTOMER", "SUMMARY", "REPORTED DATE", "OWNER GROUP", "OWNER", "CUSTOMER SEGMENT", "SERVICE TYPE", "WITEL", "WORKZONE", "STATUS", "STATUS DATE", "TICKET ID GAMAS"];
+  var dbHeaders = baseHeaders.concat(["RX POWER", "TX POWER", "OLT", "STATUS ALARM"]);
   
   if (sheetScrape) {
       var valScrape = sheetScrape.getRange(1, 1).getValue();
@@ -1079,8 +1204,13 @@ function forceCreateHeaders() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheetScrape = ss.getSheetByName("SCRAPING INSERA");
   var sheetDB = ss.getSheetByName("DATABASE");
+  
+  // Hapus baris pertama agar checkAndCreateHeaders benar-benar memaksa membuat ulang header baru
+  if (sheetScrape) sheetScrape.getRange("1:1").clearContent();
+  if (sheetDB) sheetDB.getRange("1:1").clearContent();
+  
   checkAndCreateHeaders(sheetScrape, sheetDB);
-  SpreadsheetApp.getUi().alert("✅ Header berhasil diwarnai & dibuat ulang!");
+  SpreadsheetApp.getUi().alert("✅ Header berhasil diperbarui sesuai dengan format Insera yang baru!");
 }
 
 function testTelegramAuth() {

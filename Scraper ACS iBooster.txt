@@ -26,11 +26,13 @@
                 let maxArea = 0;
                 for (let i = 0; i < window.frames.length; i++) {
                     try {
-                        let frame = window.frames[i];
-                        let area = frame.innerWidth * frame.innerHeight;
-                        if (area > maxArea && frame.document && frame.document.body) {
-                            maxArea = area;
-                            bestFrame = frame.document.body;
+                        let frameDoc = window.frames[i].document;
+                        if (frameDoc && frameDoc.body) {
+                            let area = frameDoc.body.clientWidth * frameDoc.body.clientHeight;
+                            if (area > maxArea) {
+                                maxArea = area;
+                                bestFrame = frameDoc.body;
+                            }
                         }
                     } catch(e) {} // Abaikan cross-origin frame
                 }
@@ -41,7 +43,8 @@
     }
 
     function getUI() {
-        let container = document.getElementById('acs-bulk-container');
+        let targetBody = getTargetBody();
+        let container = targetBody.querySelector('#acs-bulk-container');
         if (!container) {
             container = document.createElement('div');
             container.id = 'acs-bulk-container';
@@ -56,6 +59,20 @@
             statusInfo.style = 'font-size: 13px; color: #475569; margin-bottom: 10px; min-height: 40px; word-wrap: break-word;';
             statusInfo.innerHTML = 'Siap melakukan Ukur Massal otomatis.';
             
+            let sourceSelect = document.createElement('select');
+            sourceSelect.id = 'acs-source-select';
+            sourceSelect.style = 'width: 100%; padding: 8px; margin-bottom: 10px; border-radius: 6px; border: 1px solid #cbd5e1;';
+            sourceSelect.innerHTML = `
+                <option value="closed">Ukur Tiket CLOSED (DATABASE)</option>
+                <option value="all">Ukur ALL TICKET (DATABASE ALL TICKET)</option>
+            `;
+            
+            // Set initial value if exist
+            let existingState = JSON.parse(localStorage.getItem(STATE_KEY));
+            if(existingState && existingState.source) {
+                sourceSelect.value = existingState.source;
+            }
+
             let btnGroup = document.createElement('div');
             btnGroup.style = 'display: flex; flex-direction: column; gap: 8px;';
 
@@ -69,8 +86,15 @@
 
             startBtn.addEventListener('click', (e) => {
                 e.preventDefault();
-                localStorage.setItem(STATE_KEY, JSON.stringify({ active: true, step: 'FETCHING_DATA', queue: [] }));
-                startBtn.innerText = 'Mengambil data...';
+                let chosenSource = sourceSelect.value;
+                localStorage.setItem(STATE_KEY, JSON.stringify({ 
+                    active: true, 
+                    autoStart: true, 
+                    step: 'FETCHING_DATA',
+                    startTime: Date.now(),
+                    source: chosenSource
+                }));
+                startBtn.innerText = '⏳ MEMULAI...';
                 startCrawler();
             });
 
@@ -86,6 +110,7 @@
             
             container.appendChild(title);
             container.appendChild(statusInfo);
+            container.appendChild(sourceSelect);
             container.appendChild(btnGroup);
             
             try {
@@ -108,7 +133,10 @@
         if (state.step === 'FETCHING_DATA') {
             setStatus("⏳ Menarik database dari Google Sheet...");
             try {
-                let res = await fetch(SCRIPT_URL);
+                let fetchUrl = SCRIPT_URL;
+                if (state.source === 'all') fetchUrl += "?source=all";
+                
+                let res = await fetch(fetchUrl);
                 let data = await res.json();
                 
                 if (!data || data.length < 2) {
@@ -123,7 +151,7 @@
                 let queue = [];
                 for (let i = 1; i < data.length; i++) {
                     let row = data[i];
-                    // Ambil semua nomor internet tanpa mempedulikan apakah kolom RX sudah terisi atau belum
+                    
                     let sNumMatch = row.find(cell => cell && cell.toString().trim().match(/^1[1-9]\d{10,11}$/));
                     if (sNumMatch) {
                         queue.push(sNumMatch.toString().trim());
@@ -232,7 +260,17 @@
                 if (!state.startTime) {
                     state.startTime = Date.now();
                     state.startCount = current;
+                }
+                
+                // Deteksi STUCK (jika angka tidak bertambah selama 2 menit)
+                if (state.lastCount !== current) {
+                    state.lastCount = current;
+                    state.lastCountTime = Date.now();
                     localStorage.setItem(STATE_KEY, JSON.stringify(state));
+                } else if (state.lastCountTime && (Date.now() - state.lastCountTime > 120000)) {
+                    setStatus("⚠️ ACS SERVER STUCK! Memaksa ekstraksi data yang ada...");
+                    setTimeout(extractAndSend, 2000);
+                    return;
                 }
                 
                 if (current > (state.startCount || 0)) {
@@ -381,6 +419,7 @@
         
         let payload = {
             action: 'update_measurement_bulk',
+            source: state.source === 'all' ? 'all' : 'closed',
             measurements: measurements,
             fullData: fullData
         };
