@@ -85,6 +85,7 @@ function processData(rows) {
 
     let statusAlarmIdx = headers.findIndex(h => h === "STATUS ALARM" || h === "ONU LINK STATUS");
     let workzoneIdx = headers.indexOf("WORKZONE");
+    let technicianIdx = headers.findIndex(h => h === "TECHNICIAN" || h === "NAMA TEKNISI");
 
     for (let i = 1; i < rows.length; i++) {
         let row = rows[i];
@@ -177,7 +178,13 @@ function processData(rows) {
             isGangguan = true;
         }
 
-        let rowText = row.join(" ").toUpperCase();
+        let technician = "-";
+        if (technicianIdx !== -1 && row[technicianIdx]) {
+            let tVal = row[technicianIdx].toString().trim();
+            if (tVal && !tVal.toLowerCase().includes("please assign") && tVal.toLowerCase() !== "null") {
+                technician = tVal;
+            }
+        }
         
         // Tetap masukkan ke dashboard jika tiket ini masih dalam tahap penanganan
         if ((rowText.includes("EVIDENCE FISIK SUBMITTED") || rowText.includes("[WAITING APPROVAL KORLAP]")) && !rowText.includes("[COMPLETED]")) {
@@ -186,6 +193,11 @@ function processData(rows) {
 
         if (isGangguan) {
             let category = 'GCU FISIK';
+
+            // JIKA tidak ada nik teknisi, auto ngalir ke GCU LOGIC
+            if (technician === "-") {
+                category = 'GCU LOGIC';
+            }
 
             if (rowText.includes("[COMPLETED]")) {
                 category = 'COMPLETED';
@@ -199,6 +211,7 @@ function processData(rows) {
                 incident: ticketId,
                 serviceNumber: sNum !== "-" ? sNum : "Unknown",
                 sto: sto,
+                technician: technician,
                 rx: rx || "-",
                 tx: tx || "-",
                 status: status || "-",
@@ -338,6 +351,7 @@ function renderTable() {
             <td><strong>${ticket.incident}</strong></td>
             <td>${ticket.serviceNumber}</td>
             <td>${ticket.sto}</td>
+            <td>${ticket.technician !== "-" ? `<span style="background:#e0f2fe;color:#0284c7;padding:2px 6px;border-radius:4px;font-size:12px;font-weight:bold;">${ticket.technician}</span>` : `<span style="color:#9ca3af;font-size:12px;">-</span>`}</td>
             <td>${ticket.rx}</td>
             <td>${statusBadge}</td>
             <td>
@@ -438,7 +452,7 @@ function renderKorlapFlow() {
     let contentAssign = `
         <p class="info-text">Masukkan NIK Teknisi lapangan dan ID Telegram untuk ditugaskan menangani tiket <strong>${state.activeTicketId}</strong>.</p>
         <div class="btn-group" style="margin-bottom: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
-            <input type="text" id="tekSelect" placeholder="Masukkan NIK Teknisi" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); width: 100%; max-width: 250px;">
+            <input type="text" id="tekSelect" placeholder="Masukkan NIK Teknisi" value="${ticket.technician !== '-' ? ticket.technician : ''}" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); width: 100%; max-width: 250px;">
             <input type="text" id="teleSelect" placeholder="Masukkan ID Telegram (Chat ID)" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); width: 100%; max-width: 250px;">
         </div>
         <button class="btn btn-primary" onclick="assignTicketToTelegram(this)">Assign Ticket</button>
