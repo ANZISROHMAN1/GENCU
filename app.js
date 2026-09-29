@@ -455,11 +455,34 @@ function renderKorlapFlow() {
 
     if (ticket.category === 'APPROVAL KORLAP') {
         let contentApprove = `
-            <p class="info-text">Teknisi dan Helpdesk telah menyelesaikan perbaikan fisik dan logic untuk tiket <strong>${state.activeTicketId}</strong>.</p>
-            <p class="info-text">Silakan validasi hasil akhirnya sebelum Close tiket.</p>
-            <button class="btn btn-success" style="background: #10b981; border: none; padding: 10px 20px; color: white; border-radius: 6px; font-weight: bold; margin-top: 10px; cursor: pointer;" onclick="approveTicketFinal()">Approve & Selesaikan Tiket</button>
+            <p class="info-text" style="margin-bottom: 15px;">Validasi perbaikan sebelum melakukan GCU Closed.</p>
+            
+            <div style="background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 15px;">
+                <h4 style="font-size: 14px; font-weight: bold; color: #1e293b; margin-bottom: 10px;">🛠️ Cek Evidence Teknisi (Fisik)</h4>
+                <div class="btn-group" style="display: flex; gap: 10px;">
+                    <button class="btn ${state.workflowState.fisikAman ? 'btn-success' : 'btn-outline'}" onclick="updateState('fisikAman', true)">Fisik Aman ✅</button>
+                    <button class="btn btn-outline" style="border-color: var(--danger); color: var(--danger);" onclick="window.reworkTicket('GCU FISIK')">Rework Fisik ❌</button>
+                </div>
+            </div>
+
+            <div style="background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 15px;">
+                <h4 style="font-size: 14px; font-weight: bold; color: #1e293b; margin-bottom: 10px;">💻 Cek Checklist HD (Logic)</h4>
+                <div class="btn-group" style="display: flex; gap: 10px;">
+                    <button class="btn ${state.workflowState.logicAman ? 'btn-success' : 'btn-outline'}" onclick="updateState('logicAman', true)">Logik Aman ✅</button>
+                    <button class="btn btn-outline" style="border-color: var(--danger); color: var(--danger);" onclick="window.reworkTicket('GCU LOGIC')">Rework Logic ❌</button>
+                </div>
+            </div>
         `;
-        workflowContainer.appendChild(createStep('step-k2', 'Final Approval Korlap', contentApprove));
+
+        if (state.workflowState.fisikAman && state.workflowState.logicAman) {
+            contentApprove += `
+                <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #e5e7eb;">
+                    <button class="btn btn-success" style="width: 100%; background: #10b981; border: none; padding: 12px; color: white; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 14px;" onclick="approveTicketFinal()">GCU Closed (Approve & Selesaikan)</button>
+                </div>
+            `;
+        }
+        
+        workflowContainer.appendChild(createStep('step-k2', 'Validasi Korlap', contentApprove));
         return;
     }
 
@@ -513,6 +536,34 @@ window.approveTicketFinal = function () {
         updateTicketCategory(state.activeTicketId, 'COMPLETED');
         alert(`Tiket ${state.activeTicketId} berhasil di-Approve secara lokal (offline)`);
         showDashboard('COMPLETED');
+    });
+};
+
+window.reworkTicket = function (targetCategory) {
+    const confirmRework = confirm(`Apakah Anda yakin ingin melakukan rework dan mengembalikan tiket ini ke antrean ${targetCategory}?`);
+    if (!confirmRework) return;
+
+    const payload = {
+        action: 'rework_ticket',
+        ticketId: state.activeTicketId,
+        targetCategory: targetCategory,
+        summaryText: `[REWORK - DIKEMBALIKAN KE ${targetCategory}]`
+    };
+
+    fetch(SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: {
+            'Content-Type': 'text/plain'
+        },
+        body: JSON.stringify(payload)
+    }).then(() => {
+        updateTicketCategory(state.activeTicketId, targetCategory);
+        alert(`Tiket dikembalikan ke ${targetCategory}!`);
+        showDashboard(targetCategory);
+    }).catch(err => {
+        console.error(err);
+        alert("Gagal koneksi ke server!");
     });
 };
 
