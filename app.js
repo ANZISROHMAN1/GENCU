@@ -565,7 +565,9 @@ function renderTeknisiFlow() {
             <label style="display: flex; align-items: center; gap: 5px;"><input type="checkbox" ${state.workflowState.cekOnt ? 'checked' : ''} onclick="updateState('cekOnt', this.checked)"> Cek Redaman ONT</label>
             <label style="display: flex; align-items: center; gap: 5px;"><input type="checkbox" ${state.workflowState.gantiKabel ? 'checked' : ''} onclick="updateState('gantiKabel', this.checked)"> Patching/Ganti Kabel</label>
         </div>
-        <textarea id="tekNotes" placeholder="Tulis catatan perbaikan / link evidence foto di sini..." rows="3" style="width: 100%; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px; margin-bottom: 10px;">${state.workflowState.evidence || ''}</textarea>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Upload Foto Evidence (Dari Galeri/Kamera)</label>
+        <input type="file" id="tekPhoto" accept="image/*" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 10px; background: white;">
+        <textarea id="tekNotes" placeholder="Tulis catatan perbaikan tambahan di sini..." rows="3" style="width: 100%; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px; margin-bottom: 10px;">${state.workflowState.evidence || ''}</textarea>
         <button class="btn btn-primary" onclick="window.submitTeknisiEvidence(event)">Submit Evidence Fisik</button>
     `;
 
@@ -693,7 +695,7 @@ window.requestApprovalBackend = function (event) {
     });
 };
 
-window.submitTeknisiEvidence = function (event) {
+window.submitTeknisiEvidence = async function (event) {
     const btn = event.target;
     const oldText = btn.innerText;
     btn.innerText = "Mengirim...";
@@ -714,6 +716,33 @@ window.submitTeknisiEvidence = function (event) {
         summaryText: summaryText
     };
 
+    // Proses Foto Jika Ada
+    const photoInput = document.getElementById('tekPhoto');
+    if (photoInput && photoInput.files.length > 0) {
+        btn.innerText = "Mengupload Foto...";
+        const file = photoInput.files[0];
+        
+        try {
+            const base64String = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result.split(',')[1]);
+                reader.onerror = error => reject(error);
+                reader.readAsDataURL(file);
+            });
+            
+            payload.photoBase64 = base64String;
+            payload.photoMimeType = file.type;
+            payload.photoName = "Evidence_" + state.activeTicketId + "_" + file.name;
+        } catch (e) {
+            console.error("Gagal membaca file foto:", e);
+            alert("Gagal memproses foto. Pastikan format file benar.");
+            btn.innerText = oldText;
+            btn.disabled = false;
+            return;
+        }
+    }
+
+    btn.innerText = "Mengirim Data...";
     fetch(SCRIPT_URL, {
         method: 'POST',
         mode: 'no-cors',
@@ -724,7 +753,7 @@ window.submitTeknisiEvidence = function (event) {
     }).then(() => {
         updateState('evidence', 'submitted');
         updateTicketCategory(state.activeTicketId, 'GCU LOGIC');
-        alert("Evidence fisik berhasil dikirim ke Google Sheet!");
+        alert("Evidence fisik & foto berhasil dikirim ke Google Sheet!");
         showDashboard('GCU LOGIC');
     }).catch(err => {
         console.error(err);
