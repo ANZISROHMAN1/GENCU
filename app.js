@@ -201,8 +201,13 @@ function processData(rows) {
                 category = 'GCU LOGIC';
             }
 
+            // Prioritas status text (override category)
             if (rowText.includes("[COMPLETED]")) {
                 category = 'COMPLETED';
+            } else if (rowText.includes("DIKEMBALIKAN KE GCU FISIK") || rowText.includes("[BUTUH FISIK")) {
+                category = 'GCU FISIK'; // Paksa ke GCU FISIK jika dirework/butuh fisik
+            } else if (rowText.includes("DIKEMBALIKAN KE GCU LOGIC")) {
+                category = 'GCU LOGIC';
             } else if (rowText.includes("[WAITING APPROVAL KORLAP]")) {
                 category = 'APPROVAL KORLAP';
             } else if (rowText.includes("EVIDENCE FISIK SUBMITTED")) {
@@ -697,7 +702,7 @@ function renderHelpdeskFlow() {
 
         <div class="btn-group" style="margin-bottom: 15px;">
             <button class="btn ${state.workflowState.logicOk ? 'btn-success' : 'btn-outline'}" onclick="updateState('logicOk', true)">Logic Selesai & Layanan Normal ✅</button>
-            <button class="btn ${state.workflowState.logicFail ? 'btn-danger' : 'btn-outline'}" onclick="updateState('logicFail', true)" style="border-color: var(--danger); color: ${state.workflowState.logicFail ? 'white' : 'var(--danger)'}; background: ${state.workflowState.logicFail ? 'var(--danger)' : 'transparent'}">Masih Gangguan (Butuh Fisik) ❌</button>
+            <button class="btn btn-outline" style="border-color: var(--danger); color: var(--danger);" onclick="window.returnToFisikFromHelpdesk()">Masih Gangguan (Butuh Fisik) ❌</button>
         </div>
     `;
 
@@ -827,5 +832,49 @@ window.submitTeknisiEvidence = async function (event) {
         alert("Gagal menghubungi server!");
         btn.innerText = oldText;
         btn.disabled = false;
+    });
+};
+
+window.returnToFisikFromHelpdesk = function () {
+    const confirmMove = confirm("Apakah tiket ini masih butuh perbaikan fisik oleh Teknisi? Tiket akan dipindah ke antrean GCU FISIK.");
+    if (!confirmMove) return;
+    
+    // Kumpulkan data checklist yang sudah dilakukan helpdesk
+    let checkedItems = [];
+    if(state.workflowState.chk_int1) checkedItems.push("Pindah Channel");
+    if(state.workflowState.chk_int2) checkedItems.push("Checklist NAT");
+    if(state.workflowState.chk_int3) checkedItems.push("Enable IPV6");
+    if(state.workflowState.chk_int4) checkedItems.push("Firewall Medium");
+    if(state.workflowState.chk_int5) checkedItems.push("Cek ONT");
+    if(state.workflowState.chk_int6) checkedItems.push("Cek FPP");
+    if(state.workflowState.chk_iptv1) checkedItems.push("Cek ACS");
+    if(state.workflowState.chk_iptv2) checkedItems.push("Cek Channel");
+    if(state.workflowState.chk_iptv3) checkedItems.push("Cek Isolir");
+    if(state.workflowState.chk_iptv4) checkedItems.push("Cek STB");
+    if(state.workflowState.chk_voice1) checkedItems.push("Cek Voice");
+
+    let notes = (checkedItems.length > 0 ? "Sudah dicoba Helpdesk: " + checkedItems.join(", ") : "Logic tidak mempan");
+
+    const payload = {
+        action: 'rework_ticket',
+        ticketId: state.activeTicketId,
+        targetCategory: 'GCU FISIK',
+        summaryText: `[BUTUH FISIK - DIKEMBALIKAN KE GCU FISIK] | ${notes}`
+    };
+    
+    fetch(SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: {
+            'Content-Type': 'text/plain'
+        },
+        body: JSON.stringify(payload)
+    }).then(() => {
+        updateTicketCategory(state.activeTicketId, 'GCU FISIK');
+        alert("Tiket dikembalikan ke GCU FISIK untuk perbaikan lapangan!");
+        showDashboard('GCU FISIK');
+    }).catch(err => {
+        console.error(err);
+        alert("Gagal koneksi ke server!");
     });
 };
