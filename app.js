@@ -589,20 +589,50 @@ function renderHelpdeskFlow() {
         return;
     }
 
-    if (state.workflowState.evidence !== 'submitted') {
+    if (state.workflowState.evidence !== 'submitted' && ticket.technician !== "-") {
         workflowContainer.innerHTML = `<p style="color: var(--danger); font-weight: 500;">❌ Teknisi belum mensubmit evidence perbaikan fisik.</p>`;
         return;
     }
 
     let contentLogic = `
-        <p class="info-text">Teknisi telah menyelesaikan perbaikan fisik. Silakan cek *Logic* (koneksi PPPoE, IP, dan Layanan iBooster).</p>
+        <p class="info-text" style="margin-bottom:15px;">Silakan jalankan eksekusi pengecekan Logic sesuai flowchart berikut. Centang langkah yang sudah dilakukan:</p>
+        
+        <div style="background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 15px;">
+            <h4 style="font-size: 14px; font-weight: bold; color: #1e293b; margin-bottom: 10px;">🌐 Layanan Internet</h4>
+            <div style="display: flex; flex-direction: column; gap: 8px; margin-left: 5px;">
+                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" id="chk_int1" ${state.workflowState.chk_int1 ? 'checked' : ''} onchange="updateState('chk_int1', this.checked)"> Cek Interferensi Sinyal / Pindah Channel Frekuensi</label>
+                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" id="chk_int2" ${state.workflowState.chk_int2 ? 'checked' : ''} onchange="updateState('chk_int2', this.checked)"> Checklist NAT</label>
+                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" id="chk_int3" ${state.workflowState.chk_int3 ? 'checked' : ''} onchange="updateState('chk_int3', this.checked)"> Enable IPV6</label>
+                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" id="chk_int4" ${state.workflowState.chk_int4 ? 'checked' : ''} onchange="updateState('chk_int4', this.checked)"> Set Firewall ke Medium</label>
+                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" id="chk_int5" ${state.workflowState.chk_int5 ? 'checked' : ''} onchange="updateState('chk_int5', this.checked)"> Cek CPU/RAM & Versi ONT (Restart/Ganti jika Obsolete)</label>
+                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" id="chk_int6" ${state.workflowState.chk_int6 ? 'checked' : ''} onchange="updateState('chk_int6', this.checked)"> Cek FPP (Client, RSSL, Ping, Traceroute)</label>
+            </div>
+        </div>
+
+        <div style="background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 15px;">
+            <h4 style="font-size: 14px; font-weight: bold; color: #1e293b; margin-bottom: 10px;">📺 Layanan IPTV</h4>
+            <div style="display: flex; flex-direction: column; gap: 8px; margin-left: 5px;">
+                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" id="chk_iptv1" ${state.workflowState.chk_iptv1 ? 'checked' : ''} onchange="updateState('chk_iptv1', this.checked)"> Cek ACS Connection</label>
+                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" id="chk_iptv2" ${state.workflowState.chk_iptv2 ? 'checked' : ''} onchange="updateState('chk_iptv2', this.checked)"> Cek Last Information & Channel connect</label>
+                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" id="chk_iptv3" ${state.workflowState.chk_iptv3 ? 'checked' : ''} onchange="updateState('chk_iptv3', this.checked)"> Cek Status Isolir</label>
+                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" id="chk_iptv4" ${state.workflowState.chk_iptv4 ? 'checked' : ''} onchange="updateState('chk_iptv4', this.checked)"> Cek Adv STB Information</label>
+            </div>
+        </div>
+
+        <div style="background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 15px;">
+            <h4 style="font-size: 14px; font-weight: bold; color: #1e293b; margin-bottom: 10px;">📞 Layanan Voice</h4>
+            <div style="display: flex; flex-direction: column; gap: 8px; margin-left: 5px;">
+                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" id="chk_voice1" ${state.workflowState.chk_voice1 ? 'checked' : ''} onchange="updateState('chk_voice1', this.checked)"> Cek Voice Service (Connected, Normal)</label>
+            </div>
+        </div>
+
         <div class="btn-group" style="margin-bottom: 15px;">
-            <button class="btn ${state.workflowState.logicOk ? 'btn-success' : 'btn-outline'}" onclick="updateState('logicOk', true)">Logic OK & Layanan UP ✅</button>
-            <button class="btn ${state.workflowState.logicFail ? 'btn-danger' : 'btn-outline'}" onclick="updateState('logicFail', true)" style="border-color: var(--danger); color: ${state.workflowState.logicFail ? 'white' : 'var(--danger)'}; background: ${state.workflowState.logicFail ? 'var(--danger)' : 'transparent'}">Masih Gangguan (Reject) ❌</button>
+            <button class="btn ${state.workflowState.logicOk ? 'btn-success' : 'btn-outline'}" onclick="updateState('logicOk', true)">Logic Selesai & Layanan Normal ✅</button>
+            <button class="btn ${state.workflowState.logicFail ? 'btn-danger' : 'btn-outline'}" onclick="updateState('logicFail', true)" style="border-color: var(--danger); color: ${state.workflowState.logicFail ? 'white' : 'var(--danger)'}; background: ${state.workflowState.logicFail ? 'var(--danger)' : 'transparent'}">Masih Gangguan (Butuh Fisik) ❌</button>
         </div>
     `;
 
-    workflowContainer.appendChild(createStep('step-h1', 'Verifikasi Logic & Layanan', contentLogic));
+    workflowContainer.appendChild(createStep('step-h1', 'Eksekusi Logic Flowchart', contentLogic));
 
     if (state.workflowState.logicOk) {
         let contentClose = `
@@ -623,9 +653,26 @@ window.requestApprovalBackend = function (event) {
     btn.innerText = "Mengirim...";
     btn.disabled = true;
 
+    // Format summary checklist
+    let checkedItems = [];
+    if(state.workflowState.chk_int1) checkedItems.push("Pindah Channel");
+    if(state.workflowState.chk_int2) checkedItems.push("Checklist NAT");
+    if(state.workflowState.chk_int3) checkedItems.push("Enable IPV6");
+    if(state.workflowState.chk_int4) checkedItems.push("Firewall Medium");
+    if(state.workflowState.chk_int5) checkedItems.push("Cek ONT");
+    if(state.workflowState.chk_int6) checkedItems.push("Cek FPP");
+    if(state.workflowState.chk_iptv1) checkedItems.push("Cek ACS");
+    if(state.workflowState.chk_iptv2) checkedItems.push("Cek Channel");
+    if(state.workflowState.chk_iptv3) checkedItems.push("Cek Isolir");
+    if(state.workflowState.chk_iptv4) checkedItems.push("Cek STB");
+    if(state.workflowState.chk_voice1) checkedItems.push("Cek Voice");
+    
+    let summaryText = "[WAITING APPROVAL KORLAP] - Eksekusi Logic: " + (checkedItems.length > 0 ? checkedItems.join(", ") : "OK");
+
     const payload = {
         action: 'request_approval',
-        ticketId: state.activeTicketId
+        ticketId: state.activeTicketId,
+        summaryText: summaryText
     };
 
     fetch(SCRIPT_URL, {
