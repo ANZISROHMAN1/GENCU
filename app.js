@@ -705,6 +705,12 @@ function renderHelpdeskFlow() {
             </div>
         </div>
 
+        <div style="margin-top: 15px; margin-bottom: 15px;">
+            <label class="block text-sm font-medium text-gray-700 mb-1">Upload Foto Evidence Logic (Opsional)</label>
+            <input type="file" id="hdPhoto" accept="image/*" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 10px; background: white;">
+            <textarea id="hdNotes" placeholder="Tulis catatan logic / link evidence foto tambahan di sini..." rows="2" style="width: 100%; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px;"></textarea>
+        </div>
+
         <div class="btn-group" style="margin-bottom: 15px;">
             <button class="btn ${state.workflowState.logicOk ? 'btn-success' : 'btn-outline'}" onclick="updateState('logicOk', true)">Logic Selesai & Layanan Normal ✅</button>
             <button class="btn btn-outline" style="border-color: var(--danger); color: var(--danger);" onclick="window.returnToFisikFromHelpdesk()">Masih Gangguan (Butuh Fisik) ❌</button>
@@ -726,10 +732,10 @@ function renderHelpdeskFlow() {
 init();
 
 
-window.requestApprovalBackend = function (event) {
+window.requestApprovalBackend = async function (event) {
     const btn = event.target;
     const oldText = btn.innerText;
-    btn.innerText = "Mengirim...";
+    btn.innerText = "Mempersiapkan...";
     btn.disabled = true;
 
     // Format summary checklist
@@ -746,7 +752,8 @@ window.requestApprovalBackend = function (event) {
     if(state.workflowState.chk_iptv4) checkedItems.push("Cek STB");
     if(state.workflowState.chk_voice1) checkedItems.push("Cek Voice");
     
-    let summaryText = "[WAITING APPROVAL KORLAP] - Eksekusi Logic: " + (checkedItems.length > 0 ? checkedItems.join(", ") : "OK");
+    let notes = document.getElementById('hdNotes') ? document.getElementById('hdNotes').value : "";
+    let summaryText = "[WAITING APPROVAL KORLAP] - Eksekusi Logic: " + (checkedItems.length > 0 ? checkedItems.join(", ") : "OK") + (notes ? " | Catatan: " + notes : "");
 
     const payload = {
         action: 'request_approval',
@@ -754,6 +761,31 @@ window.requestApprovalBackend = function (event) {
         summaryText: summaryText
     };
 
+    // Proses Foto Jika Ada
+    const photoInput = document.getElementById('hdPhoto');
+    if (photoInput && photoInput.files.length > 0) {
+        btn.innerText = "Mengupload Foto...";
+        const file = photoInput.files[0];
+        try {
+            const base64String = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result.split(',')[1]);
+                reader.onerror = error => reject(error);
+                reader.readAsDataURL(file);
+            });
+            payload.photoBase64 = base64String;
+            payload.photoMimeType = file.type;
+            payload.photoName = "Evidence_Logic_" + state.activeTicketId + "_" + file.name;
+        } catch (e) {
+            console.error(e);
+            alert("Gagal memproses foto.");
+            btn.innerText = oldText;
+            btn.disabled = false;
+            return;
+        }
+    }
+
+    btn.innerText = "Mengirim...";
     fetch(SCRIPT_URL, {
         method: 'POST',
         mode: 'no-cors',
@@ -840,7 +872,7 @@ window.submitTeknisiEvidence = async function (event) {
     });
 };
 
-window.returnToFisikFromHelpdesk = function () {
+window.returnToFisikFromHelpdesk = async function () {
     const confirmMove = confirm("Apakah tiket ini masih butuh perbaikan fisik oleh Teknisi? Tiket akan dipindah ke antrean GCU FISIK.");
     if (!confirmMove) return;
     
@@ -858,7 +890,9 @@ window.returnToFisikFromHelpdesk = function () {
     if(state.workflowState.chk_iptv4) checkedItems.push("Cek STB");
     if(state.workflowState.chk_voice1) checkedItems.push("Cek Voice");
 
+    let hdNotes = document.getElementById('hdNotes') ? document.getElementById('hdNotes').value : "";
     let notes = (checkedItems.length > 0 ? "Sudah dicoba Helpdesk: " + checkedItems.join(", ") : "Logic tidak mempan");
+    if (hdNotes) notes += " | Catatan Tambahan: " + hdNotes;
 
     const payload = {
         action: 'rework_ticket',
@@ -867,6 +901,27 @@ window.returnToFisikFromHelpdesk = function () {
         summaryText: `[BUTUH FISIK - DIKEMBALIKAN KE GCU FISIK] | ${notes}`
     };
     
+    // Proses Foto Jika Ada
+    const photoInput = document.getElementById('hdPhoto');
+    if (photoInput && photoInput.files.length > 0) {
+        const file = photoInput.files[0];
+        try {
+            const base64String = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result.split(',')[1]);
+                reader.onerror = error => reject(error);
+                reader.readAsDataURL(file);
+            });
+            payload.photoBase64 = base64String;
+            payload.photoMimeType = file.type;
+            payload.photoName = "Evidence_LogicRework_" + state.activeTicketId + "_" + file.name;
+        } catch (e) {
+            console.error(e);
+            alert("Gagal memproses foto.");
+            return;
+        }
+    }
+
     fetch(SCRIPT_URL, {
         method: 'POST',
         mode: 'no-cors',
