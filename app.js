@@ -565,8 +565,8 @@ function renderTeknisiFlow() {
             <label style="display: flex; align-items: center; gap: 5px;"><input type="checkbox" ${state.workflowState.cekOnt ? 'checked' : ''} onclick="updateState('cekOnt', this.checked)"> Cek Redaman ONT</label>
             <label style="display: flex; align-items: center; gap: 5px;"><input type="checkbox" ${state.workflowState.gantiKabel ? 'checked' : ''} onclick="updateState('gantiKabel', this.checked)"> Patching/Ganti Kabel</label>
         </div>
-        <textarea placeholder="Tulis catatan perbaikan / link evidence foto di sini..." rows="3" style="width: 100%; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px; margin-bottom: 10px;">${state.workflowState.evidence || ''}</textarea>
-        <button class="btn btn-primary" onclick="updateState('evidence', 'submitted')">Submit Evidence</button>
+        <textarea id="tekNotes" placeholder="Tulis catatan perbaikan / link evidence foto di sini..." rows="3" style="width: 100%; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px; margin-bottom: 10px;">${state.workflowState.evidence || ''}</textarea>
+        <button class="btn btn-primary" onclick="window.submitTeknisiEvidence(event)">Submit Evidence Fisik</button>
     `;
 
     if (state.workflowState.evidence === 'submitted') {
@@ -688,6 +688,47 @@ window.requestApprovalBackend = function (event) {
         showDashboard('APPROVAL KORLAP');
     }).catch(err => {
         alert("Gagal koneksi ke server!");
+        btn.innerText = oldText;
+        btn.disabled = false;
+    });
+};
+
+window.submitTeknisiEvidence = function (event) {
+    const btn = event.target;
+    const oldText = btn.innerText;
+    btn.innerText = "Mengirim...";
+    btn.disabled = true;
+
+    // Kumpulkan data checklist
+    let checkedItems = [];
+    if(state.workflowState.cekOdp) checkedItems.push("Cek Redaman ODP");
+    if(state.workflowState.cekOnt) checkedItems.push("Cek Redaman ONT");
+    if(state.workflowState.gantiKabel) checkedItems.push("Patching/Ganti Kabel");
+    
+    let notes = document.getElementById('tekNotes') ? document.getElementById('tekNotes').value : "";
+    let summaryText = "[GCU LOGIC] - EVIDENCE FISIK SUBMITTED: " + (checkedItems.length > 0 ? checkedItems.join(", ") : "Selesai") + (notes ? " | Catatan: " + notes : "");
+
+    const payload = {
+        action: 'submit_evidence_fisik',
+        ticketId: state.activeTicketId,
+        summaryText: summaryText
+    };
+
+    fetch(SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: {
+            'Content-Type': 'text/plain'
+        },
+        body: JSON.stringify(payload)
+    }).then(() => {
+        updateState('evidence', 'submitted');
+        updateTicketCategory(state.activeTicketId, 'GCU LOGIC');
+        alert("Evidence fisik berhasil dikirim ke Google Sheet!");
+        showDashboard('GCU LOGIC');
+    }).catch(err => {
+        console.error(err);
+        alert("Gagal menghubungi server!");
         btn.innerText = oldText;
         btn.disabled = false;
     });
