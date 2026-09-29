@@ -31,7 +31,7 @@ const workflowSubtitle = document.getElementById('workflowSubtitle');
 const dispActiveTicketId = document.getElementById('activeTicketId');
 const dashboardTitle = document.getElementById('dashboardTitle');
 
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxcwhCudJzEE-eONd2npH6qsPjFecyaH6fg7GGHCbLFvfLEZDVZdt4gPFnPApheEk8F/exec'; 
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyz4bDNVEtjazRYRSvs2lXk_40Ee6qhxR64r9UCBXjaWPn6Q9urV8LFSymXXqWHxQs3/exec';
 
 function init() {
     const today = new Date();
@@ -68,7 +68,7 @@ function processData(rows) {
 
     let parsedTickets = [];
     let headers = rows[0].map(h => (h || "").toString().toUpperCase().trim());
-    
+
     let incIdx = -1;
     // Scan headers to find INCIDENT column
     for (let c = 0; c < headers.length; c++) {
@@ -80,30 +80,30 @@ function processData(rows) {
         }
         if (incIdx !== -1) break;
     }
-    
+
     if (incIdx === -1) incIdx = 1; // absolute fallback
-    
+
     let statusAlarmIdx = headers.findIndex(h => h === "STATUS ALARM" || h === "ONU LINK STATUS");
     let workzoneIdx = headers.indexOf("WORKZONE");
-    
+
     for (let i = 1; i < rows.length; i++) {
         let row = rows[i];
         let ticketId = row[incIdx] ? row[incIdx].toString().trim() : "-";
         if (!ticketId.match(/^(INC|1-SV)/)) continue;
-        
+
         let rx = "", tx = "", status = "-", sto = "-", sNum = "-";
-        
+
         // 1. Ekstrak STATUS
         if (statusAlarmIdx !== -1 && row[statusAlarmIdx]) {
             let s = row[statusAlarmIdx].toString().toUpperCase().trim();
             if (s) status = s;
-        } 
-        
+        }
+
         // Jika dari kolom STATUS ALARM belum ada (belum discrape), fallback cari manual
         let hasStatusColumn = (statusAlarmIdx !== -1);
         if (status === "-" || status === "") {
-            for(let c=0; c<row.length; c++) {
-                let val = (row[c]||"").toString().toUpperCase().trim();
+            for (let c = 0; c < row.length; c++) {
+                let val = (row[c] || "").toString().toUpperCase().trim();
                 // Gunakan EXACT match agar tidak salah baca teks keluhan dari kolom SUMMARY
                 if (val === "LOS") { status = "LOS"; break; }
                 if (val === "DYING GASP" || val === "DYING_GASP") { status = "DYING GASP"; break; }
@@ -111,46 +111,47 @@ function processData(rows) {
                 if (val === "ONLINE") { status = "ONLINE"; break; }
             }
         }
-        
-        // 2. Ekstrak STO
-        if (workzoneIdx !== -1 && row[workzoneIdx]) {
-            sto = row[workzoneIdx].toString().toUpperCase().trim();
-        } else {
-            // Fallback: Paling akurat dari RK Information misal ODC-BKS-FA
-            for(let c=0; c<row.length; c++) {
-                let val = (row[c]||"").toString().trim();
-                let rkMatch = val.match(/OD[CP]-([A-Z]{3})-/i);
-                if (rkMatch) {
-                    sto = rkMatch[1].toUpperCase();
-                    break;
-                }
-            }
-            
-            // Fallback jika tidak ada ODC/ODP, cari 3 huruf kapital
-            if (sto === "-") {
-                for(let c=0; c<row.length; c++) {
-                    let val = (row[c]||"").toString().trim();
-                    if (/^[A-Z]{3}$/.test(val) && !["INC","YES","REG","LOS","ONU","OLT","FBB","TTR","TIF","ASR","RBS","DGS","WIB"].includes(val)) {
-                        sto = val;
-                        break;
-                    }
-                }
+
+        // 2. Ekstrak STO (Paling akurat dari ODC-XXX / ODP-XXX)
+        for (let c = 0; c < row.length; c++) {
+            let val = (row[c] || "").toString().trim();
+            let rkMatch = val.match(/OD[CP]-([A-Z]{3})-/i);
+            if (rkMatch) {
+                sto = rkMatch[1].toUpperCase();
+                break;
             }
         }
         
+        // Fallback jika tidak ada ODC/ODP, gunakan WORKZONE jika panjangnya persis 3 huruf
+        if (sto === "-" && workzoneIdx !== -1 && row[workzoneIdx]) {
+            let wz = row[workzoneIdx].toString().toUpperCase().trim();
+            if (wz.length === 3) sto = wz;
+        }
+
+        // Fallback terakhir: cari 3 huruf kapital
+        if (sto === "-") {
+            for (let c = 0; c < row.length; c++) {
+                let val = (row[c] || "").toString().trim();
+                if (/^[A-Z]{3}$/.test(val) && !["INC", "YES", "REG", "LOS", "ONU", "OLT", "FBB", "TTR", "TIF", "ASR", "RBS", "DGS", "WIB"].includes(val)) {
+                    sto = val;
+                    break;
+                }
+            }
+        }
+
         // 3. Ekstrak INET Number (12-13 digit angka berawalan 1)
         for (let c = 0; c < row.length; c++) {
             let val = (row[c] || "").toString().trim();
-            let match = val.match(/\b1[1-9]\d{10,11}\b/); 
+            let match = val.match(/\b1[1-9]\d{10,11}\b/);
             if (match) {
                 sNum = match[0];
                 break; // prioritas pertama: jika nemu langsung break
             }
         }
-        
+
         // 4. Ekstrak RX dan TX (Scan dari belakang karena ditaruh di paling ujung oleh ACS Crawler)
-        for(let c=row.length-1; c>=0; c--) {
-            let val = (row[c]||"").toString().trim();
+        for (let c = row.length - 1; c >= 0; c--) {
+            let val = (row[c] || "").toString().trim();
             // Hanya ekstrak jika val benar-benar terlihat seperti angka redaman (misal -20, 2.3, -15.2 dBm)
             // Hindari string seperti "3-Medium"
             let numMatch = val.match(/^-?\d+([.,]\d+)?(\s?dBm)?$/i);
@@ -167,7 +168,7 @@ function processData(rows) {
 
         let isGangguan = false;
         let rxNum = parseFloat(rx.replace(',', '.'));
-        
+
         // Logika Redaman
         if (!isNaN(rxNum) && (rxNum < -27 || rxNum > -12)) {
             isGangguan = true;
@@ -176,10 +177,10 @@ function processData(rows) {
             isGangguan = true;
         }
 
-        if (isGangguan) { 
+        if (isGangguan) {
             let category = 'GCU FISIK';
             let rowText = row.join(" ").toUpperCase();
-            
+
             // Jika teknisi sudah submit evidence via form, pindahkan ke GCU LOGIC
             if (rowText.includes("EVIDENCE FISIK SUBMITTED")) {
                 category = 'GCU LOGIC';
@@ -207,22 +208,22 @@ function updateDashboardSummary() {
     countGcuLogic.innerText = state.tickets.filter(t => t.category === 'GCU LOGIC').length;
     countApprovalKorlap.innerText = state.tickets.filter(t => t.category === 'APPROVAL KORLAP').length;
     countCompleted.innerText = state.tickets.filter(t => t.category === 'COMPLETED').length;
-    
+
     // Automatically show active dashboard
-    if(state.activeTicketId == null) {
+    if (state.activeTicketId == null) {
         window.showDashboard(state.activeFilter);
     }
 }
 
 // NAVIGATION
-window.showDashboard = function(filterStatus) {
+window.showDashboard = function (filterStatus) {
     state.activeFilter = filterStatus;
     dashboardTitle.innerText = `Dashboard - ${filterStatus}`;
-    
+
     // UI Toggle
     viewDashboard.style.display = 'block';
     viewWorkflow.style.display = 'none';
-    
+
     // Sidebar Active state
     document.querySelectorAll('.nav-links .nav-item').forEach(el => el.classList.remove('active'));
     if (filterStatus === 'GCU FISIK') document.getElementById('menuGcuFisik').classList.add('active');
@@ -239,13 +240,13 @@ window.showDashboard = function(filterStatus) {
     renderTable();
 };
 
-window.showWorkflow = function(role) {
+window.showWorkflow = function (role) {
     state.role = role;
-    
+
     // UI Toggle
     viewDashboard.style.display = 'none';
     viewWorkflow.style.display = 'block';
-    
+
     // Sidebar Active state
     document.querySelectorAll('.nav-links .nav-item').forEach(el => el.classList.remove('active'));
     if (role === 'korlap') document.getElementById('menuKorlap').classList.add('active');
@@ -255,17 +256,17 @@ window.showWorkflow = function(role) {
     renderWorkflow();
 };
 
-window.selectTicket = function(ticketId, sto) {
+window.selectTicket = function (ticketId, sto) {
     state.activeTicketId = ticketId;
     state.activeSto = sto;
     state.workflowState = {}; // reset progress
     dispActiveTicketId.innerText = ticketId;
-    
+
     // Default flow starts at Korlap
     showWorkflow('korlap');
 };
 
-window.applyStatusFilter = function() {
+window.applyStatusFilter = function () {
     const filterVal = document.getElementById('statusFilter').value;
     state.statusFilter = filterVal;
     renderTable();
@@ -353,7 +354,7 @@ function showEmpty(msg) {
 }
 
 // --- WORKFLOW LOGIC ---
-window.updateTicketCategory = function(ticketId, newCategory) {
+window.updateTicketCategory = function (ticketId, newCategory) {
     const ticket = state.tickets.find(t => t.incident === ticketId);
     if (ticket) {
         ticket.category = newCategory;
@@ -400,7 +401,7 @@ function createStep(id, title, content) {
     return step;
 }
 
-window.updateState = function(key, value) {
+window.updateState = function (key, value) {
     state.workflowState[key] = value;
     renderWorkflow();
 };
@@ -433,24 +434,24 @@ function renderKorlapFlow() {
         </div>
         <button class="btn btn-primary" onclick="assignTicketToTelegram(this)">Assign Ticket</button>
     `;
-    
+
     if (state.workflowState.assigned || ticket.category === 'GCU LOGIC') {
         let assignedTo = state.workflowState.assigned || "Teknisi";
         contentAssign = `<p style="color: var(--success); font-weight: 500;">✅ Tiket telah di-assign ke NIK: <strong>${assignedTo}</strong>.</p>
         <p class="info-text" style="margin-top: 10px;">Status: Menunggu Teknisi submit evidence di menu GCU LOGIC.</p>
         <button class="btn btn-outline" style="margin-top: 10px;" onclick="showWorkflow('teknisi')">Simulasikan View Teknisi ➡️</button>`;
     }
-    
+
     workflowContainer.appendChild(createStep('step-k1', 'Assign Tiket ke Teknisi', contentAssign));
 }
 
-window.approveTicketFinal = function() {
+window.approveTicketFinal = function () {
     updateTicketCategory(state.activeTicketId, 'COMPLETED');
     alert(`Tiket ${state.activeTicketId} berhasil di-Approve dan berstatus COMPLETED!`);
     showDashboard('COMPLETED');
 };
 
-window.assignTicketToTelegram = function(btn) {
+window.assignTicketToTelegram = function (btn) {
     const tekSelect = document.getElementById('tekSelect');
     const teleSelect = document.getElementById('teleSelect');
     const teknisi = tekSelect.value.trim();
@@ -459,12 +460,12 @@ window.assignTicketToTelegram = function(btn) {
         alert("Masukkan NIK Teknisi dan ID Telegram terlebih dahulu!");
         return;
     }
-    
+
     btn.innerText = "Mengirim Tugas...";
     btn.disabled = true;
-    
+
     const ticket = state.tickets.find(t => t.incident === state.activeTicketId);
-    
+
     const payload = {
         action: 'assign_ticket',
         ticketId: state.activeTicketId,
@@ -475,7 +476,7 @@ window.assignTicketToTelegram = function(btn) {
         tx: ticket ? ticket.tx : '-',
         serviceNumber: ticket ? ticket.serviceNumber : '-'
     };
-    
+
     fetch(SCRIPT_URL, {
         method: 'POST',
         mode: 'no-cors',
@@ -497,7 +498,7 @@ window.assignTicketToTelegram = function(btn) {
 // 2. TEKNISI FLOW
 function renderTeknisiFlow() {
     const ticket = state.tickets.find(t => t.incident === state.activeTicketId);
-    
+
     if (ticket && ticket.category === 'GCU FISIK' && !state.workflowState.assigned) {
         workflowContainer.innerHTML = `<p style="color: var(--danger); font-weight: 500;">❌ Tiket belum di-assign oleh Korlap.</p>`;
         return;

@@ -516,7 +516,7 @@ function doPost(e) {
         }
         
         // Gunakan SCRIPT_URL statis untuk mencegah error getUrl()
-        var webAppUrl = "https://script.google.com/macros/s/AKfycbxcwhCudJzEE-eONd2npH6qsPjFecyaH6fg7GGHCbLFvfLEZDVZdt4gPFnPApheEk8F/exec";
+        var webAppUrl = "https://script.google.com/macros/s/AKfycbyz4bDNVEtjazRYRSvs2lXk_40Ee6qhxR64r9UCBXjaWPn6Q9urV8LFSymXXqWHxQs3/exec";
         var evidenceLink = webAppUrl + "?action=form_evidence&ticket=" + encodeURIComponent(ticketId) + "&inet=" + encodeURIComponent(sNum) + "&rx=" + encodeURIComponent(rx) + "&tx=" + encodeURIComponent(tx);
         var logicLink = webAppUrl + "?action=mark_gcu_logic&ticket=" + encodeURIComponent(ticketId);
         
@@ -675,9 +675,6 @@ function doPost(e) {
                             // Ekstrak STO untuk summary
                             var sto = "-";
                         
-                        if (workzoneIdx !== -1 && rowData[workzoneIdx]) {
-                            sto = rowData[workzoneIdx].toString().toUpperCase().trim();
-                        } else {
                             // Paling akurat dari ODC-XXX / ODP-XXX
                             for (var c2 = 0; c2 < rowData.length; c2++) {
                                var ct = (rowData[c2] || "").toString().trim();
@@ -686,6 +683,12 @@ function doPost(e) {
                                    sto = rkMatch[1].toUpperCase();
                                    break;
                                }
+                            }
+                            
+                            // Fallback jika tidak ada ODC/ODP, gunakan WORKZONE jika persis 3 huruf
+                            if (sto === "-" && workzoneIdx !== -1 && rowData[workzoneIdx]) {
+                                var wz = rowData[workzoneIdx].toString().toUpperCase().trim();
+                                if (wz.length === 3) sto = wz;
                             }
                             
                             // Fallback STO
@@ -698,7 +701,6 @@ function doPost(e) {
                                    }
                                 }
                             }
-                        }
                         
                         if (!stoLosCount[sto]) stoLosCount[sto] = [];
                         stoLosCount[sto].push({
