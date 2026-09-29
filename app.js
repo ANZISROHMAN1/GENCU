@@ -196,6 +196,11 @@ function processData(rows) {
         if (isGangguan) {
             let category = 'GCU FISIK';
 
+            // JIKA tidak ada nik teknisi, auto ngalir ke GCU LOGIC
+            if (technician === "-") {
+                category = 'GCU LOGIC';
+            }
+
             if (rowText.includes("[COMPLETED]")) {
                 category = 'COMPLETED';
             } else if (rowText.includes("[WAITING APPROVAL KORLAP]")) {
