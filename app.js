@@ -286,8 +286,20 @@ window.selectTicket = function (ticketId, sto) {
     state.workflowState = {}; // reset progress
     dispActiveTicketId.innerText = ticketId;
 
-    // Default flow starts at Korlap
-    showWorkflow('korlap');
+    const ticket = state.tickets.find(t => t.incident === ticketId);
+    let targetRole = 'korlap';
+    
+    if (ticket) {
+        if (ticket.category === 'GCU LOGIC') {
+            targetRole = 'helpdesk';
+        } else if (ticket.category === 'GCU FISIK') {
+            targetRole = 'teknisi'; // Otomatis ke Teknisi agar bisa langsung upload foto
+        } else if (ticket.category === 'APPROVAL KORLAP') {
+            targetRole = 'korlap';
+        }
+    }
+    
+    showWorkflow(targetRole);
 };
 
 window.applyStatusFilter = function () {
