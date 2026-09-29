@@ -110,6 +110,7 @@ function doGet(e) {
           </style>
       </head>
       <body>
+          <form id="evidenceForm" onsubmit="event.preventDefault(); submitForm();">
           <div class="app-header">
               <div style="display: flex; align-items: center; gap: 15px;">
                   <!-- ⚠️ GANTI LINK DI BAWAH INI DENGAN LINK LOGO GENCU ANDA (Bisa upload ke Imgur/Postimages) -->
@@ -200,7 +201,7 @@ function doGet(e) {
                   
                   <div class="form-group">
                       <label>Evidence Jalur</label>
-                      <input type="text" id="ev_jalur_link" placeholder="Link Foto Jalur (Snipboard/GDrive)">
+                      <input type="file" id="ev_jalur_link" name="ev_jalur_file" accept="image/*" style="padding:8px; border:1px solid #cbd5e1; border-radius:6px; width:100%; box-sizing:border-box;">
                       <div class="switch-container">
                           <span class="switch-label">Status Jalur:</span>
                           <div style="display: flex; align-items: center;">
@@ -212,7 +213,7 @@ function doGet(e) {
 
                   <div class="form-group">
                       <label>Penempatan ONT</label>
-                      <input type="text" id="ev_ont_link" placeholder="Link Foto ONT (Snipboard/GDrive)">
+                      <input type="file" id="ev_ont_link" name="ev_ont_file" accept="image/*" style="padding:8px; border:1px solid #cbd5e1; border-radius:6px; width:100%; box-sizing:border-box;">
                       <div class="switch-container">
                           <span class="switch-label">Status ONT:</span>
                           <div style="display: flex; align-items: center;">
@@ -230,7 +231,7 @@ function doGet(e) {
                           <option value="3">3 Sambungan</option>
                       </select>
                       <div id="dc_inputs_container" style="margin-top: 10px;">
-                          <input type="text" id="ev_dc_1" placeholder="Link Foto Sambungan DC 1">
+                          <input type="file" id="ev_dc_1" name="ev_dc_1" accept="image/*" style="padding:8px; border:1px solid #cbd5e1; border-radius:6px; width:100%; box-sizing:border-box; margin-bottom:5px;">
                       </div>
                   </div>
 
@@ -244,7 +245,7 @@ function doGet(e) {
 
                   <div class="form-group">
                       <label>Foto di Lokasi / Pelanggan</label>
-                      <input type="text" id="ev_lokasi" placeholder="Link Foto Lokasi">
+                      <input type="file" id="ev_lokasi" name="ev_lokasi_file" accept="image/*" style="padding:8px; border:1px solid #cbd5e1; border-radius:6px; width:100%; box-sizing:border-box;">
                   </div>
               </div>
 
@@ -287,10 +288,12 @@ function doGet(e) {
               <br><br><br>
               <div id="statusMsg" style="display:none; position:fixed; top:0; left:0; right:0; padding:15px; z-index:9999; font-size:14px; font-weight:600; text-align:center;"></div>
               <div class="btn-submit-container">
-                  <button onclick="submitForm()">Kirim Evidence Fisik</button>
-                  <div style="text-align:center; margin-top:5px; font-size:10px; color:#94a3b8;">v2.1-debug</div>
+                  <button type="submit">Kirim Evidence Fisik</button>
+                  <div style="text-align:center; margin-top:5px; font-size:10px; color:#94a3b8;">v2.2-file-upload</div>
               </div>
           </div>
+          <input type="hidden" name="ticketId" value="${ticketId}">
+          </form>
 
           <script>
               function showMsg(msg, type) {
@@ -331,7 +334,7 @@ function doGet(e) {
                   var cont = document.getElementById('dc_inputs_container');
                   cont.innerHTML = '';
                   for(var i=1; i<=count; i++) {
-                      cont.innerHTML += '<input type="text" id="ev_dc_'+i+'" placeholder="Link Foto Sambungan DC '+i+'" style="margin-bottom:5px;">';
+                      cont.innerHTML += '<input type="file" id="ev_dc_'+i+'" name="ev_dc_'+i+'" accept="image/*" style="padding:8px; border:1px solid #cbd5e1; border-radius:6px; width:100%; box-sizing:border-box; margin-bottom:5px;">';
                   }
               }
 
@@ -354,40 +357,39 @@ function doGet(e) {
                           return;
                       }
 
-                      // Build Evidence String
+                      // Append explicit values not captured natively by form
+                      var dcCount = parseInt(getVal('dc_count') || '1');
+                      
                       var summary = "EVIDENCE FISIK SUBMITTED\\n";
                       summary += "- Penyebab: " + penyebab + "\\n";
                       summary += "- Perbaikan: " + perbaikan + "\\n";
                       summary += "- Segmen: " + segmen + "\\n";
-                      summary += "- GCU Jalur: " + (document.getElementById('ev_jalur_status').checked ? "Aman" : "Tidak Aman") + " [" + (getVal('ev_jalur_link')||"-") + "]\\n";
-                      summary += "- GCU ONT: " + (document.getElementById('ev_ont_status').checked ? "Aman" : "Tidak Aman") + " [" + (getVal('ev_ont_link')||"-") + "]\\n";
-                      
-                      var dcCount = parseInt(getVal('dc_count') || '1');
-                      var dcLinks = [];
-                      for(var i=1; i<=dcCount; i++) dcLinks.push(getVal('ev_dc_'+i)||"-");
-                      summary += "- GCU DC ("+dcCount+"): " + dcLinks.join(", ") + "\\n";
-                      
+                      summary += "- GCU Jalur: " + (document.getElementById('ev_jalur_status').checked ? "Aman" : "Tidak Aman") + "\\n";
+                      summary += "- GCU ONT: " + (document.getElementById('ev_ont_status').checked ? "Aman" : "Tidak Aman") + "\\n";
+                      summary += "- GCU DC ("+dcCount+")\\n";
                       summary += "- SCC/TSC: " + (getVal('close_scc') || 'Sukses') + "\\n";
-                      summary += "- Lokasi/Pelanggan: [" + (getVal('ev_lokasi')||"-") + "]\\n";
-
+                      
                       if(document.getElementById('toggle_voice') && document.getElementById('toggle_voice').checked) {
                           summary += "- VOICE: RJ11/Phone (" + (document.getElementById('voice_status').checked ? "Aman" : "Tidak Aman") + ")\\n";
                       }
                       if(document.getElementById('toggle_iptv') && document.getElementById('toggle_iptv').checked) {
                           summary += "- IPTV: Channel (" + (document.getElementById('iptv_channel').checked ? "Aman" : "Tidak Aman") + "), Remote (" + getVal('iptv_remote') + ")\\n";
                       }
+                      
+                      document.getElementById('evidenceForm').insertAdjacentHTML('beforeend', '<input type="hidden" name="baseSummary" value="' + summary.replace(/\\n/g, "\\\\n") + '">');
+                      document.getElementById('evidenceForm').insertAdjacentHTML('beforeend', '<input type="hidden" name="dcCount" value="' + dcCount + '">');
 
-                      btn.innerText = 'Mengirim Data...';
+                      btn.innerText = 'Mengirim & Mengupload Foto...';
                       btn.disabled = true;
-                      showMsg('⏳ Mengirim data ke server...', 'loading');
+                      showMsg('⏳ Sedang mengupload foto ke Google Drive... Mohon tunggu...', 'loading');
                       
                       google.script.run.withSuccessHandler(function() {
-                          document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;min-height:80vh;"><div class="card" style="text-align:center;"><h2 style="color: #10b981; font-size:40px; margin-bottom:10px;">✅</h2><h3 style="color: #374151;">Berhasil Terkirim!</h3><p style="color: #6b7280; font-size:14px;">Laporan evidence telah tersimpan ke sistem.</p></div></div>';
+                          document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;min-height:80vh;"><div class="card" style="text-align:center;"><h2 style="color: #10b981; font-size:40px; margin-bottom:10px;">✅</h2><h3 style="color: #374151;">Berhasil Terkirim!</h3><p style="color: #6b7280; font-size:14px;">Laporan evidence dan foto telah tersimpan ke sistem.</p></div></div>';
                       }).withFailureHandler(function(err) {
                           showMsg('❌ Gagal: ' + err, 'error');
                           btn.innerText = 'Kirim Evidence Fisik';
                           btn.disabled = false;
-                      }).submitEvidenceDariWeb('${ticketId}', summary, "");
+                      }).processEvidenceForm(document.getElementById('evidenceForm'));
                   } catch (err) {
                       showMsg('❌ ERROR: ' + err.message, 'error');
                   }
@@ -402,6 +404,55 @@ function doGet(e) {
           .addMetaTag('viewport', 'width=device-width, initial-scale=1');
   }
 
+function processEvidenceForm(formObject) {
+    try {
+        var summary = formObject.baseSummary.replace(/\\n/g, "\n");
+        var ticketId = formObject.ticketId;
+        var dcCount = parseInt(formObject.dcCount || "1");
+
+        // Helper to process and upload file Blob
+        function uploadBlob(blob, namePrefix) {
+            if (blob && blob.length > 0 || (blob.getBytes && blob.getBytes().length > 0)) {
+                var file = DriveApp.createFile(blob);
+                file.setName(namePrefix + "_" + ticketId + "_" + blob.getName());
+                file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+                return file.getUrl();
+            }
+            return "-";
+        }
+
+        // Upload files
+        var urlJalur = uploadBlob(formObject.ev_jalur_file, "Jalur");
+        var urlOnt = uploadBlob(formObject.ev_ont_file, "ONT");
+        var urlLokasi = uploadBlob(formObject.ev_lokasi_file, "Lokasi");
+        
+        var dcLinks = [];
+        for (var i = 1; i <= dcCount; i++) {
+            var dcBlob = formObject["ev_dc_" + i];
+            dcLinks.push(uploadBlob(dcBlob, "DC_" + i));
+        }
+
+        // Inject URLs back into summary
+        summary = summary.replace("- GCU Jalur: Aman", "- GCU Jalur: Aman [" + urlJalur + "]");
+        summary = summary.replace("- GCU Jalur: Tidak Aman", "- GCU Jalur: Tidak Aman [" + urlJalur + "]");
+        
+        summary = summary.replace("- GCU ONT: Aman", "- GCU ONT: Aman [" + urlOnt + "]");
+        summary = summary.replace("- GCU ONT: Tidak Aman", "- GCU ONT: Tidak Aman [" + urlOnt + "]");
+        
+        summary = summary.replace("- GCU DC (" + dcCount + ")", "- GCU DC (" + dcCount + "): " + dcLinks.join(", "));
+        summary += "- Lokasi/Pelanggan: [" + urlLokasi + "]\n";
+
+        // Submit to sheet
+        var res = submitEvidenceDariWeb(ticketId, summary, "");
+        if (res.indexOf("berhasil") === -1 && res.indexOf("Sukses") === -1) {
+            throw new Error(res);
+        }
+        return res;
+    } catch(e) {
+        throw new Error(e.toString());
+    }
+}
+
   // DEFAULT API BEHAVIOR (JSON Output)
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var targetSheetName = (e && e.parameter && e.parameter.source === 'all') ? "DATABASE ALL TICKET" : "DATABASE";
@@ -413,47 +464,116 @@ function doGet(e) {
   if (dbLastRow < 1 || dbLastCol < 1) return ContentService.createTextOutput("[]").setMimeType(ContentService.MimeType.JSON);
   
   var data = sheetDB.getRange(1, 1, dbLastRow, dbLastCol).getValues();
+
+  // JIKA dashboard meminta "all" atau tidak spesifik, kita GABUNGKAN dengan tiket garansi dari ALL TICKET
+  if (!e || !e.parameter || e.parameter.source !== 'all') {
+      var sheetAll = ss.getSheetByName("DATABASE ALL TICKET");
+      if (sheetAll) {
+          var allLastRow = sheetAll.getLastRow();
+          var allLastCol = sheetAll.getLastColumn();
+          if (allLastRow > 1 && allLastCol > 1) {
+              var allData = sheetAll.getRange(1, 1, allLastRow, allLastCol).getValues();
+              
+              var actionColIdx = -1;
+              var incColIdx = -1;
+              var summaryColIdx = -1;
+              for(var c=0; c < allData[0].length; c++){
+                  var h = allData[0][c].toString().toUpperCase().trim();
+                  if(h === "ACTION") actionColIdx = c;
+                  if(h === "SUMMARY" || h === "WORKLOG SUMMARY") summaryColIdx = c;
+                  if(h.match(/^(INCIDENT|INC)/)) incColIdx = c;
+              }
+              
+              if((actionColIdx !== -1 || summaryColIdx !== -1) && incColIdx !== -1) {
+                  // Kumpulkan tiket yang sudah ada di DATABASE aktif
+                  var existingIncs = {};
+                  var dbIncCol = -1;
+                  for(var c=0; c < data[0].length; c++){
+                      if(data[0][c].toString().toUpperCase().match(/^(INCIDENT|INC)/)) dbIncCol = c;
+                  }
+                  if(dbIncCol !== -1) {
+                      for(var i=1; i < data.length; i++){
+                          if(data[i][dbIncCol]) existingIncs[data[i][dbIncCol].toString().trim()] = true;
+                      }
+                  }
+                  
+                  // Tambahkan tiket dari ALL TICKET yang punya stempel GENCU dan tidak ada di DATABASE aktif
+                  for(var i=1; i < allData.length; i++){
+                      var actionText = "";
+                      if(actionColIdx !== -1 && allData[i][actionColIdx]) actionText += allData[i][actionColIdx].toString();
+                      if(summaryColIdx !== -1 && allData[i][summaryColIdx]) actionText += " " + allData[i][summaryColIdx].toString();
+                      
+                      var incText = allData[i][incColIdx] ? allData[i][incColIdx].toString().trim() : "";
+                      
+                      // Jika ada stempel dari GENCU (EVIDENCE, WAITING, COMPLETED)
+                      if(actionText.includes("[") || actionText.includes("EVIDENCE FISIK SUBMITTED")) {
+                          if(incText && !existingIncs[incText]) {
+                              data.push(allData[i]);
+                          }
+                      }
+                  }
+              }
+          }
+      }
+  }
+
   return ContentService.createTextOutput(JSON.stringify(data)).setMimeType(ContentService.MimeType.JSON);
 }
 
-// Fungsi yang dipanggil oleh HTML form
-function submitEvidenceDariWeb(ticketId, summary, unused) {
+// Fungsi pembantu untuk menulis evidence ke sheet spesifik
+function _writeEvidenceToSheet(sheetName, ticketId, summary) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheetDB = ss.getSheetByName("DATABASE");
-  var data = sheetDB.getDataRange().getValues();
+  var sheet = ss.getSheetByName(sheetName);
+  if (!sheet) return false;
   
-  var ticketCol = -1;
+  var data = sheet.getDataRange().getValues();
+  if (data.length < 2) return false;
+  
   var actionCol = -1;
   var summaryCol = -1;
-  
-  // Cari kolom Action & Summary
   for(var c = 0; c < data[0].length; c++) {
-     if(data[0][c].toString().toUpperCase().trim() === "ACTION") actionCol = c;
-     if(data[0][c].toString().toUpperCase().trim() === "SUMMARY") summaryCol = c;
+     var h = data[0][c].toString().toUpperCase().trim();
+     if(h === "ACTION") actionCol = c;
+     if(h === "SUMMARY" || h === "WORKLOG SUMMARY") summaryCol = c;
   }
   
-  // Update baris: Cari baris mana yang punya ticketId di kolom MANAPUN
+  // Jika tidak ada kolom satupun, paksa buat kolom ACTION di ujung
+  if(actionCol === -1 && summaryCol === -1) {
+     actionCol = data[0].length;
+     sheet.getRange(1, actionCol + 1).setValue("ACTION");
+     sheet.getRange(1, actionCol + 1).setBackground("#e8f5e9").setFontWeight("bold");
+     // Update data array memory
+     for(var r=0; r<data.length; r++) data[r].push("");
+     data[0][actionCol] = "ACTION";
+  }
+  
+  var found = false;
   for(var r = 1; r < data.length; r++) {
-     var found = false;
      for (var c = 0; c < data[r].length; c++) {
          if (data[r][c] && data[r][c].toString().trim() === ticketId) {
+             if (actionCol !== -1) {
+                 sheet.getRange(r + 1, actionCol + 1).setValue(summary);
+             } else if (summaryCol !== -1) {
+                 var oldSum = sheet.getRange(r + 1, summaryCol + 1).getValue();
+                 sheet.getRange(r + 1, summaryCol + 1).setValue(oldSum + "\n\n" + summary);
+             }
              found = true;
              break;
          }
      }
-     
-     if (found) {
-         if (actionCol !== -1) {
-             sheetDB.getRange(r + 1, actionCol + 1).setValue(summary);
-         } else if (summaryCol !== -1) {
-             // Jika kolom action gak ada, taruh di summary
-             var oldSum = sheetDB.getRange(r + 1, summaryCol + 1).getValue();
-             sheetDB.getRange(r + 1, summaryCol + 1).setValue(oldSum + "\n\n" + summary);
-         }
-         return "OK";
-     }
   }
-  throw "Tiket " + ticketId + " tidak ditemukan di Database";
+  return found;
+}
+
+// Fungsi yang dipanggil oleh HTML form
+function submitEvidenceDariWeb(ticketId, summary, unused) {
+  var foundInActive = _writeEvidenceToSheet("DATABASE", ticketId, summary);
+  var foundInAll = _writeEvidenceToSheet("DATABASE ALL TICKET", ticketId, summary);
+  
+  if (foundInActive || foundInAll) {
+      return "OK";
+  }
+  throw "Tiket " + ticketId + " tidak ditemukan di Database manapun";
 }
 
 function doPost(e) {
@@ -487,8 +607,58 @@ function doPost(e) {
   // NEW: Handle request_approval action dari Web Dashboard (Helpdesk -> Korlap)
   if (dataObj.action === 'request_approval') {
       try {
-          var successMsg = submitEvidenceDariWeb(dataObj.ticketId, "[WAITING APPROVAL KORLAP] - Logic OK, siap di-approve", "");
+          var sumText = dataObj.summaryText || "[WAITING APPROVAL KORLAP] - Logic OK, siap di-approve";
+          
+          if (dataObj.photoBase64) {
+              var decoded = Utilities.base64Decode(dataObj.photoBase64);
+              var blob = Utilities.newBlob(decoded, dataObj.photoMimeType, dataObj.photoName);
+              var file = DriveApp.createFile(blob);
+              file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+              sumText += " | Foto: " + file.getUrl();
+          }
+
+          var successMsg = submitEvidenceDariWeb(dataObj.ticketId, sumText, "");
           return ContentService.createTextOutput(successMsg).setMimeType(ContentService.MimeType.TEXT);
+      } catch (err) {
+          return ContentService.createTextOutput("Error: " + err).setMimeType(ContentService.MimeType.TEXT);
+      }
+  }
+
+  // NEW: Handle submit_evidence_fisik action dari Web Dashboard (Teknisi -> Helpdesk)
+  if (dataObj.action === 'submit_evidence_fisik') {
+      try {
+          var sumTextFisik = dataObj.summaryText || "[GCU LOGIC] - EVIDENCE FISIK SUBMITTED";
+          
+          if (dataObj.photoBase64) {
+              var decoded = Utilities.base64Decode(dataObj.photoBase64);
+              var blob = Utilities.newBlob(decoded, dataObj.photoMimeType, dataObj.photoName);
+              var file = DriveApp.createFile(blob);
+              file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+              sumTextFisik += " | Foto: " + file.getUrl();
+          }
+          
+          var successMsgFisik = submitEvidenceDariWeb(dataObj.ticketId, sumTextFisik, "");
+          return ContentService.createTextOutput(successMsgFisik).setMimeType(ContentService.MimeType.TEXT);
+      } catch (err) {
+          return ContentService.createTextOutput("Error: " + err).setMimeType(ContentService.MimeType.TEXT);
+      }
+  }
+
+  // NEW: Handle rework_ticket action dari Web Dashboard (Korlap -> Helpdesk/Teknisi)
+  if (dataObj.action === 'rework_ticket') {
+      try {
+          var sumTextRework = dataObj.summaryText || ("[REWORK - DIKEMBALIKAN KE " + dataObj.targetCategory + "]");
+          
+          if (dataObj.photoBase64) {
+              var decoded = Utilities.base64Decode(dataObj.photoBase64);
+              var blob = Utilities.newBlob(decoded, dataObj.photoMimeType, dataObj.photoName);
+              var file = DriveApp.createFile(blob);
+              file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+              sumTextRework += " | Foto: " + file.getUrl();
+          }
+
+          var successMsgRework = submitEvidenceDariWeb(dataObj.ticketId, sumTextRework, "");
+          return ContentService.createTextOutput(successMsgRework).setMimeType(ContentService.MimeType.TEXT);
       } catch (err) {
           return ContentService.createTextOutput("Error: " + err).setMimeType(ContentService.MimeType.TEXT);
       }
@@ -536,7 +706,7 @@ function doPost(e) {
         }
         
         // Gunakan SCRIPT_URL statis untuk mencegah error getUrl()
-        var webAppUrl = "https://script.google.com/macros/s/AKfycbyz4bDNVEtjazRYRSvs2lXk_40Ee6qhxR64r9UCBXjaWPn6Q9urV8LFSymXXqWHxQs3/exec";
+        var webAppUrl = ScriptApp.getService().getUrl();
         var evidenceLink = webAppUrl + "?action=form_evidence&ticket=" + encodeURIComponent(ticketId) + "&inet=" + encodeURIComponent(sNum) + "&rx=" + encodeURIComponent(rx) + "&tx=" + encodeURIComponent(tx);
         var logicLink = webAppUrl + "?action=mark_gcu_logic&ticket=" + encodeURIComponent(ticketId);
         
