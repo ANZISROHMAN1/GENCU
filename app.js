@@ -278,9 +278,12 @@ window.showWorkflow = function (role) {
 
     // Sidebar Active state
     document.querySelectorAll('.nav-links .nav-item').forEach(el => el.classList.remove('active'));
-    if (role === 'korlap') document.getElementById('menuKorlap').classList.add('active');
-    else if (role === 'teknisi') document.getElementById('menuTeknisi').classList.add('active');
-    else if (role === 'helpdesk') document.getElementById('menuHelpdesk').classList.add('active');
+    let korlapEl = document.getElementById('menuKorlap');
+    if (role === 'korlap' && korlapEl) korlapEl.classList.add('active');
+    let tekEl = document.getElementById('menuTeknisi');
+    if (role === 'teknisi' && tekEl) tekEl.classList.add('active');
+    let helpdeskEl = document.getElementById('menuHelpdesk');
+    if (role === 'helpdesk' && helpdeskEl) helpdeskEl.classList.add('active');
 
     renderWorkflow();
 };
