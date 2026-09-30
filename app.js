@@ -506,12 +506,18 @@ function renderKorlapFlow() {
         let evidenceLinks = [];
         
         // Cari evidence fisik (EVIDENCE FISIK SUBMITTED)
-        let fisikMatch = actionText.match(/EVIDENCE FISIK SUBMITTED[\s\S]*?(?=\[|$)/i);
+        let fisikMatch = actionText.match(/(?:EVIDENCE FISIK|GCU FISIK)[\s\S]*?(?=\n\n\[|$)/i);
         if (fisikMatch) evidenceFisik = fisikMatch[0].trim();
         
-        // Cari evidence logic (WAITING APPROVAL KORLAP)
-        let logicMatch = actionText.match(/\[WAITING APPROVAL KORLAP\][\s\S]*?(?=\[EVIDENCE|$)/i);
+        // Cari evidence logic (WAITING APPROVAL KORLAP atau Eksekusi Logic)
+        let logicMatch = actionText.match(/(?:WAITING APPROVAL KORLAP|Eksekusi Logic)[\s\S]*?(?=\n\n\[|$)/i);
         if (logicMatch) evidenceLogic = logicMatch[0].trim();
+        
+        // Fallback: Jika gagal di-parse, tampilkan seluruh history agar tidak kosong
+        if (evidenceFisik === '-' && evidenceLogic === '-') {
+            evidenceFisik = actionText ? "[Seluruh History ACTION]\n" + actionText : "-";
+            evidenceLogic = actionText ? "[Seluruh History ACTION]\n" + actionText : "-";
+        }
         
         // Cari URL foto evidence
         let urlMatches = actionText.match(/https:\/\/drive\.google\.com[^\s\]]+/gi);
@@ -520,7 +526,7 @@ function renderKorlapFlow() {
         // Format evidence untuk ditampilkan
         function formatEvidence(text) {
             if (!text || text === '-') return '<span style="color: var(--text-secondary); font-style: italic;">Belum ada data</span>';
-            return text.replace(/\n/g, '<br>').replace(/(https:\/\/[^\s\]]+)/g, '<a href="$1" target="_blank" style="color: var(--primary); word-break: break-all;">📎 Lihat File</a>');
+            return text.replace(/\n/g, '<br>').replace(/(https:\/\/[^\s\]]+)/g, '<a href="$1" target="_blank" style="color: var(--primary); font-weight: bold; text-decoration: underline; word-break: break-all;">📎 Buka Evidence Foto</a>');
         }
 
         let contentApprove = `
