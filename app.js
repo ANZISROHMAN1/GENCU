@@ -529,18 +529,42 @@ function renderKorlapFlow() {
             return text.replace(/\n/g, '<br>').replace(/(https:\/\/[^\s\]]+)/g, '<a href="$1" target="_blank" style="color: var(--primary); font-weight: bold; text-decoration: underline; word-break: break-all;">📎 Buka Evidence Foto</a>');
         }
 
+        window.tempEvidenceFisik = formatEvidence(evidenceFisik);
+        window.tempEvidenceLogic = formatEvidence(evidenceLogic);
+
+        window.showEvidenceModal = function(type) {
+            let title = type === 'fisik' ? '🛠️ Pekerjaan GCU FISIK (Teknisi)' : '💻 Pekerjaan GCU LOGIC (Helpdesk)';
+            let content = type === 'fisik' ? window.tempEvidenceFisik : window.tempEvidenceLogic;
+            
+            let modalHtml = `
+                <div id="evidenceModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 9999; backdrop-filter: blur(4px);">
+                    <div style="background: var(--bg-surface); width: 90%; max-width: 500px; border-radius: 12px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); max-height: 85vh; overflow-y: auto; position: relative;">
+                        <button onclick="document.getElementById('evidenceModal').remove()" style="position: absolute; top: 15px; right: 15px; background: transparent; border: none; font-size: 24px; font-weight: bold; cursor: pointer; color: var(--text-secondary);">&times;</button>
+                        <h3 style="margin-top: 0; margin-bottom: 15px; font-size: 16px; color: var(--text-primary); border-bottom: 1px solid var(--border); padding-bottom: 10px;">${title}</h3>
+                        <div style="font-size: 13px; line-height: 1.6; color: var(--text-primary); background: rgba(0,0,0,0.02); padding: 15px; border-radius: 8px; border: 1px solid var(--border);">
+                            ${content}
+                        </div>
+                        <div style="margin-top: 20px; text-align: right;">
+                            <button class="btn btn-primary" onclick="document.getElementById('evidenceModal').remove()">Tutup</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+        };
+
         let contentApprove = `
             <p class="info-text" style="margin-bottom: 15px;">Validasi pekerjaan GCU Fisik dan Logic. Pastikan sesuai SOP perusahaan sebelum approve.</p>
             
             <!-- SECTION 1: Evidence GCU FISIK -->
             <div style="background: var(--bg-surface); padding: 18px; border-radius: 10px; border: 1px solid var(--border); margin-bottom: 15px;">
-                <h4 style="font-size: 14px; font-weight: bold; color: var(--text-primary); margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">🛠️ Evidence GCU FISIK (Teknisi)</h4>
+                <h4 style="font-size: 14px; font-weight: bold; color: var(--text-primary); margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">🛠️ Validasi GCU FISIK (Teknisi)</h4>
                 
-                <div style="background: rgba(0,0,0,0.05); padding: 12px; border-radius: 8px; margin-bottom: 12px; font-size: 13px; line-height: 1.6; color: var(--text-secondary); max-height: 200px; overflow-y: auto;">
-                    ${formatEvidence(evidenceFisik)}
-                </div>
+                <button class="btn btn-primary" style="margin-bottom: 15px; width: 100%; background: #3b82f6; border: none; color: white; display: flex; justify-content: center; align-items: center; gap: 8px;" onclick="window.showEvidenceModal('fisik')">
+                    <ion-icon name="search-outline" style="font-size: 18px;"></ion-icon> Cek Detail Pekerjaan GCU Fisik
+                </button>
                 
-                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
                     <span style="font-size: 12px; color: var(--text-secondary);">Teknisi: <strong style="color: var(--text-primary);">${ticket.technician}</strong></span>
                     <span style="font-size: 12px; color: var(--text-secondary);">| RX: <strong>${ticket.rx}</strong> | TX: <strong>${ticket.tx}</strong></span>
                 </div>
@@ -553,11 +577,11 @@ function renderKorlapFlow() {
 
             <!-- SECTION 2: Evidence GCU LOGIC -->
             <div style="background: var(--bg-surface); padding: 18px; border-radius: 10px; border: 1px solid var(--border); margin-bottom: 15px;">
-                <h4 style="font-size: 14px; font-weight: bold; color: var(--text-primary); margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">💻 Evidence GCU LOGIC (Helpdesk)</h4>
+                <h4 style="font-size: 14px; font-weight: bold; color: var(--text-primary); margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">💻 Validasi GCU LOGIC (Helpdesk)</h4>
                 
-                <div style="background: rgba(0,0,0,0.05); padding: 12px; border-radius: 8px; margin-bottom: 12px; font-size: 13px; line-height: 1.6; color: var(--text-secondary); max-height: 200px; overflow-y: auto;">
-                    ${formatEvidence(evidenceLogic)}
-                </div>
+                <button class="btn btn-primary" style="margin-bottom: 15px; width: 100%; background: #8b5cf6; border: none; color: white; display: flex; justify-content: center; align-items: center; gap: 8px;" onclick="window.showEvidenceModal('logic')">
+                    <ion-icon name="search-outline" style="font-size: 18px;"></ion-icon> Cek Detail Pekerjaan GCU Logic
+                </button>
 
                 <div class="btn-group" style="display: flex; gap: 10px;">
                     <button class="btn ${state.workflowState.logicAman ? 'btn-success' : 'btn-outline'}" onclick="updateState('logicAman', true)">Sesuai SOP ✅</button>
