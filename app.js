@@ -174,16 +174,8 @@ function processData(rows) {
             }
         }
 
-        let isGangguan = false;
+        let isGangguan = true; // SEMUA tiket masuk GENCU, apapun redamannya
         let rxNum = parseFloat(rx.replace(',', '.'));
-
-        // Logika Redaman
-        if (!isNaN(rxNum) && (rxNum < -27 || rxNum > -12)) {
-            isGangguan = true;
-        }
-        if (status === 'LOS' || status.includes('DYING')) {
-            isGangguan = true;
-        }
 
         let technician = "-";
         if (technicianIdx !== -1 && row[technicianIdx]) {
@@ -194,11 +186,6 @@ function processData(rows) {
         }
         
         let rowText = row.join(" ").toUpperCase();
-        
-        // Tetap masukkan ke dashboard jika tiket ini masih dalam tahap penanganan
-        if ((rowText.includes("EVIDENCE FISIK SUBMITTED") || rowText.includes("[WAITING APPROVAL KORLAP]")) && !rowText.includes("[COMPLETED]")) {
-            isGangguan = true;
-        }
 
         if (isGangguan) {
             let category = 'GCU FISIK';
