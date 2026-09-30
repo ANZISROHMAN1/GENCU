@@ -659,8 +659,8 @@ function _writeEvidenceToSheet(sheetName, ticketId, summary) {
      if(h === "SUMMARY" || h === "WORKLOG SUMMARY") summaryCol = c;
   }
   
-  // Jika tidak ada kolom satupun, paksa buat kolom ACTION di ujung
-  if(actionCol === -1 && summaryCol === -1) {
+  // Selalu pastikan kolom ACTION ada, jika tidak buat baru di ujung
+  if(actionCol === -1) {
      actionCol = data[0].length;
      sheet.getRange(1, actionCol + 1).setValue("ACTION");
      sheet.getRange(1, actionCol + 1).setBackground("#e8f5e9").setFontWeight("bold");
