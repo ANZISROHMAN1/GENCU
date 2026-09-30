@@ -11,6 +11,25 @@ const state = {
     workflowState: {}
 };
 
+// Theme Management
+function toggleTheme() {
+    const isLight = document.body.classList.toggle('light-mode');
+    localStorage.setItem('theme', isLight ? 'light' : 'dark');
+    updateThemeBtn(isLight);
+}
+
+function updateThemeBtn(isLight) {
+    const btn = document.getElementById('themeToggleBtn');
+    if (btn) {
+        btn.innerHTML = isLight ? '<ion-icon name="moon-outline"></ion-icon> Dark Mode' : '<ion-icon name="sunny-outline"></ion-icon> Light Mode';
+    }
+}
+
+// Check saved theme on load
+if (localStorage.getItem('theme') === 'light') {
+    document.body.classList.add('light-mode');
+}
+
 // Selectors
 const totalDataCount = document.getElementById('totalDataCount');
 const currentDateRange = document.getElementById('currentDateRange');
@@ -36,6 +55,7 @@ const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx1UEN5rD39Hw5W4xNYT
 function init() {
     const today = new Date();
     currentDateRange.innerText = `${today.getDate()} ${today.toLocaleString('default', { month: 'long' })} ${today.getFullYear()}`;
+    updateThemeBtn(document.body.classList.contains('light-mode'));
     fetchTickets();
 }
 

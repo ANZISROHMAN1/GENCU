@@ -257,12 +257,16 @@ function doGet(e) {
                       <input type="checkbox" id="toggle_voice" onchange="document.getElementById('voice_panel').classList.toggle('hidden')">
                       <label for="toggle_voice" style="margin:0; cursor:pointer;">Ada Layanan Voice?</label>
                   </div>
-                  <div id="voice_panel" class="hidden switch-container">
-                      <span class="switch-label">Cek RJ11 / Phone Tes:</span>
-                      <div style="display: flex; align-items: center;">
-                          <label class="switch"><input type="checkbox" id="voice_status" onchange="updateSwitchText(this)"><span class="slider"></span></label>
-                          <span class="status-text tidak-aman-text" id="voice_status_text">Tidak Aman</span>
+                  <div id="voice_panel" class="hidden" style="background: #f9fafb; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb; margin-bottom: 15px;">
+                      <div class="switch-container" style="margin-bottom: 15px; border:none; background:transparent; padding:0;">
+                          <span class="switch-label">Cek RJ11 / Phone Tes:</span>
+                          <div style="display: flex; align-items: center;">
+                              <label class="switch"><input type="checkbox" id="voice_status" onchange="updateSwitchText(this)"><span class="slider"></span></label>
+                              <span class="status-text tidak-aman-text" id="voice_status_text">Tidak Aman</span>
+                          </div>
                       </div>
+                      <label>Upload Foto Evidence Voice</label>
+                      <input type="file" id="ev_voice" name="ev_voice_file" accept="image/*" style="padding:8px; border:1px solid #cbd5e1; border-radius:6px; width:100%; box-sizing:border-box;">
                   </div>
 
                   <div class="checkbox-group">
@@ -277,11 +281,17 @@ function doGet(e) {
                               <span class="status-text tidak-aman-text" id="iptv_channel_text">Tidak Aman</span>
                           </div>
                       </div>
+                      <label>Upload Foto Evidence Channel</label>
+                      <input type="file" id="ev_iptv_channel" name="ev_iptv_channel_file" accept="image/*" style="padding:8px; border:1px solid #cbd5e1; border-radius:6px; width:100%; box-sizing:border-box; margin-bottom: 15px;">
+                      
                       <label>Cek Remote</label>
-                      <select id="iptv_remote">
+                      <select id="iptv_remote" style="margin-bottom: 15px; width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1;">
                           <option value="Normal">Normal</option>
                           <option value="Tidak Normal">Tidak Normal</option>
                       </select>
+                      
+                      <label>Upload Foto Evidence Remote</label>
+                      <input type="file" id="ev_iptv_remote" name="ev_iptv_remote_file" accept="image/*" style="padding:8px; border:1px solid #cbd5e1; border-radius:6px; width:100%; box-sizing:border-box;">
                   </div>
               </div>
 
@@ -383,13 +393,15 @@ function doGet(e) {
                       btn.disabled = true;
                       showMsg('⏳ Sedang mengupload foto ke Google Drive... Mohon tunggu...', 'loading');
                       
-                      google.script.run.withSuccessHandler(function() {
+                      var runner = google.script.run.withSuccessHandler(function() {
                           document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;min-height:80vh;"><div class="card" style="text-align:center;"><h2 style="color: #10b981; font-size:40px; margin-bottom:10px;">✅</h2><h3 style="color: #374151;">Berhasil Terkirim!</h3><p style="color: #6b7280; font-size:14px;">Laporan evidence dan foto telah tersimpan ke sistem.</p></div></div>';
                       }).withFailureHandler(function(err) {
                           showMsg('❌ Gagal: ' + err, 'error');
                           btn.innerText = 'Kirim Evidence Fisik';
                           btn.disabled = false;
-                      }).processEvidenceForm(document.getElementById('evidenceForm'));
+                      });
+                      
+                      runner.submitFisikToGAS(document.getElementById('evidenceForm'));
                   } catch (err) {
                       showMsg('❌ ERROR: ' + err.message, 'error');
                   }
@@ -404,19 +416,119 @@ function doGet(e) {
           .addMetaTag('viewport', 'width=device-width, initial-scale=1');
   }
 
-function processEvidenceForm(formObject) {
+  // DEFAULT API BEHAVIOR (JSON Output)
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  
+  // Ambil tiket fresh dari hasil scraping terakhir (ALL TICKET INSERA)
+  var sheetScrape = ss.getSheetByName("ALL TICKET INSERA");
+  if (!sheetScrape) return ContentService.createTextOutput("[]").setMimeType(ContentService.MimeType.JSON);
+  
+  var scrapeLastRow = sheetScrape.getLastRow();
+  var scrapeLastCol = sheetScrape.getLastColumn();
+  if (scrapeLastRow < 1 || scrapeLastCol < 1) return ContentService.createTextOutput("[]").setMimeType(ContentService.MimeType.JSON);
+  
+  var scrapeData = sheetScrape.getRange(1, 1, scrapeLastRow, scrapeLastCol).getValues();
+  
+  // FIX: Karena scraper menulis header lengkap di Baris 2, kita hapus Baris 1 yang tidak lengkap
+  // Cek apakah Baris 2 (indeks 1) adalah header asli dari scraper
+  if (scrapeData.length > 1 && scrapeData[1].join("").toUpperCase().includes("C_PARENT")) {
+      scrapeData.shift(); // Buang Baris 1, jadikan Baris 2 (dari scraper) sebagai scrapeData[0]
+  }
+  
+  // Ambil data historis / ACS dari DATABASE ALL TICKET
+  var sheetDB = ss.getSheetByName("DATABASE ALL TICKET");
+  if (sheetDB) {
+      var dbLastRow = sheetDB.getLastRow();
+      var dbLastCol = sheetDB.getLastColumn();
+      if (dbLastRow > 1 && dbLastCol > 1) {
+          var dbData = sheetDB.getRange(1, 1, dbLastRow, dbLastCol).getValues();
+          var dbHeaders = dbData[0];
+          
+          var dbIncIdx = -1, dbActionIdx = -1, dbRxIdx = -1, dbTxIdx = -1, dbOltIdx = -1, dbStatusIdx = -1;
+          for(var c=0; c < dbHeaders.length; c++) {
+              var h = dbHeaders[c].toString().toUpperCase().trim();
+              if(h.match(/^(INCIDENT|INC)/)) dbIncIdx = c;
+              if(h === "ACTION") dbActionIdx = c;
+              if(h === "RX POWER") dbRxIdx = c;
+              if(h === "TX POWER") dbTxIdx = c;
+              if(h === "OLT") dbOltIdx = c;
+              if(h === "STATUS ALARM") dbStatusIdx = c;
+          }
+          
+          if(dbIncIdx !== -1) {
+              // Buat dictionary O(1) untuk pencarian cepat
+              var dbMap = {};
+              for(var i=1; i < dbData.length; i++) {
+                  var inc = dbData[i][dbIncIdx] ? dbData[i][dbIncIdx].toString().trim() : "";
+                  if(inc) {
+                      dbMap[inc] = {
+                          action: dbActionIdx !== -1 ? dbData[i][dbActionIdx] : "",
+                          rx: dbRxIdx !== -1 ? dbData[i][dbRxIdx] : "",
+                          tx: dbTxIdx !== -1 ? dbData[i][dbTxIdx] : "",
+                          olt: dbOltIdx !== -1 ? dbData[i][dbOltIdx] : "",
+                          status: dbStatusIdx !== -1 ? dbData[i][dbStatusIdx] : ""
+                      };
+                  }
+              }
+              
+              // Tambahkan header baru ke scrapeData
+              scrapeData[0].push("ACTION", "RX POWER", "TX POWER", "OLT", "STATUS ALARM");
+              
+              var scrapeIncIdx = -1;
+              for(var c=0; c < scrapeData[0].length; c++){
+                  if(scrapeData[0][c].toString().toUpperCase().match(/^(INCIDENT|INC)/)) {
+                      scrapeIncIdx = c; break;
+                  }
+              }
+              
+              // Gabungkan data
+              for(var i=1; i < scrapeData.length; i++){
+                  var inc = scrapeIncIdx !== -1 && scrapeData[i][scrapeIncIdx] ? scrapeData[i][scrapeIncIdx].toString().trim() : "";
+                  var ext = dbMap[inc] || { action: "", rx: "", tx: "", olt: "", status: "" };
+                  scrapeData[i].push(ext.action, ext.rx, ext.tx, ext.olt, ext.status);
+              }
+          }
+      }
+  }
+
+  return ContentService.createTextOutput(JSON.stringify(scrapeData)).setMimeType(ContentService.MimeType.JSON);
+}
+
+function submitFisikToGAS(formObject) {
     try {
-        var summary = formObject.baseSummary.replace(/\\n/g, "\n");
-        var ticketId = formObject.ticketId;
-        var dcCount = parseInt(formObject.dcCount || "1");
+        var baseSummaryRaw = Array.isArray(formObject.baseSummary) ? formObject.baseSummary[formObject.baseSummary.length - 1] : formObject.baseSummary;
+        var summary = (baseSummaryRaw || "").toString().replace(/\\n/g, "\n");
+        
+        var ticketIdRaw = Array.isArray(formObject.ticketId) ? formObject.ticketId[0] : formObject.ticketId;
+        var ticketId = (ticketIdRaw || "").toString();
+        
+        var dcCountRaw = Array.isArray(formObject.dcCount) ? formObject.dcCount[formObject.dcCount.length - 1] : formObject.dcCount;
+        var dcCount = parseInt(dcCountRaw || "1");
+
+        // Cari folder berdasarkan ID spesifik dari user untuk menghemat waktu (mencegah timeout)
+        var folder = null;
+        try {
+            folder = DriveApp.getFolderById("1Nrot1WJolVqbgfAlDmxoqHbo7Hu2pl49");
+        } catch(e) {
+            // Abaikan jika error izin, biarkan folder null (nanti akan fallback ke root)
+        }
 
         // Helper to process and upload file Blob
         function uploadBlob(blob, namePrefix) {
-            if (blob && blob.length > 0 || (blob.getBytes && blob.getBytes().length > 0)) {
-                var file = DriveApp.createFile(blob);
-                file.setName(namePrefix + "_" + ticketId + "_" + blob.getName());
-                file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-                return file.getUrl();
+            try {
+                // Jika user submit berkali-kali, blob bisa jadi array. Ambil yang terakhir.
+                var actualBlob = Array.isArray(blob) ? blob[blob.length - 1] : blob;
+                
+                // Cek apakah blob valid dan memiliki nama (berarti file benar-benar di-upload)
+                if (actualBlob && typeof actualBlob === 'object' && actualBlob.getName && actualBlob.getName() !== "") {
+                    // Gunakan folder jika ada, jika tidak taruh di root
+                    var file = folder ? folder.createFile(actualBlob) : DriveApp.createFile(actualBlob);
+                    file.setName(namePrefix + "_" + ticketId + "_" + actualBlob.getName());
+                    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+                    return file.getUrl();
+                }
+            } catch (e) {
+                return "[Error Upload: " + e.message + "]";
             }
             return "-";
         }
@@ -425,6 +537,9 @@ function processEvidenceForm(formObject) {
         var urlJalur = uploadBlob(formObject.ev_jalur_file, "Jalur");
         var urlOnt = uploadBlob(formObject.ev_ont_file, "ONT");
         var urlLokasi = uploadBlob(formObject.ev_lokasi_file, "Lokasi");
+        var urlVoice = uploadBlob(formObject.ev_voice_file, "Voice");
+        var urlIptvChannel = uploadBlob(formObject.ev_iptv_channel_file, "IPTV_Channel");
+        var urlIptvRemote = uploadBlob(formObject.ev_iptv_remote_file, "IPTV_Remote");
         
         var dcLinks = [];
         for (var i = 1; i <= dcCount; i++) {
@@ -441,83 +556,24 @@ function processEvidenceForm(formObject) {
         
         summary = summary.replace("- GCU DC (" + dcCount + ")", "- GCU DC (" + dcCount + "): " + dcLinks.join(", "));
         summary += "- Lokasi/Pelanggan: [" + urlLokasi + "]\n";
+        
+        if (urlVoice !== "-") {
+            summary = summary.replace(/- VOICE: RJ11\/Phone \((Aman|Tidak Aman)\)/, "- VOICE: RJ11/Phone ($1) [" + urlVoice + "]");
+        }
+        if (urlIptvChannel !== "-" || urlIptvRemote !== "-") {
+            summary = summary.replace(/- IPTV: Channel \((Aman|Tidak Aman)\), Remote \((Normal|Tidak Normal)\)/, 
+                "- IPTV: Channel ($1) [" + urlIptvChannel + "], Remote ($2) [" + urlIptvRemote + "]");
+        }
 
         // Submit to sheet
         var res = submitEvidenceDariWeb(ticketId, summary, "");
-        if (res.indexOf("berhasil") === -1 && res.indexOf("Sukses") === -1) {
+        if (res.indexOf("berhasil") === -1 && res.indexOf("Sukses") === -1 && res !== "OK") {
             throw new Error(res);
         }
         return res;
     } catch(e) {
         throw new Error(e.toString());
     }
-}
-
-  // DEFAULT API BEHAVIOR (JSON Output)
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var targetSheetName = (e && e.parameter && e.parameter.source === 'all') ? "DATABASE ALL TICKET" : "DATABASE";
-  var sheetDB = ss.getSheetByName(targetSheetName);
-  if (!sheetDB) return ContentService.createTextOutput("[]").setMimeType(ContentService.MimeType.JSON);
-  
-  var dbLastRow = sheetDB.getLastRow();
-  var dbLastCol = sheetDB.getLastColumn();
-  if (dbLastRow < 1 || dbLastCol < 1) return ContentService.createTextOutput("[]").setMimeType(ContentService.MimeType.JSON);
-  
-  var data = sheetDB.getRange(1, 1, dbLastRow, dbLastCol).getValues();
-
-  // JIKA dashboard meminta "all" atau tidak spesifik, kita GABUNGKAN dengan tiket garansi dari ALL TICKET
-  if (!e || !e.parameter || e.parameter.source !== 'all') {
-      var sheetAll = ss.getSheetByName("DATABASE ALL TICKET");
-      if (sheetAll) {
-          var allLastRow = sheetAll.getLastRow();
-          var allLastCol = sheetAll.getLastColumn();
-          if (allLastRow > 1 && allLastCol > 1) {
-              var allData = sheetAll.getRange(1, 1, allLastRow, allLastCol).getValues();
-              
-              var actionColIdx = -1;
-              var incColIdx = -1;
-              var summaryColIdx = -1;
-              for(var c=0; c < allData[0].length; c++){
-                  var h = allData[0][c].toString().toUpperCase().trim();
-                  if(h === "ACTION") actionColIdx = c;
-                  if(h === "SUMMARY" || h === "WORKLOG SUMMARY") summaryColIdx = c;
-                  if(h.match(/^(INCIDENT|INC)/)) incColIdx = c;
-              }
-              
-              if((actionColIdx !== -1 || summaryColIdx !== -1) && incColIdx !== -1) {
-                  // Kumpulkan tiket yang sudah ada di DATABASE aktif
-                  var existingIncs = {};
-                  var dbIncCol = -1;
-                  for(var c=0; c < data[0].length; c++){
-                      if(data[0][c].toString().toUpperCase().match(/^(INCIDENT|INC)/)) dbIncCol = c;
-                  }
-                  if(dbIncCol !== -1) {
-                      for(var i=1; i < data.length; i++){
-                          if(data[i][dbIncCol]) existingIncs[data[i][dbIncCol].toString().trim()] = true;
-                      }
-                  }
-                  
-                  // Tambahkan tiket dari ALL TICKET yang punya stempel GENCU dan tidak ada di DATABASE aktif
-                  for(var i=1; i < allData.length; i++){
-                      var actionText = "";
-                      if(actionColIdx !== -1 && allData[i][actionColIdx]) actionText += allData[i][actionColIdx].toString();
-                      if(summaryColIdx !== -1 && allData[i][summaryColIdx]) actionText += " " + allData[i][summaryColIdx].toString();
-                      
-                      var incText = allData[i][incColIdx] ? allData[i][incColIdx].toString().trim() : "";
-                      
-                      // Jika ada stempel dari GENCU (EVIDENCE, WAITING, COMPLETED)
-                      if(actionText.includes("[") || actionText.includes("EVIDENCE FISIK SUBMITTED")) {
-                          if(incText && !existingIncs[incText]) {
-                              data.push(allData[i]);
-                          }
-                      }
-                  }
-              }
-          }
-      }
-  }
-
-  return ContentService.createTextOutput(JSON.stringify(data)).setMimeType(ContentService.MimeType.JSON);
 }
 
 // Fungsi pembantu untuk menulis evidence ke sheet spesifik
@@ -1410,5 +1466,12 @@ function forceCreateHeaders() {
 
 function testTelegramAuth() {
   UrlFetchApp.fetch("https://api.telegram.org/");
+}
+
+function authorizeGoogleDrive() {
+  // Jalankan fungsi ini sekali dari dalam editor untuk memicu pop-up "Review Permissions"
+  try {
+      DriveApp.createFolder("GENCU_TEST_AUTH");
+  } catch(e) {}
 }
 

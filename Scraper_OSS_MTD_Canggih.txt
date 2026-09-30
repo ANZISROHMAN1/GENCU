@@ -11,15 +11,14 @@
 (function() {
     'use strict';
 
-    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyz4bDNVEtjazRYRSvs2lXk_40Ee6qhxR64r9UCBXjaWPn6Q9urV8LFSymXXqWHxQs3/exec';
+    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx1UEN5rD39Hw5W4xNYTJaBZCafdP-bmlJgNHqFkfpWPF7_wYotc3-MFqyeAkdCjuLI/exec';
     
     // ==========================================
     // DAFTAR URL BOOKMARK UNTUK ROTASI OTOMATIS
     // ==========================================
     // PENTING: Masukkan URL *PANJANG* yang muncul di browser SETELAH Anda mengklik bookmark tersebut!
     const BOOKMARK_URLS = [
-        "https://oss-incident.telkom.co.id/jw/web/userview/ticketIncidentService/ticketIncidentService/_/allTicketListRepo", // Ganti dengan URL PANJANG Closed Ticket
-        "https://oss-incident.telkom.co.id/jw/web/userview/ticketIncidentService/ticketIncidentService/_/allTicketList"      // Ganti dengan URL PANJANG All Ticket (tes ogp close)
+        "https://oss-incident.telkom.co.id/jw/web/userview/ticketIncidentService/ticketIncidentService/_/allTicketList?d-5564009-fn_C_RELATED_TO_GAMAS=&d-5564009-fn_C_PERANGKAT=&d-5564009-fn_C_CUSTOMER_SEGMENT=RBS%2CDGS%2CDDS%2CDES%2CDBS%2CDSS%2CREG%2CDPS%2CDWS%2CFTTH_OLO&d-5564009-fn_reported_date_filter=&d-5564009-fn_reported_date_filter=&d-5564009-fn_C_CONTACT_NAME=&d-5564009-fn_C_TICKET_ID_GAMAS=&d-5564009-fn_C_PIPE_NAME=&d-5564009-fn_C_GUARANTE_STATUS=&d-5564009-fn_C_CLASSIFICATION_CATEGORY=&d-5564009-fn_C_CLASSIFICATION_PATH=&d-5564009-fn_C_EXTERNAL_TICKETID=&d-5564009-s=13&d-5564009-fn_C_CHANNEL=&d-5564009-fn_C_SLG=&d-5564009-p=1&d-5564009-o=1&d-5564009-fn_C_WORK_ZONE=BOO%2CPAG%2CCPS%2CCWI%2CCSR%2CCRI%2CCJU%2CTJH%2CCBI%2CBJD%2CJGL%2CCLS%2CCAU%2CPCM%2CCNE%2CDEP%2CLWL%2CLBI%2CJSA%2CDMG%2CCGD%2CGPI%2CCSN%2CKHL%2CSPL%2CPAR%2CCSE%2CSTL%2CPMU%2CCTR%2CSKJ%2CCSL%2CPLR%2CKLU%2CJPK%2CCKB%2CCCR%2CCBD%2CBGL%2CSKB%2CSGN%2CNLD%2CCMO&d-5564009-ps=100&d-5564009-fn_status_date_filter=&d-5564009-fn_status_date_filter=&d-5564009-fn_C_TICKET_STATUS=CLOSED%2CFINALCHECK%2CMEDIACARE%2CSALAMSIM%2CRESOLVED&d-5564009-fn_C_ACTUAL_SOLUTION=&d-5564009-fn_C_REGION=&d-5564009-fn_C_CUSTOMER_ID=&d-5564009-fn_C_ID_TICKET=&d-5564009-fn_C_REPORTED_PRIORITY=&d-5564009-fn_DATEMODIFIED=&d-5564009-fn_C_SERVICE_TYPE=&d-5564009-fn_C_CLOSED_BY=&d-5564009-fn_C_SERVICE_ID=&d-5564009-fn_C_INCIDENT_DOMAIN=&d-5564009-fn_C_OWNER_GROUP=&d-5564009-fn_C_SOURCE_TICKET=&d-5564009-fn_C_REALM=&d-5564009-fn_C_SERVICE_NO=&d-5564009-fn_C_DESCRIPTION_ASSIGMENT=&d-5564009-fn_C_DESCRIPTION_CUSTOMERID=&d-5564009-fn_C_OWNER=&d-5564009-fn_C_WITEL=&d-5564009-fn_C_CUSTOMER_TYPE=&d-5564009-fn_C_KODE_PRODUK"
     ];
     
     let currentBmkIdx = parseInt(localStorage.getItem('oss_scraper_bmk_idx') || '0');
@@ -114,7 +113,9 @@
         });
 
         if (!targetTable) {
-            setStatus("⚠️ Data kosong atau tabel tiket tidak ditemukan.<br>Melanjutkan ke bookmark berikutnya...");
+            let delayMs = (currentBmkIdx === 1) ? 10000 : 600000;
+            let delayStr = (currentBmkIdx === 1) ? "10 detik" : "10 menit";
+            setStatus(`⚠️ Data kosong atau tabel tiket tidak ditemukan.<br>Melanjutkan ke bookmark berikutnya dalam ${delayStr}...`);
             isRunning = false;
             
             setTimeout(() => {
@@ -122,7 +123,7 @@
                 if(currentBmkIdx >= BOOKMARK_URLS.length) currentBmkIdx = 0;
                 localStorage.setItem('oss_scraper_bmk_idx', currentBmkIdx);
                 window.location.href = BOOKMARK_URLS[currentBmkIdx];
-            }, 5000);
+            }, delayMs);
             return;
         }
 
@@ -130,12 +131,18 @@
         // Bersihkan header dari enter (\n) yang bikin gagal deteksi
         headers = Array.from(headerCells).map(c => c.innerText.trim().replace(/\s+/g, ' '));
         
-        // PERUBAHAN PENTING: Prioritaskan mencari kolom STATUS DATE (Tanggal Ditutup)
-        reportedDateIdx = headers.findIndex(h => h.includes('STATUS DATE') || h.includes('STATUSDATE'));
-        
-        // Jika tidak ada STATUS DATE, baru cari REPORTED DATE
-        if(reportedDateIdx === -1) {
-            reportedDateIdx = headers.findIndex(h => h.includes('REPORTED DATE'));
+        if (window.location.href.includes('allTicketListRepo')) {
+            // CLOSED TICKET: Prioritaskan STATUS DATE
+            reportedDateIdx = headers.findIndex(h => h.includes('STATUS DATE') || h.includes('STATUSDATE'));
+            if(reportedDateIdx === -1) {
+                reportedDateIdx = headers.findIndex(h => h.includes('REPORTED DATE'));
+            }
+        } else {
+            // ALL TICKET: Prioritaskan STATUS DATE agar sinkron dengan sorting user
+            reportedDateIdx = headers.findIndex(h => h.includes('STATUS DATE') || h.includes('STATUSDATE'));
+            if(reportedDateIdx === -1) {
+                reportedDateIdx = headers.findIndex(h => h.includes('REPORTED DATE') || h.includes('REPORTEDDATE'));
+            }
         }
         
         // Jika masih tidak ada, cari yang ada kata DATE
@@ -144,7 +151,9 @@
         }
 
         if(reportedDateIdx === -1) {
-            setStatus("⚠️ Kolom Date tidak ditemukan di header!<br>Melanjutkan ke bookmark berikutnya...");
+            let delayMs = (currentBmkIdx === 1) ? 10000 : 600000;
+            let delayStr = (currentBmkIdx === 1) ? "10 detik" : "10 menit";
+            setStatus(`⚠️ Kolom Date tidak ditemukan di header!<br>Melanjutkan ke bookmark berikutnya dalam ${delayStr}...`);
             isRunning = false;
             
             setTimeout(() => {
@@ -152,7 +161,7 @@
                 if(currentBmkIdx >= BOOKMARK_URLS.length) currentBmkIdx = 0;
                 localStorage.setItem('oss_scraper_bmk_idx', currentBmkIdx);
                 window.location.href = BOOKMARK_URLS[currentBmkIdx];
-            }, 5000);
+            }, delayMs);
             return;
         }
 
@@ -163,30 +172,40 @@
             return;
         }
         
-        let pagelinks = document.querySelector('.pagelinks a') || document.querySelector('a[href*="?d-"]');
-        if (!pagelinks) {
-            sendToGoogleSheet();
-            return;
+        let pagelinks = document.querySelector('.pagelinks a') || document.querySelector('a[href*="d-"]');
+        let paramPrefix = "";
+        
+        if (pagelinks) {
+            let href = pagelinks.getAttribute('href');
+            let match = href.match(/(d-\d+-)/);
+            if (match) paramPrefix = match[1];
+        }
+        
+        // Fallback: cari dari URL saat ini (contoh: url?d-5564009-p=1)
+        if (!paramPrefix) {
+            let urlMatch = window.location.href.match(/(d-\d+-)/);
+            if (urlMatch) {
+                paramPrefix = urlMatch[1];
+            } else {
+                sendToGoogleSheet();
+                return;
+            }
         }
 
-        let href = pagelinks.getAttribute('href');
-        let match = href.match(/(d-\d+-)/);
-        if (!match) {
-            sendToGoogleSheet();
-            return;
-        }
-
-        let paramPrefix = match[1]; 
         let baseUrl = window.location.origin + window.location.pathname; 
         let currentPageNum = 2; 
         let totalHalaman = 264; // Default aman jika gagal baca info
 
         // Baca jumlah info (Contoh: "26,220 items found")
-        let infoDiv = document.querySelector('.pagelinks').parentNode.innerText;
-        let totalItemsMatch = infoDiv.match(/([\d,]+)\sitems found/);
-        if(totalItemsMatch) {
-            let total = parseInt(totalItemsMatch[1].replace(/,/g, ''));
-            totalHalaman = Math.ceil(total / 100);
+        try {
+            let infoDiv = document.querySelector('.pagelinks') ? document.querySelector('.pagelinks').parentNode.innerText : document.body.innerText;
+            let totalItemsMatch = infoDiv.match(/([\d,]+)\s+items found/);
+            if(totalItemsMatch) {
+                let total = parseInt(totalItemsMatch[1].replace(/,/g, ''));
+                totalHalaman = Math.ceil(total / 100);
+            }
+        } catch(e) {
+            console.log("Gagal membaca total halaman, menggunakan default", e);
         }
 
         while (currentPageNum <= totalHalaman) {
@@ -261,14 +280,16 @@
                 
                 let targetStr = CURRENT_DATE.replace(/\s+/g, ''); // "2026-09-27"
                 
-                if (dateStr && dateStr.includes(targetStr)) {
-                    scrapedData.push(rowData);
-                } else if (dateStr) {
-                    // Cek apakah tanggal di baris ini lebih lama dari target
+                // AMBIL SEMUA ROW YANG ADA DI TABEL!
+                // Jangan terlalu ketat pada filter tanggal karena OSS sering return tiket kemarin sore karena beda zona waktu!
+                scrapedData.push(rowData);
+                
+                if (dateStr) {
+                    // Cek apakah tanggal di baris ini bukan hari ini, jika ya, hentikan pencarian halaman berikutnya
                     let rowDateMatch = dateStr.match(/(\d{4}-\d{2}-\d{2})/);
                     if (rowDateMatch) {
-                        let rowDate = rowDateMatch[1];
-                        if (rowDate < targetStr) {
+                        let rowDateStr = rowDateMatch[1];
+                        if (rowDateStr !== targetStr) {
                             foundOlderDate = true;
                         }
                     }
@@ -304,9 +325,12 @@
             headers: { 'Content-Type': 'text/plain' },
             body: JSON.stringify(payload)
         }).then(() => {
-            let waitTime = 10; // Cuma nunggu 10 detik sebelum lompat ke bookmark berikutnya
+            let waitTime = (currentBmkIdx === 1) ? 10 : 600; // 10s if All Ticket, 600s (10m) if Closed Ticket
             let timerInterval = setInterval(() => {
-                setStatus(`🎉 <b>SUKSES!</b> Data terkirim.<br>Pindah ke bookmark selanjutnya dalam <b>${waitTime}s</b>...`);
+                let m = Math.floor(waitTime / 60);
+                let s = waitTime % 60;
+                let timeStr = waitTime >= 60 ? `${m}m ${s}s` : `${s}s`;
+                setStatus(`🎉 <b>SUKSES!</b> Data terkirim.<br>Pindah ke bookmark selanjutnya dalam <b>${timeStr}</b>...`);
                 waitTime--;
                 if(waitTime < 0) {
                     clearInterval(timerInterval);
@@ -317,17 +341,19 @@
                 }
             }, 1000);
         }).catch(err => {
-            setStatus("❌ Gagal mengirim data ke Google Sheet.<br>Lanjut ke bookmark berikutnya...");
+            let delayMs = (currentBmkIdx === 1) ? 10000 : 600000;
+            let delayStr = (currentBmkIdx === 1) ? "10 detik" : "10 menit";
+            setStatus(`❌ Gagal mengirim data ke Google Sheet.<br>Lanjut ke bookmark berikutnya dalam ${delayStr}...`);
             setTimeout(() => {
                 currentBmkIdx++;
                 if(currentBmkIdx >= BOOKMARK_URLS.length) currentBmkIdx = 0;
                 localStorage.setItem('oss_scraper_bmk_idx', currentBmkIdx);
                 window.location.href = BOOKMARK_URLS[currentBmkIdx];
-            }, 10000);
+            }, delayMs);
         });
     }
 
-    window.addEventListener('load', () => {
+    function runMain() {
         // Jika sedang di halaman utama atau sembarang halaman setelah login
         if (!isTargetPage) {
             let container = document.createElement('div');
@@ -344,7 +370,68 @@
         setTimeout(() => {
             initUI();
             
-            // FITUR AUTO START TANPA SYARAT (Bisa jalan tanpa klik bookmark)
+            let isEmpty = false;
+            let pageText = document.body.innerText;
+            if (pageText.includes('Nothing found') || pageText.includes('No items found') || pageText.includes('Please Submit Filters')) {
+                isEmpty = true;
+            }
+
+            // AUTO-FILTER KHUSUS HALAMAN CLOSED TICKET
+            if (window.location.href.includes('allTicketListRepo') && isEmpty && !sessionStorage.getItem('oss_auto_filtered')) {
+                setStatus("Mencoba filter otomatis untuk Hari Ini...");
+                sessionStorage.setItem('oss_auto_filtered', 'true');
+
+                let filterApplied = false;
+                
+                // Cari input tanggal berdasarkan icon kalender di sebelahnya
+                let dateInputs = Array.from(document.querySelectorAll('input[type="text"]')).filter(input => {
+                    let nextEl = input.nextElementSibling;
+                    return (nextEl && nextEl.tagName === 'IMG' && nextEl.src.toLowerCase().includes('calendar'));
+                });
+                
+                // Jika ketemu 4 (Reported From-To, Status From-To), isi yang Status saja
+                if (dateInputs.length >= 4) {
+                    dateInputs[2].value = CURRENT_DATE;
+                    dateInputs[3].value = CURRENT_DATE;
+                    filterApplied = true;
+                } else if (dateInputs.length > 0) {
+                    // Fallback, isi semuanya
+                    dateInputs.forEach(i => i.value = CURRENT_DATE);
+                    filterApplied = true;
+                } else {
+                    // Fallback super darurat
+                    let allDateInputs = Array.from(document.querySelectorAll('input[type="text"]')).filter(i => 
+                        (i.placeholder && (i.placeholder.includes('From') || i.placeholder.includes('To')))
+                    );
+                    if (allDateInputs.length >= 4) {
+                        allDateInputs[2].value = CURRENT_DATE;
+                        allDateInputs[3].value = CURRENT_DATE;
+                        filterApplied = true;
+                    }
+                }
+
+                if (filterApplied) {
+                    let showBtn = Array.from(document.querySelectorAll('input, button')).find(el => 
+                        (el.value && el.value.toLowerCase() === 'show') || 
+                        (el.innerText && el.innerText.toLowerCase().trim() === 'show')
+                    );
+
+                    if (showBtn) {
+                        setStatus("Filter diisi. Mengklik 'show'...");
+                        setTimeout(() => showBtn.click(), 1000);
+                        return; // Stop eksekusi, biarkan halaman reload
+                    }
+                }
+            }
+
+            // Jika kita ada di ALL TICKET, atau tabel tidak kosong, reset flag
+            if (!isEmpty || window.location.href.includes('allTicketList')) {
+                if (!window.location.href.includes('allTicketListRepo')) {
+                    sessionStorage.removeItem('oss_auto_filtered');
+                }
+            }
+
+            // FITUR AUTO START (Akan jalan meskipun tabel kosong, supaya dia bisa melompat ke bookmark berikutnya)
             let btn = document.querySelector('#oss-canggih-panel button');
             if (btn && !isRunning) {
                 setStatus("Sistem siap. Otomatis memulai dalam 5 detik...");
@@ -353,5 +440,11 @@
                 }, 5000);
             }
         }, 1500);
-    });
+    }
+
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        runMain();
+    } else {
+        window.addEventListener('DOMContentLoaded', runMain);
+    }
 })();
