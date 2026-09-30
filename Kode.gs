@@ -507,79 +507,57 @@ function doGet(e) {
   // DEFAULT API BEHAVIOR (JSON Output)
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   
-  // Ambil tiket fresh dari hasil scraping terakhir (ALL TICKET INSERA)
-  var sheetScrape = ss.getSheetByName("ALL TICKET INSERA");
-  if (!sheetScrape) return ContentService.createTextOutput("[]").setMimeType(ContentService.MimeType.JSON);
+  // Ambil data HANYA dari DATABASE ALL TICKET sesuai request
+  var sheetDB = ss.getSheetByName("DATABASE ALL TICKET");
+  if (!sheetDB) return ContentService.createTextOutput("[]").setMimeType(ContentService.MimeType.JSON);
   
-  var scrapeLastRow = sheetScrape.getLastRow();
-  var scrapeLastCol = sheetScrape.getLastColumn();
-  if (scrapeLastRow < 1 || scrapeLastCol < 1) return ContentService.createTextOutput("[]").setMimeType(ContentService.MimeType.JSON);
+  var dbLastRow = sheetDB.getLastRow();
+  var dbLastCol = sheetDB.getLastColumn();
+  if (dbLastRow < 2 || dbLastCol < 1) return ContentService.createTextOutput("[]").setMimeType(ContentService.MimeType.JSON);
   
-  var scrapeData = sheetScrape.getRange(1, 1, scrapeLastRow, scrapeLastCol).getValues();
+  var dbData = sheetDB.getRange(1, 1, dbLastRow, dbLastCol).getValues();
+  var headers = dbData[0];
   
-  // FIX: Karena scraper menulis header lengkap di Baris 2, kita hapus Baris 1 yang tidak lengkap
-  // Cek apakah Baris 2 (indeks 1) adalah header asli dari scraper
-  if (scrapeData.length > 1 && scrapeData[1].join("").toUpperCase().includes("C_PARENT")) {
-      scrapeData.shift(); // Buang Baris 1, jadikan Baris 2 (dari scraper) sebagai scrapeData[0]
+  // Cari index TIMESTAMP atau REPORTED DATE untuk filter hari ini
+  var timestampIdx = -1;
+  var reportedDateIdx = -1;
+  for(var c = 0; c < headers.length; c++) {
+      var h = headers[c].toString().toUpperCase().trim();
+      if(h === "TIMESTAMP") timestampIdx = c;
+      if(h === "REPORTED DATE") reportedDateIdx = c;
   }
   
-  // Ambil data historis / ACS dari DATABASE ALL TICKET
-  var sheetDB = ss.getSheetByName("DATABASE ALL TICKET");
-  if (sheetDB) {
-      var dbLastRow = sheetDB.getLastRow();
-      var dbLastCol = sheetDB.getLastColumn();
-      if (dbLastRow > 1 && dbLastCol > 1) {
-          var dbData = sheetDB.getRange(1, 1, dbLastRow, dbLastCol).getValues();
-          var dbHeaders = dbData[0];
-          
-          var dbIncIdx = -1, dbActionIdx = -1, dbRxIdx = -1, dbTxIdx = -1, dbOltIdx = -1, dbStatusIdx = -1;
-          for(var c=0; c < dbHeaders.length; c++) {
-              var h = dbHeaders[c].toString().toUpperCase().trim();
-              if(h.match(/^(INCIDENT|INC)/)) dbIncIdx = c;
-              if(h === "ACTION") dbActionIdx = c;
-              if(h === "RX POWER") dbRxIdx = c;
-              if(h === "TX POWER") dbTxIdx = c;
-              if(h === "OLT") dbOltIdx = c;
-              if(h === "STATUS ALARM") dbStatusIdx = c;
-          }
-          
-          if(dbIncIdx !== -1) {
-              // Buat dictionary O(1) untuk pencarian cepat
-              var dbMap = {};
-              for(var i=1; i < dbData.length; i++) {
-                  var inc = dbData[i][dbIncIdx] ? dbData[i][dbIncIdx].toString().trim() : "";
-                  if(inc) {
-                      dbMap[inc] = {
-                          action: dbActionIdx !== -1 ? dbData[i][dbActionIdx] : "",
-                          rx: dbRxIdx !== -1 ? dbData[i][dbRxIdx] : "",
-                          tx: dbTxIdx !== -1 ? dbData[i][dbTxIdx] : "",
-                          olt: dbOltIdx !== -1 ? dbData[i][dbOltIdx] : "",
-                          status: dbStatusIdx !== -1 ? dbData[i][dbStatusIdx] : ""
-                      };
-                  }
-              }
-              
-              // Tambahkan header baru ke scrapeData
-              scrapeData[0].push("ACTION", "RX POWER", "TX POWER", "OLT", "STATUS ALARM");
-              
-              var scrapeIncIdx = -1;
-              for(var c=0; c < scrapeData[0].length; c++){
-                  if(scrapeData[0][c].toString().toUpperCase().match(/^(INCIDENT|INC)/)) {
-                      scrapeIncIdx = c; break;
-                  }
-              }
-              
-              // Gabungkan data
-              for(var i=1; i < scrapeData.length; i++){
-                  var inc = scrapeIncIdx !== -1 && scrapeData[i][scrapeIncIdx] ? scrapeData[i][scrapeIncIdx].toString().trim() : "";
-                  var ext = dbMap[inc] || { action: "", rx: "", tx: "", olt: "", status: "" };
-                  scrapeData[i].push(ext.action, ext.rx, ext.tx, ext.olt, ext.status);
+  // Prioritaskan REPORTED DATE (dari web/insera), kalau tidak ada pakai TIMESTAMP (waktu diserap scraper)
+  var dateColIdx = reportedDateIdx !== -1 ? reportedDateIdx : (timestampIdx !== -1 ? timestampIdx : 0);
+  
+  var todayStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");
+                 
+  var filteredData = [headers];
+  
+  for(var i = 1; i < dbData.length; i++) {
+      var rowDate = dbData[i][dateColIdx];
+      var rowDateStr = "";
+      
+      if (rowDate instanceof Date) {
+          rowDateStr = Utilities.formatDate(rowDate, Session.getScriptTimeZone(), "yyyy-MM-dd");
+      } else if (rowDate) {
+          var d = new Date(rowDate);
+          if (!isNaN(d.getTime())) {
+              rowDateStr = Utilities.formatDate(d, Session.getScriptTimeZone(), "yyyy-MM-dd");
+          } else {
+              var match = rowDate.toString().match(/\d{4}-\d{2}-\d{2}/);
+              if (match) {
+                  rowDateStr = match[0];
               }
           }
       }
+      
+      if (rowDateStr === todayStr) {
+          filteredData.push(dbData[i]);
+      }
   }
 
-  return ContentService.createTextOutput(JSON.stringify(scrapeData)).setMimeType(ContentService.MimeType.JSON);
+  return ContentService.createTextOutput(JSON.stringify(filteredData)).setMimeType(ContentService.MimeType.JSON);
 }
 
 function submitFisikToGAS(formObject) {
