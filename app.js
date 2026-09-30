@@ -296,12 +296,8 @@ window.selectTicket = function (ticketId, sto) {
         if (ticket.category === 'GCU LOGIC') {
             targetRole = 'helpdesk';
         } else if (ticket.category === 'GCU FISIK') {
-            // Jika belum di-assign, arahkan ke Korlap. Jika sudah, arahkan ke Teknisi.
-            if (!ticket.technician || ticket.technician === '-') {
-                targetRole = 'korlap';
-            } else {
-                targetRole = 'teknisi';
-            }
+            // Selalu arahkan ke Korlap terlebih dahulu agar Korlap bisa melihat status assignment
+            targetRole = 'korlap';
         } else if (ticket.category === 'APPROVAL KORLAP') {
             targetRole = 'korlap';
         }
@@ -497,24 +493,30 @@ function renderKorlapFlow() {
         return;
     }
 
-    let contentAssign = `
-        <p class="info-text">Masukkan NIK Teknisi lapangan dan ID Telegram untuk ditugaskan menangani tiket <strong>${state.activeTicketId}</strong>.</p>
-        <div class="btn-group" style="margin-bottom: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
-            <input type="text" id="tekSelect" placeholder="Masukkan NIK Teknisi" value="${ticket.technician !== '-' ? ticket.technician : ''}" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); width: 100%; max-width: 250px;">
-            <input type="text" id="teleSelect" placeholder="Masukkan ID Telegram (Chat ID)" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); width: 100%; max-width: 250px;">
-        </div>
-        <button class="btn btn-primary" onclick="assignTicketToTelegram(this)">Assign Ticket</button>
-    `;
-
+    let assignedTo = state.workflowState.assigned || (ticket.technician !== "-" ? ticket.technician : null);
+    
+    let contentAssign = '';
     if (ticket.category === 'GCU LOGIC') {
         contentAssign = `<p style="color: var(--success); font-weight: 500;">✅ Tiket berada di antrean GCU LOGIC.</p>
         <p class="info-text" style="margin-top: 10px;">Status: Menunggu Helpdesk mengeksekusi pengecekan Logic.</p>
         <button class="btn btn-outline" style="margin-top: 10px;" onclick="showWorkflow('helpdesk')">Simulasikan View Helpdesk ➡️</button>`;
-    } else if (state.workflowState.assigned || ticket.technician !== "-") {
-        let assignedTo = state.workflowState.assigned || ticket.technician;
-        contentAssign = `<p style="color: var(--success); font-weight: 500;">✅ Tiket telah di-assign ke NIK: <strong>${assignedTo}</strong>.</p>
-        <p class="info-text" style="margin-top: 10px;">Status: Menunggu Teknisi submit evidence fisik.</p>
-        <button class="btn btn-outline" style="margin-top: 10px;" onclick="showWorkflow('teknisi')">Simulasikan View Teknisi ➡️</button>`;
+    } else {
+        if (assignedTo) {
+            contentAssign += `<div style="padding: 10px; background: #e0f2fe; border-left: 4px solid #0284c7; margin-bottom: 15px;">
+                <p style="color: #0284c7; font-weight: 500; margin: 0;">✅ Tiket saat ini di-assign ke NIK: <strong>${assignedTo}</strong></p>
+                <p style="font-size: 12px; color: #0369a1; margin: 4px 0 0 0;">Status: Menunggu Teknisi submit evidence fisik.</p>
+                <button class="btn btn-outline" style="margin-top: 8px; font-size: 12px; padding: 4px 8px;" onclick="showWorkflow('teknisi')">Simulasikan View Teknisi ➡️</button>
+            </div>`;
+        }
+
+        contentAssign += `
+            <p class="info-text">Masukkan NIK Teknisi lapangan dan ID Telegram untuk ditugaskan menangani tiket <strong>${state.activeTicketId}</strong>.</p>
+            <div class="btn-group" style="margin-bottom: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
+                <input type="text" id="tekSelect" placeholder="Masukkan NIK Teknisi" value="${assignedTo || ''}" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); width: 100%; max-width: 250px;">
+                <input type="text" id="teleSelect" placeholder="Masukkan ID Telegram (Chat ID)" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); width: 100%; max-width: 250px;">
+            </div>
+            <button class="btn btn-primary" onclick="assignTicketToTelegram(this)">${assignedTo ? 'Re-Assign Ticket' : 'Assign Ticket'}</button>
+        `;
     }
 
     workflowContainer.appendChild(createStep('step-k1', 'Assign Tiket ke Teknisi', contentAssign));
@@ -627,9 +629,12 @@ window.assignTicketToTelegram = function (btn) {
 function renderTeknisiFlow() {
     const ticket = state.tickets.find(t => t.incident === state.activeTicketId);
 
-    if (ticket && ticket.category === 'GCU FISIK' && !state.workflowState.assigned) {
-        workflowContainer.innerHTML = `<p style="color: var(--danger); font-weight: 500;">❌ Tiket belum di-assign oleh Korlap.</p>`;
-        return;
+    if (ticket && ticket.category === 'GCU FISIK') {
+        let hasTeknisi = (ticket.technician && ticket.technician !== "-") || state.workflowState.assigned;
+        if (!hasTeknisi) {
+            workflowContainer.innerHTML = `<p style="color: var(--danger); font-weight: 500;">❌ Tiket belum di-assign oleh Korlap.</p>`;
+            return;
+        }
     }
 
     if (ticket && (ticket.category === 'APPROVAL KORLAP' || ticket.category === 'COMPLETED')) {
