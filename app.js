@@ -106,6 +106,7 @@ function processData(rows) {
     let statusAlarmIdx = headers.findIndex(h => h === "STATUS ALARM" || h === "ONU LINK STATUS");
     let workzoneIdx = headers.indexOf("WORKZONE");
     let technicianIdx = headers.findIndex(h => h === "TECHNICIAN" || h === "NAMA TEKNISI");
+    let actionIdx = headers.indexOf("ACTION");
     let customerNameIdx = headers.indexOf("CUSTOMER NAME");
     if (customerNameIdx === -1) customerNameIdx = headers.findIndex(h => h.includes("CUSTOMER NAM"));
 
@@ -234,6 +235,12 @@ function processData(rows) {
                 category = 'GCU LOGIC';
             }
 
+            // Ambil ACTION history untuk ditampilkan di approval korlap
+            let actionHistory = "";
+            if (actionIdx !== -1 && row[actionIdx]) {
+                actionHistory = row[actionIdx].toString().trim();
+            }
+
             parsedTickets.push({
                 incident: ticketId,
                 serviceNumber: sNum !== "-" ? sNum : "Unknown",
@@ -243,7 +250,8 @@ function processData(rows) {
                 tx: tx || "-",
                 status: status || "-",
                 category: category,
-                customerName: customerName
+                customerName: customerName,
+                actionHistory: actionHistory
             });
         }
     }
@@ -489,35 +497,92 @@ function renderKorlapFlow() {
     }
 
     if (ticket.category === 'APPROVAL KORLAP') {
+        // Parse evidence dari ACTION history
+        let actionText = ticket.actionHistory || '';
+        
+        // Pisahkan evidence FISIK dan LOGIC dari action history
+        let evidenceFisik = '-';
+        let evidenceLogic = '-';
+        let evidenceLinks = [];
+        
+        // Cari evidence fisik (EVIDENCE FISIK SUBMITTED)
+        let fisikMatch = actionText.match(/EVIDENCE FISIK SUBMITTED[\s\S]*?(?=\[|$)/i);
+        if (fisikMatch) evidenceFisik = fisikMatch[0].trim();
+        
+        // Cari evidence logic (WAITING APPROVAL KORLAP)
+        let logicMatch = actionText.match(/\[WAITING APPROVAL KORLAP\][\s\S]*?(?=\[EVIDENCE|$)/i);
+        if (logicMatch) evidenceLogic = logicMatch[0].trim();
+        
+        // Cari URL foto evidence
+        let urlMatches = actionText.match(/https:\/\/drive\.google\.com[^\s\]]+/gi);
+        if (urlMatches) evidenceLinks = urlMatches;
+
+        // Format evidence untuk ditampilkan
+        function formatEvidence(text) {
+            if (!text || text === '-') return '<span style="color: var(--text-secondary); font-style: italic;">Belum ada data</span>';
+            return text.replace(/\n/g, '<br>').replace(/(https:\/\/[^\s\]]+)/g, '<a href="$1" target="_blank" style="color: var(--primary); word-break: break-all;">📎 Lihat File</a>');
+        }
+
         let contentApprove = `
-            <p class="info-text" style="margin-bottom: 15px;">Validasi perbaikan sebelum melakukan GCU Closed.</p>
+            <p class="info-text" style="margin-bottom: 15px;">Validasi pekerjaan GCU Fisik dan Logic. Pastikan sesuai SOP perusahaan sebelum approve.</p>
             
-            <div style="background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 15px;">
-                <h4 style="font-size: 14px; font-weight: bold; color: #1e293b; margin-bottom: 10px;">🛠️ Cek Evidence Teknisi (Fisik)</h4>
+            <!-- SECTION 1: Evidence GCU FISIK -->
+            <div style="background: var(--bg-surface); padding: 18px; border-radius: 10px; border: 1px solid var(--border); margin-bottom: 15px;">
+                <h4 style="font-size: 14px; font-weight: bold; color: var(--text-primary); margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">🛠️ Evidence GCU FISIK (Teknisi)</h4>
+                
+                <div style="background: rgba(0,0,0,0.05); padding: 12px; border-radius: 8px; margin-bottom: 12px; font-size: 13px; line-height: 1.6; color: var(--text-secondary); max-height: 200px; overflow-y: auto;">
+                    ${formatEvidence(evidenceFisik)}
+                </div>
+                
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                    <span style="font-size: 12px; color: var(--text-secondary);">Teknisi: <strong style="color: var(--text-primary);">${ticket.technician}</strong></span>
+                    <span style="font-size: 12px; color: var(--text-secondary);">| RX: <strong>${ticket.rx}</strong> | TX: <strong>${ticket.tx}</strong></span>
+                </div>
+
                 <div class="btn-group" style="display: flex; gap: 10px;">
-                    <button class="btn ${state.workflowState.fisikAman ? 'btn-success' : 'btn-outline'}" onclick="updateState('fisikAman', true)">Fisik Aman ✅</button>
-                    <button class="btn btn-outline" style="border-color: var(--danger); color: var(--danger);" onclick="window.reworkTicket('GCU FISIK')">Rework Fisik ❌</button>
+                    <button class="btn ${state.workflowState.fisikAman ? 'btn-success' : 'btn-outline'}" onclick="updateState('fisikAman', true)">Sesuai SOP ✅</button>
+                    <button class="btn btn-outline" style="border-color: var(--danger); color: var(--danger);" onclick="window.rejectToQueue('GCU FISIK', 'Fisik tidak sesuai SOP')">Reject ke GCU FISIK ❌</button>
                 </div>
             </div>
 
-            <div style="background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 15px;">
-                <h4 style="font-size: 14px; font-weight: bold; color: #1e293b; margin-bottom: 10px;">💻 Cek Checklist HD (Logic)</h4>
-                <div class="btn-group" style="display: flex; gap: 10px;">
-                    <button class="btn ${state.workflowState.logicAman ? 'btn-success' : 'btn-outline'}" onclick="updateState('logicAman', true)">Logik Aman ✅</button>
-                    <button class="btn btn-outline" style="border-color: var(--danger); color: var(--danger);" onclick="window.reworkTicket('GCU LOGIC')">Rework Logic ❌</button>
+            <!-- SECTION 2: Evidence GCU LOGIC -->
+            <div style="background: var(--bg-surface); padding: 18px; border-radius: 10px; border: 1px solid var(--border); margin-bottom: 15px;">
+                <h4 style="font-size: 14px; font-weight: bold; color: var(--text-primary); margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">💻 Evidence GCU LOGIC (Helpdesk)</h4>
+                
+                <div style="background: rgba(0,0,0,0.05); padding: 12px; border-radius: 8px; margin-bottom: 12px; font-size: 13px; line-height: 1.6; color: var(--text-secondary); max-height: 200px; overflow-y: auto;">
+                    ${formatEvidence(evidenceLogic)}
                 </div>
+
+                <div class="btn-group" style="display: flex; gap: 10px;">
+                    <button class="btn ${state.workflowState.logicAman ? 'btn-success' : 'btn-outline'}" onclick="updateState('logicAman', true)">Sesuai SOP ✅</button>
+                    <button class="btn btn-outline" style="border-color: var(--danger); color: var(--danger);" onclick="window.rejectToQueue('GCU LOGIC', 'Logic tidak sesuai SOP')">Reject ke GCU LOGIC ❌</button>
+                </div>
+            </div>
+        `;
+
+        // Catatan Korlap (opsional)
+        contentApprove += `
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">📝 Catatan Korlap (Opsional)</label>
+                <textarea id="korlapNotes" placeholder="Tulis catatan validasi di sini..." rows="2" style="width: 100%; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px; font-size: 13px; box-sizing: border-box; background: var(--bg-surface); color: var(--text-primary);"></textarea>
             </div>
         `;
 
         if (state.workflowState.fisikAman && state.workflowState.logicAman) {
             contentApprove += `
-                <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #e5e7eb;">
-                    <button class="btn btn-success" style="width: 100%; background: #10b981; border: none; padding: 12px; color: white; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 14px;" onclick="approveTicketFinal()">GCU Closed (Approve & Selesaikan)</button>
+                <div style="margin-top: 10px; padding-top: 15px; border-top: 1px solid var(--border);">
+                    <button class="btn btn-success" style="width: 100%; background: linear-gradient(135deg, #10b981, #059669); border: none; padding: 14px; color: white; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 15px; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);" onclick="approveTicketFinal()">✅ GCU Closed — Approve & Selesaikan</button>
+                </div>
+            `;
+        } else {
+            contentApprove += `
+                <div style="margin-top: 10px; padding: 12px; background: rgba(234, 179, 8, 0.1); border: 1px solid rgba(234, 179, 8, 0.3); border-radius: 8px;">
+                    <p style="margin: 0; font-size: 13px; color: #eab308; font-weight: 500;">⏳ Centang kedua validasi (Fisik & Logic) agar tombol Approve muncul.</p>
                 </div>
             `;
         }
         
-        workflowContainer.appendChild(createStep('step-k2', 'Validasi Korlap', contentApprove));
+        workflowContainer.appendChild(createStep('step-k2', 'Validasi Korlap — Cek Evidence', contentApprove));
         return;
     }
 
@@ -601,6 +666,38 @@ window.reworkTicket = function (targetCategory) {
     }).then(() => {
         updateTicketCategory(state.activeTicketId, targetCategory);
         alert(`Tiket dikembalikan ke ${targetCategory}!`);
+        showDashboard(targetCategory);
+    }).catch(err => {
+        console.error(err);
+        alert("Gagal koneksi ke server!");
+    });
+};
+
+window.rejectToQueue = function (targetCategory, reason) {
+    const korlapNotes = document.getElementById('korlapNotes') ? document.getElementById('korlapNotes').value : '';
+    let fullReason = reason;
+    if (korlapNotes) fullReason += ` | Catatan Korlap: ${korlapNotes}`;
+
+    const confirmReject = confirm(`REJECT tiket ini kembali ke ${targetCategory}?\nAlasan: ${fullReason}`);
+    if (!confirmReject) return;
+
+    const payload = {
+        action: 'rework_ticket',
+        ticketId: state.activeTicketId,
+        targetCategory: targetCategory,
+        summaryText: `[REJECTED OLEH KORLAP] - DIKEMBALIKAN KE ${targetCategory} | Alasan: ${fullReason}`
+    };
+
+    fetch(SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: {
+            'Content-Type': 'text/plain'
+        },
+        body: JSON.stringify(payload)
+    }).then(() => {
+        updateTicketCategory(state.activeTicketId, targetCategory);
+        alert(`Tiket di-reject dan dikembalikan ke ${targetCategory}!`);
         showDashboard(targetCategory);
     }).catch(err => {
         console.error(err);

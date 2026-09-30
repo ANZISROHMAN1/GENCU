@@ -696,7 +696,9 @@ function _writeEvidenceToSheet(sheetName, ticketId, summary) {
      for (var c = 0; c < data[r].length; c++) {
          if (data[r][c] && data[r][c].toString().trim() === ticketId) {
              if (actionCol !== -1) {
-                 sheet.getRange(r + 1, actionCol + 1).setValue(summary);
+                 var oldAction = sheet.getRange(r + 1, actionCol + 1).getValue();
+                 var newAction = oldAction ? oldAction + "\n\n" + summary : summary;
+                 sheet.getRange(r + 1, actionCol + 1).setValue(newAction);
              } else if (summaryCol !== -1) {
                  var oldSum = sheet.getRange(r + 1, summaryCol + 1).getValue();
                  sheet.getRange(r + 1, summaryCol + 1).setValue(oldSum + "\n\n" + summary);
