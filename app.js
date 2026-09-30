@@ -1031,17 +1031,20 @@ async function fetchTeknisiList() {
     _teknisiFetching = true;
     try {
         const resp = await fetch(SCRIPT_URL + '?action=get_teknisi');
-        _teknisiCache = await resp.json();
+        if (resp.ok) {
+            _teknisiCache = await resp.json();
+        } else {
+            _teknisiCache = [];
+        }
     } catch (e) {
-        console.error('Gagal fetch data teknisi:', e);
+        console.warn('Gagal fetch data teknisi (belum di-deploy?):', e.message);
         _teknisiCache = [];
     }
     _teknisiFetching = false;
     return _teknisiCache;
 }
 
-// Pre-fetch saat halaman dimuat
-fetchTeknisiList();
+// Lazy fetch: hanya dipanggil saat form assign dibuka (bukan saat halaman dimuat)
 
 let _lookupTimeout = null;
 window.lookupTeknisiByNik = function (nikValue) {
