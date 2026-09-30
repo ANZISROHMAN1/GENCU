@@ -61,29 +61,41 @@
                     </div>
                 </header>
 
-                <div class="summary-cards" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px;">
+                <div class="summary-cards">
                     <div class="card summary-card" onclick="showDashboard('GCU FISIK')">
                         <div class="card-content">
-                            <h1 id="countGcuFisik">0</h1>
-                            <p style="font-weight: 600; color: #ef4444;"><ion-icon name="hardware-chip-outline" style="vertical-align: middle; margin-right: 5px;"></ion-icon>GCU FISIK</p>
+                            <div>
+                                <h1 id="countGcuFisik">0</h1>
+                                <p><ion-icon name="calendar-outline"></ion-icon> GCU FISIK</p>
+                            </div>
+                            <ion-icon name="settings" style="font-size: 36px;"></ion-icon>
                         </div>
                     </div>
                     <div class="card summary-card" onclick="showDashboard('GCU LOGIC')">
                         <div class="card-content">
-                            <h1 id="countGcuLogic">0</h1>
-                            <p style="font-weight: 600; color: #3b82f6;"><ion-icon name="laptop-outline" style="vertical-align: middle; margin-right: 5px;"></ion-icon>GCU LOGIC</p>
+                            <div>
+                                <h1 id="countGcuLogic">0</h1>
+                                <p><ion-icon name="hardware-chip-outline"></ion-icon> GCU LOGIC</p>
+                            </div>
+                            <ion-icon name="hardware-chip" style="font-size: 36px; color: #3b82f6;"></ion-icon>
                         </div>
                     </div>
                     <div class="card summary-card" onclick="showDashboard('APPROVAL KORLAP')">
                         <div class="card-content">
-                            <h1 id="countApprovalKorlap">0</h1>
-                            <p style="font-weight: 600; color: #f59e0b;"><ion-icon name="checkmark-circle-outline" style="vertical-align: middle; margin-right: 5px;"></ion-icon>APPROVAL KORLAP</p>
+                            <div>
+                                <h1 id="countApprovalKorlap">0</h1>
+                                <p><ion-icon name="checkmark-circle"></ion-icon> APPROVAL KORLAP</p>
+                            </div>
+                            <ion-icon name="shield-checkmark" style="font-size: 36px; color: #60a5fa;"></ion-icon>
                         </div>
                     </div>
                     <div class="card summary-card" onclick="showDashboard('COMPLETED')">
                         <div class="card-content">
-                            <h1 id="countCompleted">0</h1>
-                            <p style="font-weight: 600; color: #10b981;"><ion-icon name="flag-outline" style="vertical-align: middle; margin-right: 5px;"></ion-icon>COMPLETED</p>
+                            <div>
+                                <h1 id="countCompleted">0</h1>
+                                <p><ion-icon name="medal-outline"></ion-icon> COMPLETED</p>
+                            </div>
+                            <ion-icon name="ribbon" style="font-size: 36px; color: #93c5fd;"></ion-icon>
                         </div>
                     </div>
                 </div>

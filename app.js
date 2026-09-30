@@ -366,21 +366,23 @@ function renderTable() {
         // else if (st.match(/\bDYING\b/)) countDying++;
 
         let statusBadge = '';
-        if (ticket.status === 'LOS' || ticket.status.includes('DYING')) statusBadge = `<span class="badge danger">${ticket.status}</span>`;
-        else if (parseFloat(ticket.rx) < -27) statusBadge = `<span class="badge warning">REDAMAN TINGGI</span>`;
-        else statusBadge = `<span class="badge success">${ticket.status || 'OK'}</span>`;
+        if (ticket.status === 'LOS' || ticket.status.includes('DYING')) statusBadge = `<span class="status-dot" style="background: #ef4444; box-shadow: 0 0 10px #ef4444;"></span>`;
+        else if (parseFloat(ticket.rx) < -27) statusBadge = `<span class="status-dot" style="background: #f59e0b; box-shadow: 0 0 10px #f59e0b;"></span>`;
+        else statusBadge = `<span class="status-dot"></span>`;
 
         let tr = document.createElement('tr');
         tr.innerHTML = `
-            <td><strong>${ticket.incident}</strong></td>
+            <td>${ticket.incident}</td>
             <td>
-                <div style="font-weight: 500;">${ticket.serviceNumber}</div>
-                <div style="font-size: 11px; color: var(--text-secondary);">${ticket.customerName}</div>
+                <div class="ticket-info">
+                    <span class="ticket-title">${ticket.serviceNumber || "Unknown"}</span>
+                    <span class="ticket-sub">${ticket.customerName || "-"}</span>
+                </div>
             </td>
             <td>${ticket.sto}</td>
-            <td>${ticket.technician !== "-" ? `<span style="background:#e0f2fe;color:#0284c7;padding:2px 6px;border-radius:4px;font-size:12px;font-weight:bold;">${ticket.technician}</span>` : `<span style="color:#9ca3af;font-size:12px;">-</span>`}</td>
-            <td>${ticket.rx}</td>
-            <td>${statusBadge}</td>
+            <td style="color: var(--text-secondary);">${ticket.technician !== "-" ? ticket.technician : "-"}</td>
+            <td>${ticket.rx || "-"}</td>
+            <td style="text-align: center;">${statusBadge}</td>
             <td>
                 <button class="btn-action" onclick="selectTicket('${ticket.incident}', '${ticket.sto}')">Checklist / Assign</button>
             </td>
