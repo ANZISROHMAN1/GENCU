@@ -353,10 +353,48 @@ function doGet(e) {
                   return el ? el.value.trim() : ''; 
               }
               
-              function submitForm() {
+              async function compressImage(file) {
+                  if (!file || !file.type.match(/image.*/)) return file;
+                  return new Promise((resolve) => {
+                      const reader = new FileReader();
+                      reader.onload = (e) => {
+                          const img = new Image();
+                          img.onload = () => {
+                              const canvas = document.createElement('canvas');
+                              let width = img.width;
+                              let height = img.height;
+                              const MAX_DIM = 1200; // max dimension
+                              if (width > height) {
+                                  if (width > MAX_DIM) {
+                                      height *= MAX_DIM / width;
+                                      width = MAX_DIM;
+                                  }
+                              } else {
+                                  if (height > MAX_DIM) {
+                                      width *= MAX_DIM / height;
+                                      height = MAX_DIM;
+                                  }
+                              }
+                              canvas.width = width;
+                              canvas.height = height;
+                              const ctx = canvas.getContext('2d');
+                              ctx.drawImage(img, 0, 0, width, height);
+                              canvas.toBlob((blob) => {
+                                  resolve(new File([blob], file.name, { type: 'image/jpeg' }));
+                              }, 'image/jpeg', 0.6); // 60% quality jpeg
+                          };
+                          img.src = e.target.result;
+                      };
+                      reader.readAsDataURL(file);
+                  });
+              }
+              
+              async function submitForm() {
                   try {
                       showMsg('Memproses data...', 'loading');
                       var btn = document.querySelector('button');
+                      btn.innerText = 'Mengkompresi Foto...';
+                      btn.disabled = true;
 
                       var penyebab = getVal('penyebab') === 'Others' ? getVal('penyebab_others') : getVal('penyebab');
                       var perbaikan = getVal('perbaikan') === 'Others' ? getVal('perbaikan_others') : getVal('perbaikan');
@@ -364,12 +402,12 @@ function doGet(e) {
                       
                       if(!penyebab || !perbaikan || !segmen) {
                           showMsg('⚠️ Harap isi Penyebab, Perbaikan, dan Segmen terlebih dahulu!', 'error');
+                          btn.innerText = 'Kirim Evidence Fisik';
+                          btn.disabled = false;
                           return;
                       }
 
-                      // Append explicit values not captured natively by form
                       var dcCount = parseInt(getVal('dc_count') || '1');
-                      
                       var summary = "EVIDENCE FISIK SUBMITTED\\n";
                       summary += "- Penyebab: " + penyebab + "\\n";
                       summary += "- Perbaikan: " + perbaikan + "\\n";
@@ -386,12 +424,38 @@ function doGet(e) {
                           summary += "- IPTV: Channel (" + (document.getElementById('iptv_channel').checked ? "Aman" : "Tidak Aman") + "), Remote (" + getVal('iptv_remote') + ")\\n";
                       }
                       
-                      document.getElementById('evidenceForm').insertAdjacentHTML('beforeend', '<input type="hidden" name="baseSummary" value="' + summary.replace(/\\n/g, "\\\\n") + '">');
-                      document.getElementById('evidenceForm').insertAdjacentHTML('beforeend', '<input type="hidden" name="dcCount" value="' + dcCount + '">');
+                      // Create a temporary form to hold compressed files
+                      var originalForm = document.getElementById('evidenceForm');
+                      var tempForm = document.createElement('form');
+                      
+                      for (let i = 0; i < originalForm.elements.length; i++) {
+                          let el = originalForm.elements[i];
+                          if (!el.name) continue;
+                          
+                          if (el.type === 'file' && el.files.length > 0) {
+                              let input = document.createElement('input');
+                              input.type = 'file';
+                              input.name = el.name;
+                              
+                              let dt = new DataTransfer();
+                              let compressedFile = await compressImage(el.files[0]);
+                              dt.items.add(compressedFile);
+                              input.files = dt.files;
+                              tempForm.appendChild(input);
+                          } else if (el.type !== 'file') {
+                              let input = document.createElement('input');
+                              input.type = 'hidden';
+                              input.name = el.name;
+                              input.value = el.value;
+                              tempForm.appendChild(input);
+                          }
+                      }
+                      
+                      tempForm.insertAdjacentHTML('beforeend', '<input type="hidden" name="baseSummary" value="' + summary.replace(/\\n/g, "\\\\n") + '">');
+                      tempForm.insertAdjacentHTML('beforeend', '<input type="hidden" name="dcCount" value="' + dcCount + '">');
 
-                      btn.innerText = 'Mengirim & Mengupload Foto...';
-                      btn.disabled = true;
-                      showMsg('⏳ Sedang mengupload foto ke Google Drive... Mohon tunggu...', 'loading');
+                      btn.innerText = 'Mengupload ke Server...';
+                      showMsg('⏳ Sedang mengupload foto (ukuran telah dikompres). Mohon tunggu...', 'loading');
                       
                       var runner = google.script.run.withSuccessHandler(function() {
                           document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;min-height:80vh;"><div class="card" style="text-align:center;"><h2 style="color: #10b981; font-size:40px; margin-bottom:10px;">✅</h2><h3 style="color: #374151;">Berhasil Terkirim!</h3><p style="color: #6b7280; font-size:14px;">Laporan evidence dan foto telah tersimpan ke sistem.</p></div></div>';
@@ -401,9 +465,11 @@ function doGet(e) {
                           btn.disabled = false;
                       });
                       
-                      runner.submitFisikToGAS(document.getElementById('evidenceForm'));
+                      runner.submitFisikToGAS(tempForm);
                   } catch (err) {
                       showMsg('❌ ERROR: ' + err.message, 'error');
+                      document.querySelector('button').disabled = false;
+                      document.querySelector('button').innerText = 'Kirim Evidence Fisik';
                   }
               }
           </script>
@@ -617,7 +683,27 @@ function _writeEvidenceToSheet(sheetName, ticketId, summary) {
              break;
          }
      }
+     if (found) break;
   }
+  
+  // Jika tidak ketemu di DATABASE ALL TICKET, tambahkan baris baru agar action tersimpan
+  if (!found && sheetName === "DATABASE ALL TICKET") {
+      var incCol = -1;
+      for (var c = 0; c < data[0].length; c++) {
+          var h = data[0][c].toString().toUpperCase().trim();
+          if (h.match(/^(INCIDENT|INC)/)) { incCol = c; break; }
+      }
+      
+      // Jika kolom INCIDENT dan ACTION ada, buat baris baru
+      if (incCol !== -1 && actionCol !== -1) {
+          var newRow = new Array(data[0].length).fill("");
+          newRow[incCol] = ticketId;
+          newRow[actionCol] = summary;
+          sheet.appendRow(newRow);
+          found = true;
+      }
+  }
+  
   return found;
 }
 
