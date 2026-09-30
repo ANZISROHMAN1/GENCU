@@ -649,6 +649,13 @@ function renderTeknisiFlow() {
             <label style="display: flex; align-items: center; gap: 5px;"><input type="checkbox" ${state.workflowState.cekOnt ? 'checked' : ''} onclick="updateState('cekOnt', this.checked)"> Cek Redaman ONT</label>
             <label style="display: flex; align-items: center; gap: 5px;"><input type="checkbox" ${state.workflowState.gantiKabel ? 'checked' : ''} onclick="updateState('gantiKabel', this.checked)"> Patching/Ganti Kabel</label>
         </div>
+        <div style="background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 15px;">
+            <h4 style="font-size: 14px; font-weight: bold; color: #1e293b; margin-bottom: 10px;">Layanan Tambahan (Opsional)</h4>
+            <div style="display: flex; flex-direction: column; gap: 8px; margin-left: 5px;">
+                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" ${state.workflowState.tekVoice ? 'checked' : ''} onclick="updateState('tekVoice', this.checked)"> Ada Layanan Voice?</label>
+            </div>
+        </div>
+
         <label class="block text-sm font-medium text-gray-700 mb-1">Upload Foto Evidence (Dari Galeri/Kamera)</label>
         <input type="file" id="tekPhoto" accept="image/*" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 10px; background: white;">
         <textarea id="tekNotes" placeholder="Tulis catatan perbaikan tambahan di sini..." rows="3" style="width: 100%; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px; margin-bottom: 10px;">${state.workflowState.evidence || ''}</textarea>
