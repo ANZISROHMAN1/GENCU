@@ -86,7 +86,8 @@ function processData(rows) {
     let statusAlarmIdx = headers.findIndex(h => h === "STATUS ALARM" || h === "ONU LINK STATUS");
     let workzoneIdx = headers.indexOf("WORKZONE");
     let technicianIdx = headers.findIndex(h => h === "TECHNICIAN" || h === "NAMA TEKNISI");
-    let customerNameIdx = headers.findIndex(h => h.includes("CONTACT NAM") || h.includes("CUSTOMER NAM"));
+    let customerNameIdx = headers.indexOf("CUSTOMER NAME");
+    if (customerNameIdx === -1) customerNameIdx = headers.findIndex(h => h.includes("CUSTOMER NAM"));
 
     for (let i = 1; i < rows.length; i++) {
         let row = rows[i];
