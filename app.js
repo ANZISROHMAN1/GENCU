@@ -860,14 +860,14 @@ function renderHelpdeskFlow() {
 
     // Step 2: Form Assign Teknisi (muncul saat "Butuh Fisik" diklik)
     if (state.workflowState.showAssignFisik) {
-        let contentAssignFisik = \`
+        let contentAssignFisik = `
             <div style="background: rgba(239, 68, 68, 0.05); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 8px; padding: 18px;">
                 <p class="info-text" style="margin-bottom: 15px; color: var(--danger); font-weight: 600;">⚠️ Tiket membutuhkan perbaikan fisik. Assign teknisi untuk menangani:</p>
                 
                 <div style="margin-bottom: 12px;">
                     <label style="display: block; font-weight: 600; font-size: 12px; color: var(--text-secondary); margin-bottom: 6px;">NIK Teknisi</label>
                     <input type="text" id="assignNikInput" placeholder="Masukkan NIK Teknisi..." 
-                        value="\${state.workflowState.assignNik || ''}"
+                        value="${state.workflowState.assignNik || ''}"
                         oninput="window.lookupTeknisiByNik(this.value)"
                         style="width: 100%; padding: 10px 14px; border: 1.5px solid var(--border); border-radius: var(--radius-sm); font-size: 14px; box-sizing: border-box;">
                 </div>
@@ -894,7 +894,7 @@ function renderHelpdeskFlow() {
                     <button class="btn btn-outline" style="flex-shrink: 0;" onclick="updateState('showAssignFisik', false)">Batal</button>
                 </div>
             </div>
-        \`;
+        `;
         workflowContainer.appendChild(createStep('step-h-assign', 'Assign Teknisi untuk Fisik', contentAssignFisik));
     }
 
