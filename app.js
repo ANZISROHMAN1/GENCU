@@ -186,6 +186,12 @@ function processData(rows) {
         }
         
         let rowText = row.join(" ").toUpperCase();
+        
+        // Coba ekstrak teknisi dari ACTION history jika sudah di-assign manual lewat Web
+        let assignMatch = rowText.match(/\[ASSIGNED\] TEKNISI:\s*([A-Z0-9_]+)/i);
+        if (assignMatch && assignMatch[1]) {
+            technician = assignMatch[1];
+        }
 
         if (isGangguan) {
             let category = 'GCU FISIK';
@@ -198,11 +204,11 @@ function processData(rows) {
             // Prioritas status text (override category)
             if (rowText.includes("[COMPLETED]")) {
                 category = 'COMPLETED';
-            } else if (rowText.includes("DIKEMBALIKAN KE GCU FISIK") || rowText.includes("[BUTUH FISIK")) {
-                category = 'GCU FISIK'; // Paksa ke GCU FISIK jika dirework/butuh fisik
+            } else if (rowText.includes("DIKEMBALIKAN KE GCU FISIK") || rowText.includes("[BUTUH FISIK") || rowText.includes("[ASSIGNED]")) {
+                category = 'GCU FISIK'; // Paksa ke GCU FISIK jika dirework/butuh fisik atau sudah di-assign manual
             } else if (rowText.includes("DIKEMBALIKAN KE GCU LOGIC")) {
                 category = 'GCU LOGIC';
-            } else if (rowText.includes("[WAITING APPROVAL KORLAP]")) {
+            } else if (rowText.includes("MENUNGGU APPROVAL KORLAP") || rowText.includes("[WAITING APPROVAL KORLAP]")) {
                 category = 'APPROVAL KORLAP';
             } else if (rowText.includes("EVIDENCE FISIK SUBMITTED")) {
                 category = 'GCU LOGIC';
