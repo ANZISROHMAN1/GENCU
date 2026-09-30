@@ -755,11 +755,51 @@ function renderHelpdeskFlow() {
 
         <div class="btn-group" style="margin-bottom: 15px;">
             <button class="btn ${state.workflowState.logicOk ? 'btn-success' : 'btn-outline'}" onclick="updateState('logicOk', true)">Logic Selesai & Layanan Normal ✅</button>
-            <button class="btn btn-outline" style="border-color: var(--danger); color: var(--danger);" onclick="window.returnToFisikFromHelpdesk()">Masih Gangguan (Butuh Fisik) ❌</button>
+            <button class="btn btn-outline" style="border-color: var(--danger); color: var(--danger);" onclick="updateState('showAssignFisik', true)">Masih Gangguan (Butuh Fisik) ❌</button>
         </div>
     `;
 
     workflowContainer.appendChild(createStep('step-h1', 'Eksekusi Logic Flowchart', contentLogic));
+
+    // Step 2: Form Assign Teknisi (muncul saat "Butuh Fisik" diklik)
+    if (state.workflowState.showAssignFisik) {
+        let contentAssignFisik = \`
+            <div style="background: rgba(239, 68, 68, 0.05); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 8px; padding: 18px;">
+                <p class="info-text" style="margin-bottom: 15px; color: var(--danger); font-weight: 600;">⚠️ Tiket membutuhkan perbaikan fisik. Assign teknisi untuk menangani:</p>
+                
+                <div style="margin-bottom: 12px;">
+                    <label style="display: block; font-weight: 600; font-size: 12px; color: var(--text-secondary); margin-bottom: 6px;">NIK Teknisi</label>
+                    <input type="text" id="assignNikInput" placeholder="Masukkan NIK Teknisi..." 
+                        value="\${state.workflowState.assignNik || ''}"
+                        oninput="window.lookupTeknisiByNik(this.value)"
+                        style="width: 100%; padding: 10px 14px; border: 1.5px solid var(--border); border-radius: var(--radius-sm); font-size: 14px; box-sizing: border-box;">
+                </div>
+                
+                <div id="teknisiLookupResult" style="margin-bottom: 12px; display: none;">
+                    <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 6px; padding: 10px 14px;">
+                        <p style="margin: 0; font-size: 13px; color: var(--success); font-weight: 600;" id="teknisiMatchName">-</p>
+                        <p style="margin: 4px 0 0 0; font-size: 12px; color: var(--text-secondary);" id="teknisiMatchTele">Telegram ID: -</p>
+                    </div>
+                </div>
+                <div id="teknisiNotFound" style="margin-bottom: 12px; display: none;">
+                    <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 6px; padding: 10px 14px;">
+                        <p style="margin: 0; font-size: 13px; color: var(--danger);">❌ NIK tidak ditemukan di database TEKNISI</p>
+                        <div style="margin-top: 8px;">
+                            <label style="display: block; font-weight: 600; font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">Input ID Telegram Manual</label>
+                            <input type="text" id="manualTeleInput" placeholder="Masukkan Chat ID Telegram..." 
+                                style="width: 100%; padding: 8px 12px; border: 1.5px solid var(--border); border-radius: var(--radius-sm); font-size: 13px; box-sizing: border-box;">
+                        </div>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 10px; margin-top: 15px;">
+                    <button class="btn btn-primary" style="flex: 1; background: var(--danger); border: none;" onclick="window.assignAndReturnToFisik(this)">🚀 Assign & Kirim ke GCU FISIK</button>
+                    <button class="btn btn-outline" style="flex-shrink: 0;" onclick="updateState('showAssignFisik', false)">Batal</button>
+                </div>
+            </div>
+        \`;
+        workflowContainer.appendChild(createStep('step-h-assign', 'Assign Teknisi untuk Fisik', contentAssignFisik));
+    }
 
     if (state.workflowState.logicOk) {
         let contentClose = `
@@ -979,4 +1019,164 @@ window.returnToFisikFromHelpdesk = async function () {
         console.error(err);
         alert("Gagal koneksi ke server!");
     });
+};
+
+// === TEKNISI DATABASE LOOKUP ===
+let _teknisiCache = null;
+let _teknisiFetching = false;
+
+async function fetchTeknisiList() {
+    if (_teknisiCache) return _teknisiCache;
+    if (_teknisiFetching) return [];
+    _teknisiFetching = true;
+    try {
+        const resp = await fetch(SCRIPT_URL + '?action=get_teknisi');
+        _teknisiCache = await resp.json();
+    } catch (e) {
+        console.error('Gagal fetch data teknisi:', e);
+        _teknisiCache = [];
+    }
+    _teknisiFetching = false;
+    return _teknisiCache;
+}
+
+// Pre-fetch saat halaman dimuat
+fetchTeknisiList();
+
+let _lookupTimeout = null;
+window.lookupTeknisiByNik = function (nikValue) {
+    clearTimeout(_lookupTimeout);
+    const nik = nikValue.trim();
+    
+    const resultEl = document.getElementById('teknisiLookupResult');
+    const notFoundEl = document.getElementById('teknisiNotFound');
+    
+    if (!nik || nik.length < 3) {
+        if (resultEl) resultEl.style.display = 'none';
+        if (notFoundEl) notFoundEl.style.display = 'none';
+        state.workflowState.assignNik = nik;
+        state.workflowState.assignTeleId = null;
+        state.workflowState.assignNama = null;
+        return;
+    }
+
+    _lookupTimeout = setTimeout(async () => {
+        const list = await fetchTeknisiList();
+        const match = list.find(t => t.nik === nik);
+        
+        state.workflowState.assignNik = nik;
+        
+        if (match) {
+            state.workflowState.assignTeleId = match.teleId;
+            state.workflowState.assignNama = match.nama;
+            if (resultEl) {
+                document.getElementById('teknisiMatchName').innerText = '✅ ' + match.nama + ' (NIK: ' + match.nik + ')';
+                document.getElementById('teknisiMatchTele').innerText = 'Telegram ID: ' + (match.teleId || 'Tidak ada');
+                resultEl.style.display = 'block';
+            }
+            if (notFoundEl) notFoundEl.style.display = 'none';
+        } else {
+            state.workflowState.assignTeleId = null;
+            state.workflowState.assignNama = null;
+            if (resultEl) resultEl.style.display = 'none';
+            if (notFoundEl) notFoundEl.style.display = 'block';
+        }
+    }, 300);
+};
+
+window.assignAndReturnToFisik = async function (btn) {
+    const nik = (state.workflowState.assignNik || '').trim();
+    if (!nik) {
+        alert('Masukkan NIK Teknisi terlebih dahulu!');
+        return;
+    }
+
+    // Dapatkan Telegram ID (dari lookup atau manual input)
+    let teleId = state.workflowState.assignTeleId || '';
+    if (!teleId) {
+        const manualInput = document.getElementById('manualTeleInput');
+        teleId = manualInput ? manualInput.value.trim() : '';
+    }
+    if (!teleId) {
+        alert('ID Telegram teknisi tidak ditemukan. Silakan masukkan secara manual.');
+        return;
+    }
+
+    const confirmMove = confirm(`Assign tiket ke NIK ${nik} dan kirim ke GCU FISIK?`);
+    if (!confirmMove) return;
+
+    const oldText = btn.innerText;
+    btn.innerText = 'Memproses...';
+    btn.disabled = true;
+
+    // Kumpulkan data checklist helpdesk
+    let checkedItems = [];
+    if(state.workflowState.chk_int1) checkedItems.push("Pindah Channel");
+    if(state.workflowState.chk_int2) checkedItems.push("Checklist NAT");
+    if(state.workflowState.chk_int3) checkedItems.push("Enable IPV6");
+    if(state.workflowState.chk_int4) checkedItems.push("Firewall Medium");
+    if(state.workflowState.chk_int5) checkedItems.push("Cek ONT");
+    if(state.workflowState.chk_int6) checkedItems.push("Cek FPP");
+    if(state.workflowState.chk_iptv1) checkedItems.push("Cek ACS");
+    if(state.workflowState.chk_iptv2) checkedItems.push("Cek Channel");
+    if(state.workflowState.chk_iptv3) checkedItems.push("Cek Isolir");
+    if(state.workflowState.chk_iptv4) checkedItems.push("Cek STB");
+    if(state.workflowState.chk_voice1) checkedItems.push("Cek Voice");
+
+    let hdNotes = document.getElementById('hdNotes') ? document.getElementById('hdNotes').value : '';
+    let notes = (checkedItems.length > 0 ? "Sudah dicoba Helpdesk: " + checkedItems.join(", ") : "Logic tidak mempan");
+    if (hdNotes) notes += " | Catatan: " + hdNotes;
+
+    const ticket = state.tickets.find(t => t.incident === state.activeTicketId);
+
+    // Step 1: Rework ke GCU FISIK dengan catatan
+    const reworkPayload = {
+        action: 'rework_ticket',
+        ticketId: state.activeTicketId,
+        targetCategory: 'GCU FISIK',
+        summaryText: `[BUTUH FISIK - DIKEMBALIKAN KE GCU FISIK] [ASSIGNED] TEKNISI: ${nik} | ${notes}`
+    };
+
+    // Step 2: Assign teknisi via Telegram
+    const assignPayload = {
+        action: 'assign_ticket',
+        ticketId: state.activeTicketId,
+        teknisi: nik,
+        idTele: teleId,
+        sto: ticket ? ticket.sto : '-',
+        rx: ticket ? ticket.rx : '-',
+        tx: ticket ? ticket.tx : '-',
+        serviceNumber: ticket ? ticket.serviceNumber : '-',
+        customerName: ticket ? ticket.customerName : '-'
+    };
+
+    try {
+        // Kirim rework
+        await fetch(SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify(reworkPayload)
+        });
+
+        // Kirim assign telegram
+        await fetch(SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify(assignPayload)
+        });
+
+        // Update local state
+        if (ticket) ticket.technician = nik;
+        updateTicketCategory(state.activeTicketId, 'GCU FISIK');
+        alert(`✅ Tiket berhasil di-assign ke ${state.workflowState.assignNama || nik} dan dikirim ke GCU FISIK!\nNotifikasi Telegram sudah terkirim.`);
+        state.workflowState = {};
+        showDashboard('GCU FISIK');
+    } catch (err) {
+        console.error(err);
+        alert('Gagal koneksi ke server!');
+        btn.innerText = oldText;
+        btn.disabled = false;
+    }
 };

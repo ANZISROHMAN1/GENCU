@@ -1,4 +1,26 @@
 function doGet(e) {
+  // Handle action get_teknisi - mengembalikan list teknisi (NIK, Nama, Telegram ID) sebagai JSON
+  if (e && e.parameter && e.parameter.action === 'get_teknisi') {
+      var ss = SpreadsheetApp.getActiveSpreadsheet();
+      var sheetTeknisi = ss.getSheetByName("TEKNISI");
+      var result = [];
+      if (sheetTeknisi) {
+          var tekLastRow = sheetTeknisi.getLastRow();
+          if (tekLastRow > 1) {
+              var tekData = sheetTeknisi.getRange(2, 1, tekLastRow - 1, 3).getValues();
+              for (var i = 0; i < tekData.length; i++) {
+                  var nik = tekData[i][0] ? tekData[i][0].toString().trim() : "";
+                  var nama = tekData[i][1] ? tekData[i][1].toString().trim() : "";
+                  var teleId = tekData[i][2] ? tekData[i][2].toString().trim() : "";
+                  if (nik) {
+                      result.push({ nik: nik, nama: nama, teleId: teleId });
+                  }
+              }
+          }
+      }
+      return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
+  }
+
   // Handle action mark_gcu_logic (langsung selesai via logic)
   if (e && e.parameter && e.parameter.action === 'mark_gcu_logic') {
       var ticketId = e.parameter.ticket || "";
