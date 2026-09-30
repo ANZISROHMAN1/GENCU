@@ -410,3 +410,272 @@ body {
     font-size: 11px;
     color: var(--text-secondary);
 }
+
+/* ====== MOBILE HAMBURGER TOGGLE ====== */
+.mobile-header {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    background: var(--bg-sidebar);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 16px;
+    align-items: center;
+    justify-content: space-between;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+}
+
+.mobile-header .logo-mini {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.mobile-header .logo-mini img {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+}
+
+.mobile-header .logo-mini span {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    color: #ef4444;
+    letter-spacing: 1px;
+}
+
+.hamburger-btn {
+    background: none;
+    border: none;
+    color: var(--text-primary);
+    font-size: 26px;
+    cursor: pointer;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+}
+
+.sidebar-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 49;
+}
+
+.sidebar-overlay.active {
+    display: block;
+}
+
+/* ====== RESPONSIVE: TABLET (<=1024px) ====== */
+@media (max-width: 1024px) {
+    .main-content {
+        padding: 25px 20px;
+    }
+
+    .summary-cards {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+    }
+
+    .summary-card {
+        padding: 18px;
+    }
+
+    .summary-card h1 {
+        font-size: 26px;
+    }
+
+    .data-table th, .data-table td {
+        padding: 14px 16px;
+        font-size: 12px;
+    }
+}
+
+/* ====== RESPONSIVE: MOBILE (<=768px) ====== */
+@media (max-width: 768px) {
+    .mobile-header {
+        display: flex;
+    }
+
+    .dashboard-container {
+        flex-direction: column;
+        height: auto;
+        min-height: 100vh;
+    }
+
+    .sidebar {
+        position: fixed;
+        top: 0;
+        left: -280px;
+        width: 270px;
+        height: 100vh;
+        z-index: 50;
+        transition: left 0.3s ease;
+        overflow-y: auto;
+    }
+
+    .sidebar.open {
+        left: 0;
+    }
+
+    .main-content {
+        padding: 70px 16px 24px;
+        width: 100%;
+        min-height: 100vh;
+    }
+
+    .main-content::before {
+        display: none;
+    }
+
+    /* Top Header */
+    .top-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+
+    .top-header h2 {
+        font-size: 16px;
+    }
+
+    .header-actions {
+        width: 100%;
+        flex-wrap: wrap;
+        gap: 8px;
+        font-size: 11px;
+    }
+
+    .date-picker {
+        padding: 6px 12px;
+        font-size: 12px;
+    }
+
+    /* Summary Cards */
+    .summary-cards {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+        margin-bottom: 16px;
+    }
+
+    .summary-card {
+        padding: 16px;
+    }
+
+    .summary-card h1 {
+        font-size: 24px;
+    }
+
+    .summary-card p {
+        font-size: 10px;
+    }
+
+    .summary-card ion-icon[style*="font-size: 36px"] {
+        font-size: 28px !important;
+    }
+
+    /* Dashboard Section */
+    .dashboard-section {
+        padding: 16px;
+    }
+
+    .dashboard-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    .dashboard-header h3 {
+        font-size: 15px;
+    }
+
+    /* Table - horizontal scroll */
+    .table-wrapper {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        margin: 0 -16px;
+        padding: 0 16px;
+    }
+
+    .data-table {
+        min-width: 600px;
+    }
+
+    .data-table th {
+        padding: 8px 14px;
+        font-size: 10px;
+        white-space: nowrap;
+    }
+
+    .data-table td {
+        padding: 14px;
+        font-size: 12px;
+    }
+
+    /* Workflow Panel */
+    .wizard-step {
+        padding: 14px !important;
+    }
+
+    .btn-group {
+        flex-direction: column !important;
+    }
+
+    .btn-group .btn {
+        width: 100% !important;
+        text-align: center;
+    }
+
+    /* Filter Select */
+    .filter-controls select {
+        width: 100%;
+        font-size: 13px;
+    }
+
+    /* Empty State */
+    .empty-state {
+        padding: 30px 16px;
+    }
+
+    .empty-state ion-icon {
+        font-size: 48px !important;
+    }
+}
+
+/* ====== RESPONSIVE: SMALL PHONE (<=480px) ====== */
+@media (max-width: 480px) {
+    .summary-cards {
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+    }
+
+    .summary-card {
+        padding: 14px;
+    }
+
+    .summary-card h1 {
+        font-size: 22px;
+    }
+
+    .main-content {
+        padding: 64px 12px 20px;
+    }
+
+    .top-header h2 {
+        font-size: 14px;
+    }
+
+    .header-actions {
+        gap: 6px;
+    }
+
+    .btn-reload {
+        font-size: 11px;
+    }
+}
