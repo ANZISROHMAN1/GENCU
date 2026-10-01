@@ -108,6 +108,7 @@ function processData(rows) {
     let technicianIdx = headers.findIndex(h => h === "TECHNICIAN" || h === "NAMA TEKNISI");
     let actionIdx = headers.indexOf("ACTION");
     let customerNameIdx = headers.indexOf("CUSTOMER NAME");
+    let statusDateIdx = headers.findIndex(h => h === "STATUS DATE" || h === "REPORTED DATE");
     if (customerNameIdx === -1) customerNameIdx = headers.findIndex(h => h.includes("CUSTOMER NAM"));
 
     for (let i = 1; i < rows.length; i++) {
@@ -115,7 +116,12 @@ function processData(rows) {
         let ticketId = row[incIdx] ? row[incIdx].toString().trim() : "-";
         if (!ticketId.match(/^(INC|1-SV)/)) continue;
 
-        let rx = "", tx = "", status = "-", sto = "-", sNum = "-", customerName = "-";
+        let rx = "", tx = "", status = "-", sto = "-", sNum = "-", customerName = "-", statusDate = "-";
+        
+        if (statusDateIdx !== -1 && row[statusDateIdx]) {
+            let val = row[statusDateIdx].toString().trim();
+            if (val) statusDate = val;
+        }
 
         if (customerNameIdx !== -1 && row[customerNameIdx]) {
             let val = row[customerNameIdx].toString().trim();
@@ -253,7 +259,8 @@ function processData(rows) {
                 status: status || "-",
                 category: category,
                 customerName: customerName,
-                actionHistory: actionHistory
+                actionHistory: actionHistory,
+                statusDate: statusDate
             });
         }
     }
@@ -402,6 +409,7 @@ function renderTable() {
 
         let tr = document.createElement('tr');
         tr.innerHTML = `
+            <td style="white-space: nowrap; font-size: 13px; color: var(--text-secondary);">${ticket.statusDate || "-"}</td>
             <td>${ticket.incident}</td>
             <td>
                 <div class="ticket-info">
