@@ -109,6 +109,7 @@ function processData(rows) {
     let actionIdx = headers.indexOf("ACTION");
     let customerNameIdx = headers.indexOf("CUSTOMER NAME");
     let statusDateIdx = headers.findIndex(h => h === "STATUS DATE" || h === "REPORTED DATE");
+    let onuRxIdx = headers.indexOf("ONU RX");
     if (customerNameIdx === -1) customerNameIdx = headers.findIndex(h => h.includes("CUSTOMER NAM"));
 
     for (let i = 1; i < rows.length; i++) {
@@ -199,18 +200,28 @@ function processData(rows) {
             }
         }
 
-        // 4. Ekstrak RX dan TX (Scan dari belakang karena ditaruh di paling ujung oleh ACS Crawler)
+        // 4. Ekstrak RX
+        if (onuRxIdx !== -1 && row[onuRxIdx]) {
+            let val = row[onuRxIdx].toString().trim();
+            let nums = val.match(/-?\d+(\.\d+)?/g);
+            if (nums) {
+                for (let n of nums) {
+                    let num = parseFloat(n);
+                    if (num < -5 && num > -45) {
+                        rx = num.toString();
+                    }
+                }
+            }
+        }
+
+        // Ekstrak RX dan TX fallback (Scan dari belakang)
         for (let c = row.length - 1; c >= 0; c--) {
             let val = (row[c] || "").toString().trim();
-            // Hanya ekstrak jika val benar-benar terlihat seperti angka redaman (misal -20, 2.3, -15.2 dBm)
-            // Hindari string seperti "3-Medium"
             let numMatch = val.match(/^-?\d+([.,]\d+)?(\s?dBm)?$/i);
             if (numMatch) {
                 let num = parseFloat(val.replace(',', '.').replace(/dBm/i, '').trim());
                 if (!isNaN(num)) {
-                    // RX biasanya -5 s/d -40
                     if (num < -5 && num > -45 && rx === "") rx = val;
-                    // TX biasanya 0.5 s/d 8.0
                     if (num >= 0.5 && num <= 8.0 && tx === "") tx = val;
                 }
             }
