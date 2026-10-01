@@ -518,17 +518,15 @@ function doGet(e) {
   var dbData = sheetDB.getRange(1, 1, dbLastRow, dbLastCol).getValues();
   var headers = dbData[0];
   
-  // Cari index TIMESTAMP atau REPORTED DATE untuk filter hari ini
+  // Cari index TIMESTAMP untuk filter hari ini
   var timestampIdx = -1;
-  var reportedDateIdx = -1;
   for(var c = 0; c < headers.length; c++) {
       var h = headers[c].toString().toUpperCase().trim();
-      if(h === "TIMESTAMP") timestampIdx = c;
-      if(h === "REPORTED DATE") reportedDateIdx = c;
+      if(h === "TIMESTAMP" || h === "WAKTU" || h === "DATE") timestampIdx = c;
   }
   
-  // Prioritaskan REPORTED DATE (dari web/insera), kalau tidak ada pakai TIMESTAMP (waktu diserap scraper)
-  var dateColIdx = reportedDateIdx !== -1 ? reportedDateIdx : (timestampIdx !== -1 ? timestampIdx : 0);
+  // Gunakan TIMESTAMP (kolom A) untuk filter hari berjalan (saat tiket discrape)
+  var dateColIdx = timestampIdx !== -1 ? timestampIdx : 0;
   
   var todayStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");
                  
