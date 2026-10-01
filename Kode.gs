@@ -520,7 +520,21 @@ function doGet(e) {
   if (scrapeLastRow < 2 || scrapeLastCol < 1) return ContentService.createTextOutput("[]").setMimeType(ContentService.MimeType.JSON);
   
   var scrapeData = sheetScrape.getRange(1, 1, scrapeLastRow, scrapeLastCol).getValues();
-  var headers = scrapeData[0].map(function(h) { return h.toString().trim(); });
+  
+  // Cari baris mana yang merupakan header (mengandung 'INCIDENT')
+  var headerRowIdx = 0;
+  for (var r = 0; r < Math.min(5, scrapeData.length); r++) {
+      var rowStr = scrapeData[r].join(" ").toUpperCase();
+      if (rowStr.includes("INCIDENT") && rowStr.includes("C_PARENT_ID")) {
+          headerRowIdx = r;
+          break;
+      }
+  }
+  
+  var headers = scrapeData[headerRowIdx].map(function(h) { return h.toString().trim(); });
+  
+  // Ambil data hanya SETELAH baris header
+  var dataRows = scrapeData.slice(headerRowIdx + 1);
   
   // Ambil DATABASE ALL TICKET untuk di-join (mendapatkan history ACTION, RX POWER, dll)
   var sheetDB = ss.getSheetByName("DATABASE ALL TICKET");
@@ -563,8 +577,8 @@ function doGet(e) {
   // Cari index INCIDENT di scrape data
   var incIdxScrape = headers.map(function(h) { return h.toUpperCase(); }).indexOf("INCIDENT");
   
-  for(var i = 1; i < scrapeData.length; i++) {
-      var row = scrapeData[i].slice(); // copy array
+  for(var i = 0; i < dataRows.length; i++) {
+      var row = dataRows[i].slice(); // copy array
       
       if (incIdxScrape !== -1) {
           var incId = (row[incIdxScrape] || "").toString().trim();
