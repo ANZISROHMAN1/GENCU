@@ -507,55 +507,84 @@ function doGet(e) {
   // DEFAULT API BEHAVIOR (JSON Output)
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   
-  // Ambil data HANYA dari DATABASE ALL TICKET sesuai request
-  var sheetDB = ss.getSheetByName("DATABASE ALL TICKET");
-  if (!sheetDB) return ContentService.createTextOutput("[]").setMimeType(ContentService.MimeType.JSON);
-  
-  var dbLastRow = sheetDB.getLastRow();
-  var dbLastCol = sheetDB.getLastColumn();
-  if (dbLastRow < 2 || dbLastCol < 1) return ContentService.createTextOutput("[]").setMimeType(ContentService.MimeType.JSON);
-  
-  var dbData = sheetDB.getRange(1, 1, dbLastRow, dbLastCol).getValues();
-  var headers = dbData[0];
-  
-  // Cari index STATUS DATE untuk filter hari ini
-  var statusDateIdx = -1;
-  for(var c = 0; c < headers.length; c++) {
-      var h = headers[c].toString().toUpperCase().trim();
-      if(h === "STATUS DATE") statusDateIdx = c;
+  // Ambil tiket aktif dari ALL TICKET INSERA (sebagai base data)
+  var sheetScrape = ss.getSheetByName("ALL TICKET INSERA");
+  if (!sheetScrape) {
+      // Fallback ke SCRAPING INSERA jika ALL TICKET INSERA tidak ada
+      sheetScrape = ss.getSheetByName("SCRAPING INSERA");
+      if (!sheetScrape) return ContentService.createTextOutput("[]").setMimeType(ContentService.MimeType.JSON);
   }
   
-  // Gunakan STATUS DATE untuk filter hari berjalan, fallback ke 0 (TIMESTAMP) jika tidak ada
-  var dateColIdx = statusDateIdx !== -1 ? statusDateIdx : 0;
+  var scrapeLastRow = sheetScrape.getLastRow();
+  var scrapeLastCol = sheetScrape.getLastColumn();
+  if (scrapeLastRow < 2 || scrapeLastCol < 1) return ContentService.createTextOutput("[]").setMimeType(ContentService.MimeType.JSON);
   
-  var todayStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");
-                 
-  var filteredData = [headers];
+  var scrapeData = sheetScrape.getRange(1, 1, scrapeLastRow, scrapeLastCol).getValues();
+  var headers = scrapeData[0].map(function(h) { return h.toString().trim(); });
   
-  for(var i = 1; i < dbData.length; i++) {
-      var rowDate = dbData[i][dateColIdx];
-      var rowDateStr = "";
-      
-      if (rowDate instanceof Date) {
-          rowDateStr = Utilities.formatDate(rowDate, Session.getScriptTimeZone(), "yyyy-MM-dd");
-      } else if (rowDate) {
-          var d = new Date(rowDate);
-          if (!isNaN(d.getTime())) {
-              rowDateStr = Utilities.formatDate(d, Session.getScriptTimeZone(), "yyyy-MM-dd");
-          } else {
-              var match = rowDate.toString().match(/\d{4}-\d{2}-\d{2}/);
-              if (match) {
-                  rowDateStr = match[0];
+  // Ambil DATABASE ALL TICKET untuk di-join (mendapatkan history ACTION, RX POWER, dll)
+  var sheetDB = ss.getSheetByName("DATABASE ALL TICKET");
+  var dbMap = {}; // Map Incident ID -> Data Row dari DB
+  var dbHeaders = [];
+  
+  if (sheetDB) {
+      var dbLastRow = sheetDB.getLastRow();
+      var dbLastCol = sheetDB.getLastColumn();
+      if (dbLastRow > 1 && dbLastCol > 0) {
+          var dbData = sheetDB.getRange(1, 1, dbLastRow, dbLastCol).getValues();
+          dbHeaders = dbData[0].map(function(h) { return h.toString().toUpperCase().trim(); });
+          
+          var incIdxDB = dbHeaders.indexOf("INCIDENT");
+          if (incIdxDB !== -1) {
+              for (var i = 1; i < dbData.length; i++) {
+                  var incId = (dbData[i][incIdxDB] || "").toString().trim();
+                  if (incId) {
+                      dbMap[incId] = dbData[i]; // Timpa dengan data terbaru jika ada duplikat di DB
+                  }
               }
           }
       }
+  }
+  
+  // Cari kolom tambahan yang perlu di-join dari DB ke Scrape
+  var columnsToJoin = ["RX POWER", "TX POWER", "OLT", "STATUS ALARM", "ACTION"];
+  var joinIndicesDB = {};
+  columnsToJoin.forEach(function(col) {
+      var idx = dbHeaders.indexOf(col);
+      if (idx !== -1) joinIndicesDB[col] = idx;
+  });
+  
+  // Tambahkan header tambahan ke scrape data
+  var extraHeaders = Object.keys(joinIndicesDB);
+  headers = headers.concat(extraHeaders);
+  
+  var resultData = [headers];
+  
+  // Cari index INCIDENT di scrape data
+  var incIdxScrape = headers.map(function(h) { return h.toUpperCase(); }).indexOf("INCIDENT");
+  
+  for(var i = 1; i < scrapeData.length; i++) {
+      var row = scrapeData[i].slice(); // copy array
       
-      if (rowDateStr === todayStr) {
-          filteredData.push(dbData[i]);
+      if (incIdxScrape !== -1) {
+          var incId = (row[incIdxScrape] || "").toString().trim();
+          var dbRow = dbMap[incId];
+          
+          extraHeaders.forEach(function(col) {
+              if (dbRow && joinIndicesDB[col] !== undefined) {
+                  row.push(dbRow[joinIndicesDB[col]]);
+              } else {
+                  row.push("");
+              }
+          });
+      } else {
+          extraHeaders.forEach(function(col) { row.push(""); });
       }
+      
+      resultData.push(row);
   }
 
-  return ContentService.createTextOutput(JSON.stringify(filteredData)).setMimeType(ContentService.MimeType.JSON);
+  return ContentService.createTextOutput(JSON.stringify(resultData)).setMimeType(ContentService.MimeType.JSON);
 }
 
 function submitFisikToGAS(formObject) {
