@@ -518,15 +518,15 @@ function doGet(e) {
   var dbData = sheetDB.getRange(1, 1, dbLastRow, dbLastCol).getValues();
   var headers = dbData[0];
   
-  // Cari index TIMESTAMP untuk filter hari ini
-  var timestampIdx = -1;
+  // Cari index STATUS DATE untuk filter hari ini
+  var statusDateIdx = -1;
   for(var c = 0; c < headers.length; c++) {
       var h = headers[c].toString().toUpperCase().trim();
-      if(h === "TIMESTAMP" || h === "WAKTU" || h === "DATE") timestampIdx = c;
+      if(h === "STATUS DATE") statusDateIdx = c;
   }
   
-  // Gunakan TIMESTAMP (kolom A) untuk filter hari berjalan (saat tiket discrape)
-  var dateColIdx = timestampIdx !== -1 ? timestampIdx : 0;
+  // Gunakan STATUS DATE untuk filter hari berjalan, fallback ke 0 (TIMESTAMP) jika tidak ada
+  var dateColIdx = statusDateIdx !== -1 ? statusDateIdx : 0;
   
   var todayStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");
                  
