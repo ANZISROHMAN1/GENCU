@@ -117,10 +117,25 @@ function processData(rows) {
         if (!ticketId.match(/^(INC|1-SV)/)) continue;
 
         let rx = "", tx = "", status = "-", sto = "-", sNum = "-", customerName = "-", statusDate = "-";
-        
         if (statusDateIdx !== -1 && row[statusDateIdx]) {
             let val = row[statusDateIdx].toString().trim();
-            if (val) statusDate = val;
+            if (val) {
+                try {
+                    let d = new Date(val);
+                    if (!isNaN(d.getTime())) {
+                        let y = d.getFullYear();
+                        let m = String(d.getMonth() + 1).padStart(2, '0');
+                        let dt = String(d.getDate()).padStart(2, '0');
+                        let hh = String(d.getHours()).padStart(2, '0');
+                        let mm = String(d.getMinutes()).padStart(2, '0');
+                        statusDate = `${y}-${m}-${dt} ${hh}:${mm}`;
+                    } else {
+                        statusDate = val;
+                    }
+                } catch(e) {
+                    statusDate = val;
+                }
+            }
         }
 
         if (customerNameIdx !== -1 && row[customerNameIdx]) {
