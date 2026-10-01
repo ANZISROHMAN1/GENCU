@@ -201,8 +201,10 @@ function processData(rows) {
         let technician = "-";
         if (technicianIdx !== -1 && row[technicianIdx]) {
             let tVal = row[technicianIdx].toString().trim();
-            if (tVal && !tVal.toLowerCase().includes("please assign") && tVal.toLowerCase() !== "null") {
-                technician = tVal;
+            // Ekstrak angka saja sebagai NIK Teknisi (kata kunci NIK adalah angka)
+            let nikMatch = tVal.match(/\d+/);
+            if (nikMatch && !tVal.toLowerCase().includes("please assign")) {
+                technician = nikMatch[0];
             }
         }
         
