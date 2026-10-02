@@ -50,7 +50,7 @@ const workflowSubtitle = document.getElementById('workflowSubtitle');
 const dispActiveTicketId = document.getElementById('activeTicketId');
 const dashboardTitle = document.getElementById('dashboardTitle');
 
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx1UEN5rD39Hw5W4xNYTJaBZCafdP-bmlJgNHqFkfpWPF7_wYotc3-MFqyeAkdCjuLI/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzPBLTPwr536d2mVuOps8RmKw2UzMPne-xcM89vtnHMjPzpUB_B9DCEbf7KpYS9SWOj/exec';
 
 function init() {
     const today = new Date();
@@ -115,7 +115,7 @@ function processData(rows) {
     for (let i = 1; i < rows.length; i++) {
         let row = rows[i];
         let ticketId = row[incIdx] ? row[incIdx].toString().trim() : "-";
-        if (!ticketId.match(/^(INC|1-SV)/)) continue;
+        if (ticketId === "-" || ticketId === "" || ticketId.toUpperCase() === "INCIDENT") continue;
 
         let rx = "", tx = "", status = "-", sto = "-", sNum = "-", customerName = "-", statusDate = "-";
         if (statusDateIdx !== -1 && row[statusDateIdx]) {
@@ -259,13 +259,14 @@ function processData(rows) {
             // Prioritas status text (override category)
             if (rowText.includes("[COMPLETED]")) {
                 category = 'COMPLETED';
-            } else if (rowText.includes("DIKEMBALIKAN KE GCU FISIK") || rowText.includes("[BUTUH FISIK") || rowText.includes("[ASSIGNED]")) {
-                category = 'GCU FISIK'; // Paksa ke GCU FISIK jika dirework/butuh fisik atau sudah di-assign manual
-            } else if (rowText.includes("DIKEMBALIKAN KE GCU LOGIC")) {
-                category = 'GCU LOGIC';
             } else if (rowText.includes("MENUNGGU APPROVAL KORLAP") || rowText.includes("[WAITING APPROVAL KORLAP]")) {
                 category = 'APPROVAL KORLAP';
-            } else if (rowText.includes("EVIDENCE FISIK SUBMITTED")) {
+            } else if (technician !== "-") {
+                // Sesuai permintaan user: Jika ada NIK TEKNISI, jangan pernah masuk GCU LOGIC
+                category = 'GCU FISIK';
+            } else if (rowText.includes("DIKEMBALIKAN KE GCU FISIK") || rowText.includes("[BUTUH FISIK") || rowText.includes("[ASSIGNED]")) {
+                category = 'GCU FISIK'; // Paksa ke GCU FISIK jika dirework/butuh fisik atau sudah di-assign manual
+            } else if (rowText.includes("DIKEMBALIKAN KE GCU LOGIC") || rowText.includes("EVIDENCE FISIK SUBMITTED")) {
                 category = 'GCU LOGIC';
             }
 
