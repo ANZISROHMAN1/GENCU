@@ -375,38 +375,41 @@ function doGet(e) {
                   return el ? el.value.trim() : ''; 
               }
               
-              async function compressImage(file) {
-                  if (!file || !file.type.match(/image.*/)) return file;
+              async function compressImageBase64(file) {
+                  if (!file || !file.type.match(/image.*/)) {
+                      return new Promise((resolve, reject) => {
+                          const reader = new FileReader();
+                          reader.onload = () => resolve({ base64: reader.result.split(',')[1], name: file.name, mimeType: file.type });
+                          reader.onerror = () => resolve(null);
+                          reader.readAsDataURL(file);
+                      });
+                  }
                   return new Promise((resolve) => {
                       const reader = new FileReader();
                       reader.onload = (e) => {
                           const img = new Image();
                           img.onload = () => {
-                              const canvas = document.createElement('canvas');
-                              let width = img.width;
-                              let height = img.height;
-                              const MAX_DIM = 800; // max dimension reduced for faster upload
-                              if (width > height) {
-                                  if (width > MAX_DIM) {
-                                      height *= MAX_DIM / width;
-                                      width = MAX_DIM;
+                              try {
+                                  const canvas = document.createElement('canvas');
+                                  let width = img.width;
+                                  let height = img.height;
+                                  const MAX_DIM = 800;
+                                  if (width > height) {
+                                      if (width > MAX_DIM) { height *= MAX_DIM / width; width = MAX_DIM; }
+                                  } else {
+                                      if (height > MAX_DIM) { width *= MAX_DIM / height; height = MAX_DIM; }
                                   }
-                              } else {
-                                  if (height > MAX_DIM) {
-                                      width *= MAX_DIM / height;
-                                      height = MAX_DIM;
-                                  }
-                              }
-                              canvas.width = width;
-                              canvas.height = height;
-                              const ctx = canvas.getContext('2d');
-                              ctx.drawImage(img, 0, 0, width, height);
-                              canvas.toBlob((blob) => {
-                                  resolve(new File([blob], file.name, { type: 'image/jpeg' }));
-                              }, 'image/jpeg', 0.4); // 40% quality jpeg
+                                  canvas.width = width; canvas.height = height;
+                                  const ctx = canvas.getContext('2d');
+                                  ctx.drawImage(img, 0, 0, width, height);
+                                  const dataUrl = canvas.toDataURL('image/jpeg', 0.4);
+                                  resolve({ base64: dataUrl.split(',')[1], name: file.name, mimeType: 'image/jpeg' });
+                              } catch(err) { resolve(null); }
                           };
+                          img.onerror = () => resolve(null);
                           img.src = e.target.result;
                       };
+                      reader.onerror = () => resolve(null);
                       reader.readAsDataURL(file);
                   });
               }
@@ -446,48 +449,43 @@ function doGet(e) {
                           summary += "- IPTV: Channel (" + (document.getElementById('iptv_channel').checked ? "Aman" : "Tidak Aman") + "), Remote (" + getVal('iptv_remote') + ")\\n";
                       }
                       
-                      // Create a temporary form to hold compressed files
-                      var originalForm = document.getElementById('evidenceForm');
-                      var tempForm = document.createElement('form');
+                      var payload = {
+                          ticketId: "${ticketId}",
+                          baseSummary: summary.replace(/\\n/g, "\\\\n"),
+                          dcCount: dcCount
+                      };
                       
+                      var originalForm = document.getElementById('evidenceForm');
                       for (let i = 0; i < originalForm.elements.length; i++) {
                           let el = originalForm.elements[i];
                           if (!el.name) continue;
                           
                           if (el.type === 'file' && el.files.length > 0) {
-                              let input = document.createElement('input');
-                              input.type = 'file';
-                              input.name = el.name;
-                              
-                              let dt = new DataTransfer();
-                              let compressedFile = await compressImage(el.files[0]);
-                              dt.items.add(compressedFile);
-                              input.files = dt.files;
-                              tempForm.appendChild(input);
-                          } else if (el.type !== 'file') {
-                              let input = document.createElement('input');
-                              input.type = 'hidden';
-                              input.name = el.name;
-                              input.value = el.value;
-                              tempForm.appendChild(input);
+                              let fileData = await compressImageBase64(el.files[0]);
+                              if (fileData) {
+                                  payload[el.name] = fileData;
+                              }
                           }
                       }
                       
-                      tempForm.insertAdjacentHTML('beforeend', '<input type="hidden" name="baseSummary" value="' + summary.replace(/\\n/g, "\\\\n") + '">');
-                      tempForm.insertAdjacentHTML('beforeend', '<input type="hidden" name="dcCount" value="' + dcCount + '">');
-
                       btn.innerText = 'Mengupload ke Server...';
                       showMsg('⏳ Sedang mengupload foto (ukuran telah dikompres). Mohon tunggu...', 'loading');
                       
-                      var runner = google.script.run.withSuccessHandler(function() {
-                          document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;min-height:80vh;"><div class="card" style="text-align:center;"><h2 style="color: #10b981; font-size:40px; margin-bottom:10px;">✅</h2><h3 style="color: #374151;">Berhasil Terkirim!</h3><p style="color: #6b7280; font-size:14px;">Laporan evidence dan foto telah tersimpan ke sistem.</p></div></div>';
+                      var runner = google.script.run.withSuccessHandler(function(res) {
+                          if (res === "OK") {
+                              document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;min-height:80vh;"><div class="card" style="text-align:center;"><h2 style="color: #10b981; font-size:40px; margin-bottom:10px;">✅</h2><h3 style="color: #374151;">Berhasil Terkirim!</h3><p style="color: #6b7280; font-size:14px;">Laporan evidence dan foto telah tersimpan ke sistem.</p></div></div>';
+                          } else {
+                              showMsg('❌ Gagal: ' + res, 'error');
+                              document.querySelector('button').innerText = 'Kirim Evidence Fisik';
+                              document.querySelector('button').disabled = false;
+                          }
                       }).withFailureHandler(function(err) {
                           showMsg('❌ Gagal: ' + err, 'error');
                           btn.innerText = 'Kirim Evidence Fisik';
                           btn.disabled = false;
                       });
                       
-                      runner.submitFisikToGAS(tempForm);
+                      runner.submitFisikBase64(payload);
                   } catch (err) {
                       showMsg('❌ ERROR: ' + err.message, 'error');
                       document.querySelector('button').disabled = false;
@@ -626,6 +624,93 @@ function doGet(e) {
   }
 
   return ContentService.createTextOutput(JSON.stringify(resultData)).setMimeType(ContentService.MimeType.JSON);
+}
+
+function submitFisikBase64(payload) {
+    try {
+        var summary = (payload.baseSummary || "").replace(/\\\\n/g, "\n");
+        var ticketId = (payload.ticketId || "").toString();
+        var dcCount = parseInt(payload.dcCount || "1");
+
+        var folder = null;
+        try { folder = DriveApp.getFolderById("1Nrot1WJolVqbgfAlDmxoqHbo7Hu2pl49"); } catch(e) {}
+
+        function uploadB64(fileObj, namePrefix) {
+            if (!fileObj || !fileObj.base64) return "-";
+            try {
+                var blob = Utilities.newBlob(Utilities.base64Decode(fileObj.base64), fileObj.mimeType || 'image/jpeg', namePrefix + "_" + ticketId + "_" + fileObj.name);
+                var file = folder ? folder.createFile(blob) : DriveApp.createFile(blob);
+                file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+                return file.getUrl();
+            } catch (e) { return "[Error Upload: " + e.message + "]"; }
+        }
+
+        var urlJalur = uploadB64(payload.ev_jalur_file, "Jalur");
+        var urlOnt = uploadB64(payload.ev_ont_file, "ONT");
+        var urlLokasi = uploadB64(payload.ev_lokasi_file, "Lokasi");
+        var urlVoice = uploadB64(payload.ev_voice_file, "Voice");
+        var urlIptvChannel = uploadB64(payload.ev_iptv_channel_file, "IPTV_Channel");
+        var urlIptvRemote = uploadB64(payload.ev_iptv_remote_file, "IPTV_Remote");
+        
+        var dcLinks = [];
+        for (var i = 1; i <= dcCount; i++) {
+            dcLinks.push(uploadB64(payload["ev_dc_" + i], "DC_" + i));
+        }
+
+        var ss = SpreadsheetApp.getActiveSpreadsheet();
+        var sheet = ss.getSheetByName("DATABASE ALL TICKET");
+        if (!sheet) return "Error: Sheet tidak ditemukan.";
+
+        var data = sheet.getDataRange().getValues();
+        var headers = data[0].map(function(h) { return h.toString().toUpperCase().trim(); });
+        var incIdx = headers.indexOf("INCIDENT");
+        
+        if (incIdx === -1) return "Error: Kolom INCIDENT tidak ditemukan.";
+
+        var rowToUpdate = -1;
+        for (var r = 1; r < data.length; r++) {
+            if (data[r][incIdx].toString().trim() === ticketId) {
+                rowToUpdate = r + 1;
+                break;
+            }
+        }
+
+        if (rowToUpdate === -1) return "Error: Tiket tidak ditemukan di database.";
+
+        var colMap = {
+            "ACTION": summary,
+            "FOTO JALUR": urlJalur !== "-" ? urlJalur : "",
+            "FOTO ONT": urlOnt !== "-" ? urlOnt : "",
+            "FOTO LOKASI": urlLokasi !== "-" ? urlLokasi : ""
+        };
+
+        if (urlVoice !== "-") colMap["FOTO VOICE"] = urlVoice;
+        if (urlIptvChannel !== "-") colMap["FOTO IPTV CHANNEL"] = urlIptvChannel;
+        if (urlIptvRemote !== "-") colMap["FOTO IPTV REMOTE"] = urlIptvRemote;
+
+        for (var i = 1; i <= dcCount; i++) {
+            if (dcLinks[i-1] !== "-") colMap["FOTO DC " + i] = dcLinks[i-1];
+        }
+
+        for (var colName in colMap) {
+            var val = colMap[colName];
+            if (val === "") continue;
+            var cIdx = headers.indexOf(colName);
+            if (cIdx !== -1) {
+                var cell = sheet.getRange(rowToUpdate, cIdx + 1);
+                var oldVal = cell.getValue().toString();
+                if (colName === "ACTION") {
+                    cell.setValue(val + "\n\n=== SEBELUMNYA ===\n" + oldVal);
+                } else {
+                    cell.setValue(val);
+                }
+            }
+        }
+
+        return "OK";
+    } catch(err) {
+        return "Error di server: " + err.message;
+    }
 }
 
 function submitFisikToGAS(formObject) {
