@@ -315,6 +315,17 @@ function doGet(e) {
                       <label>Upload Foto Evidence Remote</label>
                       <input type="file" id="ev_iptv_remote" name="ev_iptv_remote_file" accept="image/*" style="padding:8px; border:1px solid #cbd5e1; border-radius:6px; width:100%; box-sizing:border-box;">
                   </div>
+                  <div class="checkbox-group">
+                      <input type="checkbox" id="toggle_perangkat" onchange="document.getElementById('perangkat_panel').classList.toggle('hidden')">
+                      <label for="toggle_perangkat" style="margin:0; cursor:pointer;">Ada Perangkat Tambahan?</label>
+                  </div>
+                  <div id="perangkat_panel" class="hidden" style="background: #f9fafb; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb;">
+                      <label>Keterangan Perangkat</label>
+                      <input type="text" id="keterangan_perangkat" placeholder="Misal: STB tambahan, Router AP, dll" style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1; box-sizing: border-box; margin-bottom: 15px;">
+                      
+                      <label>Upload Foto Evidence Perangkat</label>
+                      <input type="file" id="ev_perangkat" name="ev_perangkat_file" accept="image/*" style="padding:8px; border:1px solid #cbd5e1; border-radius:6px; width:100%; box-sizing:border-box;">
+                  </div>
               </div>
 
               <br><br><br>
@@ -447,6 +458,9 @@ function doGet(e) {
                       }
                       if(document.getElementById('toggle_iptv') && document.getElementById('toggle_iptv').checked) {
                           summary += "- IPTV: Channel (" + (document.getElementById('iptv_channel').checked ? "Aman" : "Tidak Aman") + "), Remote (" + getVal('iptv_remote') + ")\\n";
+                      }
+                      if(document.getElementById('toggle_perangkat') && document.getElementById('toggle_perangkat').checked) {
+                          summary += "- PERANGKAT TAMBAHAN: " + (getVal('keterangan_perangkat') || 'Ada') + "\\n";
                       }
                       
                       var payload = {
@@ -658,6 +672,7 @@ function submitFisikBase64(payload) {
         var urlVoice = uploadB64(payload.ev_voice_file, "Voice");
         var urlIptvChannel = uploadB64(payload.ev_iptv_channel_file, "IPTV_Channel");
         var urlIptvRemote = uploadB64(payload.ev_iptv_remote_file, "IPTV_Remote");
+        var urlPerangkat = uploadB64(payload.ev_perangkat_file, "Perangkat_Tambahan");
         
         var dcLinks = [];
         for (var i = 1; i <= dcCount; i++) {
@@ -694,6 +709,7 @@ function submitFisikBase64(payload) {
         if (urlVoice !== "-") colMap["FOTO VOICE"] = urlVoice;
         if (urlIptvChannel !== "-") colMap["FOTO IPTV CHANNEL"] = urlIptvChannel;
         if (urlIptvRemote !== "-") colMap["FOTO IPTV REMOTE"] = urlIptvRemote;
+        if (urlPerangkat !== "-") colMap["FOTO PERANGKAT TAMBAHAN"] = urlPerangkat;
 
         for (var i = 1; i <= dcCount; i++) {
             if (dcLinks[i-1] !== "-") colMap["FOTO DC " + i] = dcLinks[i-1];
