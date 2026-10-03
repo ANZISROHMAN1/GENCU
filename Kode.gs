@@ -627,6 +627,13 @@ function doGet(e) {
 }
 
 function submitFisikBase64(payload) {
+    var lock = LockService.getScriptLock();
+    try {
+        lock.waitLock(30000); // Tunggu antrean sampai 30 detik
+    } catch (e) {
+        return "Error: Sistem sedang sibuk (banyak teknisi submit bersamaan). Silakan coba 30 detik lagi.";
+    }
+    
     try {
         var summary = (payload.baseSummary || "").replace(/\\\\n/g, "\n");
         var ticketId = (payload.ticketId || "").toString();
@@ -710,6 +717,8 @@ function submitFisikBase64(payload) {
         return "OK";
     } catch(err) {
         return "Error di server: " + err.message;
+    } finally {
+        lock.releaseLock();
     }
 }
 
@@ -874,7 +883,15 @@ function submitEvidenceDariWeb(ticketId, summary, unused) {
 }
 
 function doPost(e) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var lock = LockService.getScriptLock();
+  try {
+      lock.waitLock(30000);
+  } catch (err) {
+      return ContentService.createTextOutput("System busy, please try again").setMimeType(ContentService.MimeType.TEXT);
+  }
+  
+  try {
+      var ss = SpreadsheetApp.getActiveSpreadsheet();
   
   var payload = "";
   var allTickets = [];
@@ -1358,6 +1375,9 @@ function doPost(e) {
   }
 
   return ContentService.createTextOutput("Success").setMimeType(ContentService.MimeType.TEXT);
+  } finally {
+      lock.releaseLock();
+  }
 }
 
 
