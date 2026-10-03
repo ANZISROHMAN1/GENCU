@@ -385,7 +385,7 @@ function doGet(e) {
                               const canvas = document.createElement('canvas');
                               let width = img.width;
                               let height = img.height;
-                              const MAX_DIM = 1200; // max dimension
+                              const MAX_DIM = 800; // max dimension reduced for faster upload
                               if (width > height) {
                                   if (width > MAX_DIM) {
                                       height *= MAX_DIM / width;
@@ -403,7 +403,7 @@ function doGet(e) {
                               ctx.drawImage(img, 0, 0, width, height);
                               canvas.toBlob((blob) => {
                                   resolve(new File([blob], file.name, { type: 'image/jpeg' }));
-                              }, 'image/jpeg', 0.6); // 60% quality jpeg
+                              }, 'image/jpeg', 0.4); // 40% quality jpeg
                           };
                           img.src = e.target.result;
                       };
@@ -494,6 +494,33 @@ function doGet(e) {
                       document.querySelector('button').innerText = 'Kirim Evidence Fisik';
                   }
               }
+              
+              // Handle paste event for images
+              document.addEventListener('paste', function(e) {
+                  if (e.clipboardData && e.clipboardData.files && e.clipboardData.files.length > 0) {
+                      var file = e.clipboardData.files[0];
+                      if (file.type.indexOf('image/') !== -1) {
+                          var targetInput = document.activeElement;
+                          if (!targetInput || targetInput.type !== 'file') {
+                              var fileInputs = document.querySelectorAll('input[type="file"]');
+                              for (var i = 0; i < fileInputs.length; i++) {
+                                  if (fileInputs[i].files.length === 0) {
+                                      targetInput = fileInputs[i];
+                                      break;
+                                  }
+                              }
+                          }
+                          
+                          if (targetInput && targetInput.type === 'file') {
+                              var dt = new DataTransfer();
+                              dt.items.add(file);
+                              targetInput.files = dt.files;
+                              showMsg('✅ Gambar berhasil ditempel (paste) ke input: ' + (targetInput.name || targetInput.id), 'loading');
+                              setTimeout(function() { document.getElementById('msgBox').classList.add('hidden'); }, 2000);
+                          }
+                      }
+                  }
+              });
           </script>
       </body>
       </html>
@@ -507,10 +534,10 @@ function doGet(e) {
   // DEFAULT API BEHAVIOR (JSON Output)
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   
-  // Ambil tiket aktif dari ALL TICKET INSERA (sebagai base data)
-  var sheetScrape = ss.getSheetByName("ALL TICKET INSERA");
+  // Ambil tiket aktif dari DATABASE ALL TICKET (sebagai base data agar SEMUA data muncul di Dashboard)
+  var sheetScrape = ss.getSheetByName("DATABASE ALL TICKET");
   if (!sheetScrape) {
-      // Fallback ke SCRAPING INSERA jika ALL TICKET INSERA tidak ada
+      // Fallback ke SCRAPING INSERA jika DATABASE ALL TICKET tidak ada
       sheetScrape = ss.getSheetByName("SCRAPING INSERA");
       if (!sheetScrape) return ContentService.createTextOutput("[]").setMimeType(ContentService.MimeType.JSON);
   }

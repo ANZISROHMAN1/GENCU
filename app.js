@@ -292,6 +292,7 @@ function processData(rows) {
         }
     }
 
+    parsedTickets.reverse(); // Balik array agar tiket terbaru (dari baris paling bawah di Sheet) muncul paling atas
     state.tickets = parsedTickets;
     updateDashboardSummary();
 }
@@ -806,15 +807,14 @@ window.assignTicketToTelegram = function (btn) {
             'Content-Type': 'text/plain'
         },
         body: JSON.stringify(payload)
-    }).then(() => {
-        updateState('assigned', teknisi);
-        updateTicketCategory(state.activeTicketId, 'GCU LOGIC');
-        alert("Tugas berhasil dikirim ke Telegram Teknisi! Tiket berpindah ke antrean GCU LOGIC.");
     }).catch(err => {
-        console.error(err);
-        updateState('assigned', teknisi);
-        updateTicketCategory(state.activeTicketId, 'GCU LOGIC');
+        console.error("Fetch assign_ticket error:", err);
     });
+    
+    // Optimistic UI Update: Langsung pindah state tanpa menunggu server selesai mengirim telegram
+    updateState('assigned', teknisi);
+    updateTicketCategory(state.activeTicketId, 'GCU LOGIC');
+    alert("Proses assign sedang berjalan di latar belakang! Tiket dipindah ke antrean GCU LOGIC.");
 };
 
 // 2. TEKNISI FLOW
@@ -1013,12 +1013,7 @@ window.requestApprovalBackend = async function (event) {
         btn.innerText = "Mengupload Foto...";
         const file = photoInput.files[0];
         try {
-            const base64String = await new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result.split(',')[1]);
-                reader.onerror = error => reject(error);
-                reader.readAsDataURL(file);
-            });
+            const base64String = await compressImageBase64(file);
             payload.photoBase64 = base64String;
             payload.photoMimeType = file.type;
             payload.photoName = "Evidence_Logic_" + state.activeTicketId + "_" + file.name;
@@ -1078,12 +1073,7 @@ window.submitTeknisiEvidence = async function (event) {
         const file = photoInput.files[0];
         
         try {
-            const base64String = await new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result.split(',')[1]);
-                reader.onerror = error => reject(error);
-                reader.readAsDataURL(file);
-            });
+            const base64String = await compressImageBase64(file);
             
             payload.photoBase64 = base64String;
             payload.photoMimeType = file.type;
@@ -1152,12 +1142,7 @@ window.returnToFisikFromHelpdesk = async function () {
     if (photoInput && photoInput.files.length > 0) {
         const file = photoInput.files[0];
         try {
-            const base64String = await new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result.split(',')[1]);
-                reader.onerror = error => reject(error);
-                reader.readAsDataURL(file);
-            });
+            const base64String = await compressImageBase64(file);
             payload.photoBase64 = base64String;
             payload.photoMimeType = file.type;
             payload.photoName = "Evidence_LogicRework_" + state.activeTicketId + "_" + file.name;
@@ -1318,32 +1303,110 @@ window.assignAndReturnToFisik = async function (btn) {
     };
 
     try {
-        // Kirim rework
-        await fetch(SCRIPT_URL, {
+        // Kirim rework (tidak perlu await, biarkan jalan di background)
+        fetch(SCRIPT_URL, {
             method: 'POST',
             mode: 'no-cors',
             headers: { 'Content-Type': 'text/plain' },
             body: JSON.stringify(reworkPayload)
-        });
+        }).catch(console.error);
 
-        // Kirim assign telegram
-        await fetch(SCRIPT_URL, {
+        // Kirim assign telegram (tidak perlu await)
+        fetch(SCRIPT_URL, {
             method: 'POST',
             mode: 'no-cors',
             headers: { 'Content-Type': 'text/plain' },
             body: JSON.stringify(assignPayload)
-        });
+        }).catch(console.error);
 
-        // Update local state
+        // Update local state secara instan (Optimistic UI)
         if (ticket) ticket.technician = nik;
         updateTicketCategory(state.activeTicketId, 'GCU FISIK');
-        alert(`✅ Tiket berhasil di-assign ke ${state.workflowState.assignNama || nik} dan dikirim ke GCU FISIK!\nNotifikasi Telegram sudah terkirim.`);
+        alert(`✅ Tiket diproses ke ${state.workflowState.assignNama || nik} dan dikembalikan ke GCU FISIK!\nNotifikasi Telegram sedang dikirim di latar belakang.`);
         state.workflowState = {};
         showDashboard('GCU FISIK');
     } catch (err) {
         console.error(err);
-        alert('Gagal koneksi ke server!');
+        alert('Terjadi kesalahan pada sistem!');
         btn.innerText = oldText;
         btn.disabled = false;
     }
 };
+
+// Handle paste event for images
+document.addEventListener('paste', function(e) {
+    if (e.clipboardData && e.clipboardData.files && e.clipboardData.files.length > 0) {
+        var file = e.clipboardData.files[0];
+        if (file.type.indexOf('image/') !== -1) {
+            var targetInput = document.activeElement;
+            if (!targetInput || targetInput.type !== 'file') {
+                var fileInputs = document.querySelectorAll('input[type="file"]');
+                for (var i = 0; i < fileInputs.length; i++) {
+                    if (fileInputs[i].files.length === 0) {
+                        targetInput = fileInputs[i];
+                        break;
+                    }
+                }
+            }
+            
+            if (targetInput && targetInput.type === 'file') {
+                var dt = new DataTransfer();
+                dt.items.add(file);
+                targetInput.files = dt.files;
+                
+                // Show a quick visual feedback
+                var originalBg = targetInput.style.backgroundColor;
+                targetInput.style.backgroundColor = '#d1fae5';
+                setTimeout(function() {
+                    targetInput.style.backgroundColor = originalBg;
+                }, 500);
+            }
+        }
+    }
+});
+
+async function compressImageBase64(file) {
+    if (!file || !file.type.match(/image.*/)) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result.split(',')[1]);
+            reader.onerror = error => reject(error);
+            reader.readAsDataURL(file);
+        });
+    }
+    
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+                const MAX_DIM = 800; // max dimension
+                if (width > height) {
+                    if (width > MAX_DIM) {
+                        height *= MAX_DIM / width;
+                        width = MAX_DIM;
+                    }
+                } else {
+                    if (height > MAX_DIM) {
+                        width *= MAX_DIM / height;
+                        height = MAX_DIM;
+                    }
+                }
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.4); // 40% quality jpeg
+                resolve(dataUrl.split(',')[1]);
+            };
+            img.onerror = () => reject(new Error("Gagal load image"));
+            img.src = e.target.result;
+        };
+        reader.onerror = error => reject(error);
+        reader.readAsDataURL(file);
+    });
+}
+
