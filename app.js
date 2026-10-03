@@ -49,8 +49,7 @@ const workflowPageTitle = document.getElementById('workflowPageTitle');
 const workflowSubtitle = document.getElementById('workflowSubtitle');
 const dispActiveTicketId = document.getElementById('activeTicketId');
 const dashboardTitle = document.getElementById('dashboardTitle');
-
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzPBLTPwr536d2mVuOps8RmKw2UzMPne-xcM89vtnHMjPzpUB_B9DCEbf7KpYS9SWOj/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx1UEN5rD39Hw5W4xNYTJaBZCafdP-bmlJgNHqFkfpWPF7_wYotc3-MFqyeAkdCjuLI/exec';
 
 function init() {
     const today = new Date();
