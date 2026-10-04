@@ -731,7 +731,8 @@ function renderKorlapFlow() {
                         }
                     }
                 }
-            });
+            } // Close the outer else block
+        });
             
             if (isParsingFisik) {
                 html += renderFisikFormGroups(fisikProps);
