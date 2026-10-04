@@ -425,6 +425,57 @@ function doGet(e) {
                   });
               }
               
+              // --- GLOBAL PASTE & DRAG HANDLER ---
+              document.addEventListener('paste', function(e) {
+                  if (e.clipboardData && e.clipboardData.files && e.clipboardData.files.length > 0) {
+                      e.preventDefault();
+                      handleDroppedFile(e.clipboardData.files[0]);
+                  }
+              });
+
+              document.addEventListener('dragover', function(e) {
+                  e.preventDefault();
+              });
+
+              document.addEventListener('drop', function(e) {
+                  // Cek apakah target drop adalah input text, jika ya, jangan biarkan browser menaruh path text!
+                  e.preventDefault(); 
+                  if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                      handleDroppedFile(e.dataTransfer.files[0]);
+                  }
+              });
+
+              function handleDroppedFile(file) {
+                  if (!file.type.match('image.*')) {
+                      showMsg('Hanya file gambar yang diperbolehkan!', 'error');
+                      return;
+                  }
+                  
+                  // Cari input file pertama yang masih kosong dan tidak hidden
+                  var fileInputs = document.querySelectorAll('input[type="file"]');
+                  var targetInput = null;
+                  for(var i=0; i<fileInputs.length; i++) {
+                      if(fileInputs[i].closest('.hidden')) continue; // Skip jika panel disembunyikan
+                      if(!fileInputs[i].files || fileInputs[i].files.length === 0) {
+                          targetInput = fileInputs[i];
+                          break;
+                      }
+                  }
+                  
+                  if (targetInput) {
+                      // Isi input file menggunakan DataTransfer API
+                      var dt = new DataTransfer();
+                      dt.items.add(file);
+                      targetInput.files = dt.files;
+                      
+                      var labelEl = targetInput.previousElementSibling;
+                      var labelText = labelEl ? labelEl.innerText : 'Form Foto';
+                      showMsg('✅ Foto berhasil di-paste ke: ' + labelText, 'success');
+                  } else {
+                      showMsg('⚠️ Semua kolom foto yang aktif sudah terisi!', 'error');
+                  }
+              }
+
               async function submitForm() {
                   try {
                       showMsg('Memproses data...', 'loading');
@@ -1334,12 +1385,35 @@ function doPost(e) {
   
   var rowsToInsert = [];
   var dynamicHeaders = null;
+  var scrapeIncIdx = -1;
+  var scrapeSumIdx = -1;
+  
   allTickets.forEach(function(ticketData, index) {
-    // Tangkap header dari scraper secara dinamis (berapapun jumlah kolomnya)
-    if (index === 0 && ticketData[0] && ticketData[0].toString().toUpperCase().includes('PARENT')) {
-        dynamicHeaders = ["TIMESTAMP"].concat(ticketData);
-        return; 
+    // Tangkap header dari scraper secara dinamis
+    if (index === 0) {
+        var rowText = ticketData.join(" ").toUpperCase();
+        if (rowText.includes('INCIDENT') && (rowText.includes('STATUS') || rowText.includes('TTR') || rowText.includes('DATE') || rowText.includes('PARENT'))) {
+            dynamicHeaders = ["TIMESTAMP"].concat(ticketData);
+            for (var c = 0; c < ticketData.length; c++) {
+                var h = ticketData[c] ? ticketData[c].toString().toUpperCase() : "";
+                if (h.includes("INCIDENT") || h === "TICKET") scrapeIncIdx = c;
+                if (h.includes("SUMMARY") || h.includes("DESCRIPTION")) scrapeSumIdx = c;
+            }
+            return; 
+        }
     }
+    
+    // Fallback jika tidak ada baris header yang terdeteksi
+    if (scrapeIncIdx === -1 && index === 0) {
+        for (var c = 0; c < ticketData.length; c++) {
+            var val = ticketData[c] ? ticketData[c].toString() : "";
+            if (val.match(/^(INC\d{5,}|1-SV\d{5,})/)) {
+                scrapeIncIdx = c;
+                break;
+            }
+        }
+    }
+    if (scrapeIncIdx === -1) scrapeIncIdx = 1; // Default fallback (kolom ke-2)
     
     rowsToInsert.push([new Date()].concat(ticketData));
   });
@@ -1364,11 +1438,11 @@ function doPost(e) {
       sheetScrape.getRange(2, 1, rowsToInsert.length, rowsToInsert[0].length).setValues(rowsToInsert);
   }
 
-
   // 2. UPDATE DATABASE & CEK DUPLIKASI
   var dbLastRow = sheetDB.getLastRow();
   
   // Update header DATABASE secara dinamis + Ukur Masal di paling ujung
+  var dbIncColNum = 3; // Default Kolom C jika tidak ada header
   if (dynamicHeaders) {
       var dbFullHeaders = dynamicHeaders.concat(["RX POWER", "TX POWER", "OLT", "STATUS ALARM"]);
       if (sheetDB.getMaxColumns() < dbFullHeaders.length) {
@@ -1376,29 +1450,61 @@ function doPost(e) {
       }
       sheetDB.getRange(1, 1, 1, dbFullHeaders.length).setValues([dbFullHeaders]);
       sheetDB.getRange(1, 1, 1, dbFullHeaders.length).setFontWeight("bold").setBackground("#f3f3f3");
-      sheetDB.getRange(1, dbFullHeaders.length - 3, 1, 4).setBackground("#fff9c4"); // Kuning untuk 4 kolom terakhir (ukur masal)
+      sheetDB.getRange(1, dbFullHeaders.length - 3, 1, 4).setBackground("#fff9c4");
+      
+      // Cari kolom INCIDENT di header DATABASE untuk duplikasi cek
+      for (var h = 0; h < dbFullHeaders.length; h++) {
+          var headerName = dbFullHeaders[h] ? dbFullHeaders[h].toString().toUpperCase() : "";
+          if (headerName.includes("INCIDENT") || headerName === "TICKET") {
+              dbIncColNum = h + 1; // 1-indexed for getRange
+              break;
+          }
+      }
   }
 
   var existingIncidents = [];
   if (dbLastRow > 1) {
-    // Nomor INCIDENT ada di kolom C (kolom ke-3) tab DATABASE karena A=TIMESTAMP, B=C_PARENT_ID
-    var dbIncData = sheetDB.getRange(2, 3, dbLastRow - 1, 1).getValues();
+    // Ambil data INCIDENT dari kolom yang tepat
+    var dbIncData = sheetDB.getRange(2, dbIncColNum, dbLastRow - 1, 1).getValues();
     existingIncidents = dbIncData.map(function(r) { return r[0] ? r[0].toString().trim() : ""; });
   }
 
   var newTicketsForDB = [];
-  allTickets.forEach(function(ticketData) {
-    var ticketId = ticketData[1] ? ticketData[1].toString().trim() : ""; // Kolom INCIDENT dari scraper (index 1)
+  allTickets.forEach(function(ticketData, index) {
+    // Skip baris header jika masih ada di array (karena forEach tidak menggunakan skip index=0 yang sudah return)
+    if (index === 0 && ticketData[0] && ticketData.join(" ").toUpperCase().includes('INCIDENT')) {
+        return;
+    }
+    
+    var ticketId = ticketData[scrapeIncIdx] ? ticketData[scrapeIncIdx].toString().trim() : "";
+    
+    // Pastikan ini format tiket yang benar, bukan kosong
+    if (!ticketId || !ticketId.match(/^(INC|1-SV)/)) {
+        // Fallback pencarian di seluruh baris
+        for (var c = 0; c < ticketData.length; c++) {
+            var val = ticketData[c] ? ticketData[c].toString().trim() : "";
+            if (val.match(/^(INC|1-SV)/)) {
+                ticketId = val;
+                break;
+            }
+        }
+    }
+    
+    if (!ticketId) return; // Skip baris tidak valid
     
     // Jika tiket ini BELUM ADA di database
     if (existingIncidents.indexOf(ticketId) === -1) {
        newTicketsForDB.push([new Date()].concat(ticketData));
        
        // 3. LOGIKA TELEGRAM BOT
-       // Karena "Gaul" ada di teks kolom SUMMARY (indeks 3), kita mendeteksinya dari sana
-       var summaryText = ticketData[3] ? ticketData[3].toString().toUpperCase() : "";
-       var isGaul = summaryText.indexOf("GAUL") !== -1 || summaryText.indexOf("_GAUL_") !== -1;
+       var summaryText = "";
+       if (scrapeSumIdx !== -1 && ticketData[scrapeSumIdx]) {
+           summaryText = ticketData[scrapeSumIdx].toString().toUpperCase();
+       } else {
+           summaryText = ticketData.join(" ").toUpperCase(); // Fallback cari di seluruh baris
+       }
        
+       var isGaul = summaryText.indexOf("GAUL") !== -1 || summaryText.indexOf("_GAUL_") !== -1;
        if (isGaul) {
           sendToTelegram(ticketId, ticketData);
        }
