@@ -810,50 +810,74 @@ function renderKorlapFlow() {
             }
         });
         
-        let evidenceFisik = arrFisik.length > 0 ? arrFisik.join('') : '<span style="color: var(--text-secondary); font-style: italic;">Belum ada data history GCU Fisik</span>';
-        let evidenceLogic = arrLogic.length > 0 ? arrLogic.join('') : '<span style="color: var(--text-secondary); font-style: italic;">Belum ada data history GCU Logic</span>';
+        let evidenceFisikText = arrFisik.join('\n');
+        let evidenceLogicText = arrLogic.join('\n');
+        
+        let evidenceFisik = arrFisik.length > 0 ? evidenceFisikText : '<span style="color: var(--text-secondary); font-style: italic;">Belum ada data history GCU Fisik</span>';
+        let evidenceLogic = arrLogic.length > 0 ? evidenceLogicText : '<span style="color: var(--text-secondary); font-style: italic;">Belum ada data history GCU Logic</span>';
 
-        // Ekstrak URL Google Drive yang mungkin terselip di dalam teks (khususnya dari Helpdesk / Web)
         let driveRegex = /https:\/\/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/g;
-        let logicPhotos = [];
-        let match;
-        while ((match = driveRegex.exec(actionText)) !== null) {
-            logicPhotos.push(match[0]);
+        
+        // Ekstrak URL Google Drive dari teks GCU Fisik (untuk tiket lama)
+        let fisikPhotosText = [];
+        let matchFisik;
+        while ((matchFisik = driveRegex.exec(evidenceFisikText)) !== null) {
+            if (!fisikPhotosText.includes(matchFisik[0])) fisikPhotosText.push(matchFisik[0]);
         }
 
-        // Render Foto untuk GCU FISIK (Dari kolom FOTO JALUR, FOTO ONT, dll di Database)
+        // Ekstrak URL Google Drive dari teks GCU Logic
+        let logicPhotosText = [];
+        let matchLogic;
+        while ((matchLogic = driveRegex.exec(evidenceLogicText)) !== null) {
+            if (!logicPhotosText.includes(matchLogic[0])) logicPhotosText.push(matchLogic[0]);
+        }
+
+        // Gabungkan foto dari kolom Spreadsheet (tiket baru) dengan foto dari teks (tiket lama)
+        let allFisikPhotos = [];
         if (ticket.photos && Object.keys(ticket.photos).length > 0) {
+            for (let pName in ticket.photos) {
+                allFisikPhotos.push({ name: pName.replace('FOTO ', ''), url: ticket.photos[pName] });
+            }
+        }
+        fisikPhotosText.forEach((url, i) => {
+            // Jangan masukkan duplikat jika sudah ada di ticket.photos
+            if (!allFisikPhotos.find(p => p.url === url)) {
+                allFisikPhotos.push({ name: 'EVIDENCE ' + (i+1), url: url });
+            }
+        });
+
+        // Render Foto untuk GCU FISIK
+        if (allFisikPhotos.length > 0) {
             let photoHtmlFisik = `<div style="margin-top: 20px; padding-top: 15px; border-top: 2px solid var(--border);">
                 <h4 style="margin-bottom: 15px; color: var(--text-primary); font-size: 14px;">📸 Lampiran Foto (GCU FISIK):</h4>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">`;
             
-            for (let pName in ticket.photos) {
-                let url = ticket.photos[pName];
-                let imgSrc = url;
-                let matchId = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-                if (matchId && matchId[1]) imgSrc = `https://drive.google.com/uc?id=${matchId[1]}`;
+            allFisikPhotos.forEach(photo => {
+                let imgSrc = photo.url;
+                let matchId = photo.url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+                if (matchId && matchId[1]) imgSrc = `https://drive.google.com/thumbnail?id=${matchId[1]}&sz=w1000`;
 
                 photoHtmlFisik += `
-                    <a href="${url}" target="_blank" style="display: flex; flex-direction: column; align-items: center; justify-content: center; background: #f8fafc; padding: 8px; border-radius: 8px; text-decoration: none; border: 1px solid #e2e8f0; transition: transform 0.2s ease;">
+                    <a href="${photo.url}" target="_blank" style="display: flex; flex-direction: column; align-items: center; justify-content: center; background: #f8fafc; padding: 8px; border-radius: 8px; text-decoration: none; border: 1px solid #e2e8f0; transition: transform 0.2s ease;">
                         <img src="${imgSrc}" alt="Evidence" style="width: 100%; height: 120px; object-fit: cover; border-radius: 6px; margin-bottom: 8px; border: 1px solid #cbd5e1; background: #e2e8f0;">
-                        <span style="font-size: 11px; font-weight: 600; color: #334155; text-align: center;">${pName.replace('FOTO ', '')}</span>
+                        <span style="font-size: 11px; font-weight: 600; color: #334155; text-align: center;">${photo.name}</span>
                     </a>
                 `;
-            }
+            });
             photoHtmlFisik += `</div></div>`;
             evidenceFisik += photoHtmlFisik;
         }
 
-        // Render Foto untuk GCU LOGIC (Dari ekstraksi link Google Drive di catatan aksi)
-        if (logicPhotos.length > 0) {
+        // Render Foto untuk GCU LOGIC
+        if (logicPhotosText.length > 0) {
             let photoHtmlLogic = `<div style="margin-top: 20px; padding-top: 15px; border-top: 2px solid var(--border);">
                 <h4 style="margin-bottom: 15px; color: var(--text-primary); font-size: 14px;">📸 Lampiran Foto (GCU LOGIC):</h4>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">`;
             
-            logicPhotos.forEach((url, i) => {
+            logicPhotosText.forEach((url, i) => {
                 let imgSrc = url;
                 let matchId = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-                if (matchId && matchId[1]) imgSrc = `https://drive.google.com/uc?id=${matchId[1]}`;
+                if (matchId && matchId[1]) imgSrc = `https://drive.google.com/thumbnail?id=${matchId[1]}&sz=w1000`;
                 
                 photoHtmlLogic += `
                     <a href="${url}" target="_blank" style="display: flex; flex-direction: column; align-items: center; justify-content: center; background: #f8fafc; padding: 8px; border-radius: 8px; text-decoration: none; border: 1px solid #e2e8f0; transition: transform 0.2s ease;">
