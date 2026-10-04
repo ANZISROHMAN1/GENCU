@@ -248,6 +248,12 @@ function processData(rows) {
         
         let rowText = row.join(" ").toUpperCase();
         
+        // Ambil ACTION history terlebih dahulu untuk state machine
+        let actionHistory = "";
+        if (actionIdx !== -1 && row[actionIdx]) {
+            actionHistory = row[actionIdx].toString().trim();
+        }
+
         // Coba ekstrak teknisi dari ACTION history jika sudah di-assign manual lewat Web
         let assignMatch = rowText.match(/\[ASSIGNED\] TEKNISI:\s*([A-Z0-9_]+)/i);
         if (assignMatch && assignMatch[1]) {
@@ -262,24 +268,25 @@ function processData(rows) {
                 category = 'GCU LOGIC';
             }
 
-            // Prioritas status text (override category)
-            if (rowText.includes("[COMPLETED]")) {
-                category = 'COMPLETED';
-            } else if (rowText.includes("MENUNGGU APPROVAL KORLAP") || rowText.includes("[WAITING APPROVAL KORLAP]")) {
-                category = 'APPROVAL KORLAP';
-            } else if (technician !== "-") {
-                // Sesuai permintaan user: Jika ada NIK TEKNISI, jangan pernah masuk GCU LOGIC
-                category = 'GCU FISIK';
-            } else if (rowText.includes("DIKEMBALIKAN KE GCU FISIK") || rowText.includes("[BUTUH FISIK") || rowText.includes("[ASSIGNED]")) {
-                category = 'GCU FISIK'; // Paksa ke GCU FISIK jika dirework/butuh fisik atau sudah di-assign manual
-            } else if (rowText.includes("DIKEMBALIKAN KE GCU LOGIC") || rowText.includes("EVIDENCE FISIK SUBMITTED")) {
-                category = 'GCU LOGIC';
+            // Dapatkan block aksi TERAKHIR untuk penentuan state yang akurat
+            let latestAction = "";
+            if (actionHistory) {
+                let blocks = actionHistory.split(/\n\n/);
+                latestAction = blocks[blocks.length - 1].toUpperCase();
             }
 
-            // Ambil ACTION history untuk ditampilkan di approval korlap
-            let actionHistory = "";
-            if (actionIdx !== -1 && row[actionIdx]) {
-                actionHistory = row[actionIdx].toString().trim();
+            // Evaluasi berdasarkan aksi TERAKHIR (mencegah history lama menimpa history baru)
+            if (latestAction.includes("[COMPLETED]") || rowText.includes("[COMPLETED]")) {
+                category = 'COMPLETED';
+            } else if (latestAction.includes("MENUNGGU APPROVAL KORLAP") || latestAction.includes("[WAITING APPROVAL KORLAP]")) {
+                category = 'APPROVAL KORLAP';
+            } else if (latestAction.includes("DIKEMBALIKAN KE GCU LOGIC") || latestAction.includes("EVIDENCE FISIK SUBMITTED")) {
+                category = 'GCU LOGIC';
+            } else if (latestAction.includes("DIKEMBALIKAN KE GCU FISIK") || latestAction.includes("[BUTUH FISIK") || latestAction.includes("[ASSIGNED]")) {
+                category = 'GCU FISIK';
+            } else if (technician !== "-") {
+                // Sesuai permintaan user: Jika ada NIK TEKNISI dan belum ada aksi lanjutan, tetapkan di GCU FISIK
+                category = 'GCU FISIK';
             }
 
             let photos = {};
