@@ -652,7 +652,7 @@ function renderKorlapFlow() {
 
         // Format string helper to simulate form view
         function formatEvidenceBlock(text) {
-            let lines = text.split('\n');
+            let lines = text.replace(/\\n/g, '\n').split('\n');
             let html = '';
             
             let fisikProps = {};
