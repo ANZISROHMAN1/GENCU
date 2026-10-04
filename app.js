@@ -559,9 +559,92 @@ function renderKorlapFlow() {
             blocks = actionText.split(/\n\n(?=\[)/); // Fallback format lama
         }
         
-        // Format string helper
+        // Format string helper to simulate form view
         function formatEvidenceBlock(text) {
-            return text.replace(/\n/g, '<br>').replace(/(https:\/\/[^\s\]]+)/g, '<a href="$1" target="_blank" style="color: var(--primary); font-weight: bold; text-decoration: underline; word-break: break-all;">📎 Buka Evidence Foto</a>');
+            let lines = text.split('\n');
+            let html = '';
+            let inList = false;
+
+            lines.forEach(line => {
+                let trimmed = line.trim();
+                
+                // Parse key-value pairs (GCU FISIK style)
+                if (trimmed.startsWith('- ')) {
+                    if (!inList) {
+                        html += `<div style="background: white; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-top: 10px; margin-bottom: 10px;">`;
+                        inList = true;
+                    }
+                    let parts = trimmed.substring(2).split(':');
+                    let key = parts[0].trim();
+                    let val = parts.slice(1).join(':').trim();
+                    
+                    if (val === 'Aman' || val === 'Sukses' || val === 'OK' || val === 'Normal') {
+                        val = `<span style="color: var(--success); font-weight: 600;">${val} ✅</span>`;
+                    } else if (val === 'Tidak Aman' || val === 'Gagal' || val === 'Tidak Normal') {
+                        val = `<span style="color: var(--danger); font-weight: 600;">${val} ❌</span>`;
+                    }
+                    
+                    html += `
+                        <div style="display: flex; justify-content: space-between; padding: 10px 15px; border-bottom: 1px solid var(--border); font-size: 13px;">
+                            <span style="color: var(--text-secondary); font-weight: 500;">${key}</span>
+                            <span style="color: var(--text-primary); font-weight: 600; text-align: right; max-width: 60%;">${val || '-'}</span>
+                        </div>
+                    `;
+                } 
+                // Parse Logic Checklist (GCU LOGIC style)
+                else if (trimmed.includes('Eksekusi Logic:')) {
+                    if (inList) { html += `</div>`; inList = false; }
+                    
+                    let parts = trimmed.split('Eksekusi Logic:');
+                    let prefix = parts[0].trim();
+                    let logicStr = parts[1].trim();
+                    
+                    if (prefix) {
+                        html += `<div style="font-weight: 600; color: var(--text-primary); margin-bottom: 10px;">${prefix}</div>`;
+                    }
+                    
+                    if (logicStr.includes('| Catatan:')) {
+                        let logicParts = logicStr.split('| Catatan:');
+                        logicStr = logicParts[0].trim();
+                        let notes = logicParts[1].trim();
+                        html += `<div style="margin-bottom: 10px; padding: 10px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; font-size: 13px; color: #b45309;"><strong>📝 Catatan Logic:</strong> ${notes}</div>`;
+                    }
+
+                    let logicItems = logicStr.split(',').map(item => item.trim()).filter(i => i);
+                    if (logicItems.length > 0) {
+                        html += `<div style="background: white; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 10px;">`;
+                        html += `<div style="background: #f8fafc; padding: 10px 15px; font-size: 12px; font-weight: bold; color: var(--text-secondary); border-bottom: 1px solid var(--border);">CHECKLIST LOGIC YANG DILAKUKAN:</div>`;
+                        logicItems.forEach(item => {
+                             let displayItem = item === 'OK' ? 'Selesai (Tidak ada checklist khusus)' : item;
+                             html += `
+                                <div style="display: flex; justify-content: space-between; padding: 10px 15px; border-bottom: 1px solid var(--border); font-size: 13px;">
+                                    <span style="color: var(--text-secondary); font-weight: 500;">${displayItem}</span>
+                                    <span style="color: var(--success); font-weight: 600; text-align: right;">Executed ✅</span>
+                                </div>
+                            `;
+                        });
+                        html += `</div>`;
+                    }
+                }
+                // Regular Text
+                else {
+                    if (inList) { html += `</div>`; inList = false; }
+                    
+                    // Format URLs
+                    let processedLine = trimmed.replace(/(https:\/\/[^\s\\]]+)/g, '<a href="$1" target="_blank" style="color: var(--primary); font-weight: bold; text-decoration: underline; word-break: break-all;">📎 Buka Evidence Foto</a>');
+                    
+                    if (processedLine) {
+                        if (processedLine.includes('EVIDENCE FISIK SUBMITTED') || processedLine.includes('DIKEMBALIKAN KE')) {
+                            html += `<div style="font-weight: 600; color: var(--primary); margin-bottom: 5px; font-size: 14px;">${processedLine}</div>`;
+                        } else {
+                            html += `<div style="margin-bottom: 4px;">${processedLine}</div>`;
+                        }
+                    }
+                }
+            });
+            
+            if (inList) { html += `</div>`; }
+            return html;
         }
 
         let arrFisik = [];
