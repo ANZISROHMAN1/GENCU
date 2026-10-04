@@ -830,9 +830,18 @@ function renderKorlapFlow() {
             
             for (let pName in allPhotos) {
                 let url = allPhotos[pName];
+                let imgSrc = url;
+                
+                // Konversi URL Google Drive Viewer menjadi URL Thumbnail (uc?id=...)
+                let matchId = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+                if (matchId && matchId[1]) {
+                    imgSrc = `https://drive.google.com/uc?id=${matchId[1]}`;
+                }
+
                 photoHtml += `
-                    <a href="${url}" target="_blank" style="display: flex; align-items: center; justify-content: center; background: #e0f2fe; color: #0284c7; padding: 10px; border-radius: 6px; text-decoration: none; font-size: 12px; font-weight: 600; border: 1px solid #bae6fd;">
-                        <ion-icon name="image-outline" style="margin-right: 6px; font-size: 16px;"></ion-icon> ${pName.replace('FOTO ', '')}
+                    <a href="${url}" target="_blank" style="display: flex; flex-direction: column; align-items: center; justify-content: center; background: #f8fafc; padding: 8px; border-radius: 8px; text-decoration: none; border: 1px solid #e2e8f0; transition: transform 0.2s ease;">
+                        <img src="${imgSrc}" alt="Evidence" style="width: 100%; height: 120px; object-fit: cover; border-radius: 6px; margin-bottom: 8px; border: 1px solid #cbd5e1; background: #e2e8f0;">
+                        <span style="font-size: 11px; font-weight: 600; color: #334155; text-align: center;">${pName.replace('FOTO ', '')}</span>
                     </a>
                 `;
             }
