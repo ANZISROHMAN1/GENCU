@@ -616,11 +616,29 @@ function renderKorlapFlow() {
             let title = type === 'fisik' ? '🛠️ Pekerjaan GCU FISIK (Teknisi)' : '💻 Pekerjaan GCU LOGIC (Helpdesk)';
             let content = type === 'fisik' ? window.tempEvidenceFisik : window.tempEvidenceLogic;
             
+            let ticketInfoHtml = `
+                <div style="background: rgba(59, 130, 246, 0.05); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 8px; padding: 15px; margin-bottom: 20px;">
+                    <h4 style="margin-top: 0; margin-bottom: 12px; font-size: 14px; color: var(--primary); border-bottom: 1px dashed rgba(59, 130, 246, 0.3); padding-bottom: 8px;">Informasi Tiket</h4>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 13px;">
+                        <div><span style="color: var(--text-secondary);">No. Internet:</span><br><strong>${ticket.serviceNumber}</strong></div>
+                        <div><span style="color: var(--text-secondary);">Pelanggan:</span><br><strong>${ticket.customerName || '-'}</strong></div>
+                        <div><span style="color: var(--text-secondary);">STO:</span><br><strong>${ticket.sto}</strong></div>
+                        <div><span style="color: var(--text-secondary);">Teknisi:</span><br><strong>${ticket.technician}</strong></div>
+                        <div><span style="color: var(--text-secondary);">Status Alarm:</span><br><strong>${ticket.status}</strong></div>
+                        <div><span style="color: var(--text-secondary);">Redaman:</span><br><strong>RX: ${ticket.rx} | TX: ${ticket.tx}</strong></div>
+                    </div>
+                </div>
+            `;
+            
             let modalHtml = `
                 <div id="evidenceModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 9999; backdrop-filter: blur(4px);">
-                    <div style="background: var(--bg-surface); width: 90%; max-width: 500px; border-radius: 12px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); max-height: 85vh; overflow-y: auto; position: relative;">
+                    <div style="background: var(--bg-surface); width: 90%; max-width: 550px; border-radius: 12px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); max-height: 90vh; overflow-y: auto; position: relative;">
                         <button onclick="document.getElementById('evidenceModal').remove()" style="position: absolute; top: 15px; right: 15px; background: transparent; border: none; font-size: 24px; font-weight: bold; cursor: pointer; color: var(--text-secondary);">&times;</button>
                         <h3 style="margin-top: 0; margin-bottom: 15px; font-size: 16px; color: var(--text-primary); border-bottom: 1px solid var(--border); padding-bottom: 10px;">${title}</h3>
+                        
+                        ${ticketInfoHtml}
+                        
+                        <h4 style="margin-top: 0; margin-bottom: 10px; font-size: 14px; color: var(--text-primary);">Riwayat Pekerjaan:</h4>
                         <div style="font-size: 13px; line-height: 1.6; color: var(--text-primary); background: rgba(0,0,0,0.02); padding: 15px; border-radius: 8px; border: 1px solid var(--border);">
                             ${content}
                         </div>
