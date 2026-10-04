@@ -611,18 +611,47 @@ function renderKorlapFlow() {
                     }
 
                     let logicItems = logicStr.split(',').map(item => item.trim()).filter(i => i);
+
+                    let allLogicTasks = {
+                        "🌐 Layanan Internet": [
+                            { id: "Pindah Channel", label: "Cek Interferensi / Pindah Channel" },
+                            { id: "Checklist NAT", label: "Checklist NAT" },
+                            { id: "Enable IPV6", label: "Enable IPV6" },
+                            { id: "Firewall Medium", label: "Set Firewall Medium" },
+                            { id: "Cek ONT", label: "Cek CPU/RAM & Versi ONT" },
+                            { id: "Cek FPP", label: "Cek FPP (Ping, Traceroute)" }
+                        ],
+                        "📺 Layanan IPTV": [
+                            { id: "Cek ACS", label: "Cek ACS Connection" },
+                            { id: "Cek Channel", label: "Cek Last Info & Channel" },
+                            { id: "Cek Isolir", label: "Cek Status Isolir" },
+                            { id: "Cek STB", label: "Cek Adv STB Information" }
+                        ],
+                        "📞 Layanan Voice": [
+                            { id: "Cek Voice", label: "Executive Summary ACS" }
+                        ]
+                    };
+
                     if (logicItems.length > 0) {
-                        html += `<div style="background: white; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 10px;">`;
-                        html += `<div style="background: #f8fafc; padding: 10px 15px; font-size: 12px; font-weight: bold; color: var(--text-secondary); border-bottom: 1px solid var(--border);">CHECKLIST LOGIC YANG DILAKUKAN:</div>`;
-                        logicItems.forEach(item => {
-                             let displayItem = item === 'OK' ? 'Selesai (Tidak ada checklist khusus)' : item;
-                             html += `
-                                <div style="display: flex; justify-content: space-between; padding: 10px 15px; border-bottom: 1px solid var(--border); font-size: 13px;">
-                                    <span style="color: var(--text-secondary); font-weight: 500;">${displayItem}</span>
-                                    <span style="color: var(--success); font-weight: 600; text-align: right;">Executed ✅</span>
-                                </div>
-                            `;
-                        });
+                        html += `<div style="margin-bottom: 15px;">`;
+                        
+                        for (let category in allLogicTasks) {
+                            html += `<div style="background: white; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 10px;">`;
+                            html += `<div style="background: #f8fafc; padding: 10px 15px; font-size: 12px; font-weight: bold; color: var(--text-secondary); border-bottom: 1px solid var(--border);">${category}</div>`;
+                            
+                            allLogicTasks[category].forEach(task => {
+                                let isExecuted = logicItems.includes(task.id);
+                                let statusText = isExecuted ? `<span style="color: var(--success); font-weight: 600;">Executed ✅</span>` : `<span style="color: var(--text-secondary); font-weight: 500;">Dilewati ➖</span>`;
+                                
+                                html += `
+                                    <div style="display: flex; justify-content: space-between; padding: 10px 15px; border-bottom: 1px solid var(--border); font-size: 13px;">
+                                        <span style="color: ${isExecuted ? 'var(--text-primary)' : 'var(--text-secondary)'}; font-weight: ${isExecuted ? '600' : '400'};">${task.label}</span>
+                                        <span style="text-align: right;">${statusText}</span>
+                                    </div>
+                                `;
+                            });
+                            html += `</div>`;
+                        }
                         html += `</div>`;
                     }
                 }
