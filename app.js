@@ -537,37 +537,45 @@ function renderKorlapFlow() {
         // Parse evidence dari ACTION history
         let actionText = ticket.actionHistory || '';
         
-        // Pisahkan evidence FISIK dan LOGIC dari action history
-        let evidenceFisik = '-';
-        let evidenceLogic = '-';
-        let evidenceLinks = [];
-        
-        // Cari evidence fisik (EVIDENCE FISIK SUBMITTED)
-        let fisikMatch = actionText.match(/(?:EVIDENCE FISIK|GCU FISIK)[\s\S]*?(?=\n\n\[|$)/i);
-        if (fisikMatch) evidenceFisik = fisikMatch[0].trim();
-        
-        // Cari evidence logic (WAITING APPROVAL KORLAP atau Eksekusi Logic)
-        let logicMatch = actionText.match(/(?:WAITING APPROVAL KORLAP|Eksekusi Logic)[\s\S]*?(?=\n\n\[|$)/i);
-        if (logicMatch) evidenceLogic = logicMatch[0].trim();
-        
-        // Fallback: Jika gagal di-parse, tampilkan seluruh history agar tidak kosong
-        if (evidenceFisik === '-' && evidenceLogic === '-') {
-            evidenceFisik = actionText ? "[Seluruh History ACTION]\n" + actionText : "-";
-            evidenceLogic = actionText ? "[Seluruh History ACTION]\n" + actionText : "-";
+        // Pisahkan history block berdasarkan separator baru atau lama
+        let blocks = actionText.split(/\n\n(?:=== SEBELUMNYA ===\n)/);
+        if (blocks.length === 1 && !actionText.includes("===")) {
+            blocks = actionText.split(/\n\n(?=\[)/); // Fallback format lama
         }
         
-        // Cari URL foto evidence
-        let urlMatches = actionText.match(/https:\/\/drive\.google\.com[^\s\]]+/gi);
-        if (urlMatches) evidenceLinks = urlMatches;
-
-        // Format evidence untuk ditampilkan
-        function formatEvidence(text) {
-            if (!text || text === '-') return '<span style="color: var(--text-secondary); font-style: italic;">Belum ada data</span>';
+        // Format string helper
+        function formatEvidenceBlock(text) {
             return text.replace(/\n/g, '<br>').replace(/(https:\/\/[^\s\]]+)/g, '<a href="$1" target="_blank" style="color: var(--primary); font-weight: bold; text-decoration: underline; word-break: break-all;">📎 Buka Evidence Foto</a>');
         }
 
-        window.tempEvidenceFisik = formatEvidence(evidenceFisik);
-        window.tempEvidenceLogic = formatEvidence(evidenceLogic);
+        let arrFisik = [];
+        let arrLogic = [];
+        
+        blocks.forEach(block => {
+            let b = block.trim();
+            if (!b) return;
+            
+            let isLogic = b.match(/WAITING APPROVAL KORLAP|LOGIC|HELPDESK/i);
+            let isFisik = b.match(/EVIDENCE FISIK|GCU FISIK|TEKNISI|ASSIGNED/i);
+            
+            let htmlBlock = `<div style="margin-bottom: 15px; padding-bottom: 15px; border-bottom: 1px dashed #ccc;">${formatEvidenceBlock(b)}</div>`;
+            
+            if (isLogic && !isFisik) {
+                arrLogic.push(htmlBlock);
+            } else if (isFisik && !isLogic) {
+                arrFisik.push(htmlBlock);
+            } else {
+                // Masukkan ke keduanya jika mengandung dua keyword atau tidak satupun
+                arrFisik.push(htmlBlock);
+                arrLogic.push(htmlBlock);
+            }
+        });
+        
+        let evidenceFisik = arrFisik.length > 0 ? arrFisik.join('') : '<span style="color: var(--text-secondary); font-style: italic;">Belum ada data history GCU Fisik</span>';
+        let evidenceLogic = arrLogic.length > 0 ? arrLogic.join('') : '<span style="color: var(--text-secondary); font-style: italic;">Belum ada data history GCU Logic</span>';
+
+        window.tempEvidenceFisik = evidenceFisik;
+        window.tempEvidenceLogic = evidenceLogic;
 
         window.showEvidenceModal = function(type) {
             let title = type === 'fisik' ? '🛠️ Pekerjaan GCU FISIK (Teknisi)' : '💻 Pekerjaan GCU LOGIC (Helpdesk)';
