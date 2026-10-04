@@ -847,17 +847,25 @@ function _writeEvidenceToSheet(sheetName, ticketId, summary) {
      data[0][actionCol] = "ACTION";
   }
   
+  // Buat timestamp
+  var d = new Date();
+  var ts = ("0" + d.getDate()).slice(-2) + "/" + ("0" + (d.getMonth() + 1)).slice(-2) + " " + ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2);
+  var tsString = "[" + ts + "] ";
+  
+  // Hindari double timestamp jika dipanggil berkali-kali
+  var summaryWithTime = summary.indexOf(tsString) === 0 ? summary : (tsString + summary);
+
   var found = false;
   for(var r = 1; r < data.length; r++) {
      for (var c = 0; c < data[r].length; c++) {
          if (data[r][c] && data[r][c].toString().trim() === ticketId) {
              if (actionCol !== -1) {
                  var oldAction = sheet.getRange(r + 1, actionCol + 1).getValue();
-                 var newAction = oldAction ? oldAction + "\n\n" + summary : summary;
+                 var newAction = oldAction ? summaryWithTime + "\n\n=== SEBELUMNYA ===\n" + oldAction : summaryWithTime;
                  sheet.getRange(r + 1, actionCol + 1).setValue(newAction);
              } else if (summaryCol !== -1) {
                  var oldSum = sheet.getRange(r + 1, summaryCol + 1).getValue();
-                 sheet.getRange(r + 1, summaryCol + 1).setValue(oldSum + "\n\n" + summary);
+                 sheet.getRange(r + 1, summaryCol + 1).setValue(summaryWithTime + "\n\n=== SEBELUMNYA ===\n" + oldSum);
              }
              found = true;
              break;
@@ -878,7 +886,7 @@ function _writeEvidenceToSheet(sheetName, ticketId, summary) {
       if (incCol !== -1 && actionCol !== -1) {
           var newRow = new Array(data[0].length).fill("");
           newRow[incCol] = ticketId;
-          newRow[actionCol] = summary;
+          newRow[actionCol] = summaryWithTime;
           sheet.appendRow(newRow);
           found = true;
       }

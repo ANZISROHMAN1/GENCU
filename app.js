@@ -271,8 +271,11 @@ function processData(rows) {
             // Dapatkan block aksi TERAKHIR untuk penentuan state yang akurat
             let latestAction = "";
             if (actionHistory) {
-                let blocks = actionHistory.split(/\n\n/);
-                latestAction = blocks[blocks.length - 1].toUpperCase();
+                // Semua input (dari Web maupun Telegram) sekarang menaruh aksi terbaru di PALING ATAS (prepend)
+                // Pisahkan berdasarkan divider === SEBELUMNYA === atau double newline fallback
+                let blocks = actionHistory.split(/=== SEBELUMNYA ===/);
+                // Aksi terbaru adalah elemen pertama (index 0)
+                latestAction = blocks[0].toUpperCase();
             }
 
             // Evaluasi berdasarkan aksi TERAKHIR (mencegah history lama menimpa history baru)
