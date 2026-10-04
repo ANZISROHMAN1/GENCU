@@ -814,42 +814,56 @@ function renderKorlapFlow() {
         let evidenceLogic = arrLogic.length > 0 ? arrLogic.join('') : '<span style="color: var(--text-secondary); font-style: italic;">Belum ada data history GCU Logic</span>';
 
         // Ekstrak URL Google Drive yang mungkin terselip di dalam teks (khususnya dari Helpdesk / Web)
-        let driveRegex = /https:\/\/drive\.google\.com\/file\/d\/[a-zA-Z0-9_-]+/g;
-        let driveLinksText = actionText.match(driveRegex) || [];
-        
-        let allPhotos = { ...ticket.photos };
-        driveLinksText.forEach((url, i) => {
-            allPhotos["FOTO LAMPIRAN " + (i+1)] = url;
-        });
+        let driveRegex = /https:\/\/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/g;
+        let logicPhotos = [];
+        let match;
+        while ((match = driveRegex.exec(actionText)) !== null) {
+            logicPhotos.push(match[0]);
+        }
 
-        // Gabungkan kumpulan foto ke dalam pop-up GCU Fisik (dan Logic jika ada)
-        if (allPhotos && Object.keys(allPhotos).length > 0) {
-            let photoHtml = `<div style="margin-top: 20px; padding-top: 15px; border-top: 2px solid var(--border);">
-                <h4 style="margin-bottom: 15px; color: var(--text-primary); font-size: 14px;">📸 Lampiran Foto / Evidence:</h4>
+        // Render Foto untuk GCU FISIK (Dari kolom FOTO JALUR, FOTO ONT, dll di Database)
+        if (ticket.photos && Object.keys(ticket.photos).length > 0) {
+            let photoHtmlFisik = `<div style="margin-top: 20px; padding-top: 15px; border-top: 2px solid var(--border);">
+                <h4 style="margin-bottom: 15px; color: var(--text-primary); font-size: 14px;">📸 Lampiran Foto (GCU FISIK):</h4>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">`;
             
-            for (let pName in allPhotos) {
-                let url = allPhotos[pName];
+            for (let pName in ticket.photos) {
+                let url = ticket.photos[pName];
                 let imgSrc = url;
-                
-                // Konversi URL Google Drive Viewer menjadi URL Thumbnail (uc?id=...)
                 let matchId = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-                if (matchId && matchId[1]) {
-                    imgSrc = `https://drive.google.com/uc?id=${matchId[1]}`;
-                }
+                if (matchId && matchId[1]) imgSrc = `https://drive.google.com/uc?id=${matchId[1]}`;
 
-                photoHtml += `
+                photoHtmlFisik += `
                     <a href="${url}" target="_blank" style="display: flex; flex-direction: column; align-items: center; justify-content: center; background: #f8fafc; padding: 8px; border-radius: 8px; text-decoration: none; border: 1px solid #e2e8f0; transition: transform 0.2s ease;">
                         <img src="${imgSrc}" alt="Evidence" style="width: 100%; height: 120px; object-fit: cover; border-radius: 6px; margin-bottom: 8px; border: 1px solid #cbd5e1; background: #e2e8f0;">
                         <span style="font-size: 11px; font-weight: 600; color: #334155; text-align: center;">${pName.replace('FOTO ', '')}</span>
                     </a>
                 `;
             }
-            photoHtml += `</div></div>`;
+            photoHtmlFisik += `</div></div>`;
+            evidenceFisik += photoHtmlFisik;
+        }
+
+        // Render Foto untuk GCU LOGIC (Dari ekstraksi link Google Drive di catatan aksi)
+        if (logicPhotos.length > 0) {
+            let photoHtmlLogic = `<div style="margin-top: 20px; padding-top: 15px; border-top: 2px solid var(--border);">
+                <h4 style="margin-bottom: 15px; color: var(--text-primary); font-size: 14px;">📸 Lampiran Foto (GCU LOGIC):</h4>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">`;
             
-            // Tampilkan foto di kedua section (Fisik & Logic) agar Korlap pasti melihatnya
-            evidenceFisik += photoHtml;
-            evidenceLogic += photoHtml;
+            logicPhotos.forEach((url, i) => {
+                let imgSrc = url;
+                let matchId = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+                if (matchId && matchId[1]) imgSrc = `https://drive.google.com/uc?id=${matchId[1]}`;
+                
+                photoHtmlLogic += `
+                    <a href="${url}" target="_blank" style="display: flex; flex-direction: column; align-items: center; justify-content: center; background: #f8fafc; padding: 8px; border-radius: 8px; text-decoration: none; border: 1px solid #e2e8f0; transition: transform 0.2s ease;">
+                        <img src="${imgSrc}" alt="Evidence" style="width: 100%; height: 120px; object-fit: cover; border-radius: 6px; margin-bottom: 8px; border: 1px solid #cbd5e1; background: #e2e8f0;">
+                        <span style="font-size: 11px; font-weight: 600; color: #334155; text-align: center;">FOTO LOGIC ${i+1}</span>
+                    </a>
+                `;
+            });
+            photoHtmlLogic += `</div></div>`;
+            evidenceLogic += photoHtmlLogic;
         }
 
         window.tempEvidenceFisik = evidenceFisik;
