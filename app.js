@@ -813,15 +813,23 @@ function renderKorlapFlow() {
         let evidenceFisik = arrFisik.length > 0 ? arrFisik.join('') : '<span style="color: var(--text-secondary); font-style: italic;">Belum ada data history GCU Fisik</span>';
         let evidenceLogic = arrLogic.length > 0 ? arrLogic.join('') : '<span style="color: var(--text-secondary); font-style: italic;">Belum ada data history GCU Logic</span>';
 
-        // Gabungkan kumpulan foto ke dalam pop-up GCU Fisik
-        if (ticket.photos && Object.keys(ticket.photos).length > 0) {
+        // Ekstrak URL Google Drive yang mungkin terselip di dalam teks (khususnya dari Helpdesk / Web)
+        let driveRegex = /https:\/\/drive\.google\.com\/file\/d\/[a-zA-Z0-9_-]+/g;
+        let driveLinksText = actionText.match(driveRegex) || [];
+        
+        let allPhotos = { ...ticket.photos };
+        driveLinksText.forEach((url, i) => {
+            allPhotos["FOTO LAMPIRAN " + (i+1)] = url;
+        });
+
+        // Gabungkan kumpulan foto ke dalam pop-up GCU Fisik (dan Logic jika ada)
+        if (allPhotos && Object.keys(allPhotos).length > 0) {
             let photoHtml = `<div style="margin-top: 20px; padding-top: 15px; border-top: 2px solid var(--border);">
-                <h4 style="margin-bottom: 15px; color: var(--text-primary); font-size: 14px;">📸 Lampiran Foto Terbaru:</h4>
+                <h4 style="margin-bottom: 15px; color: var(--text-primary); font-size: 14px;">📸 Lampiran Foto / Evidence:</h4>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">`;
             
-            for (let pName in ticket.photos) {
-                let url = ticket.photos[pName];
-                // Buat tombol untuk foto
+            for (let pName in allPhotos) {
+                let url = allPhotos[pName];
                 photoHtml += `
                     <a href="${url}" target="_blank" style="display: flex; align-items: center; justify-content: center; background: #e0f2fe; color: #0284c7; padding: 10px; border-radius: 6px; text-decoration: none; font-size: 12px; font-weight: 600; border: 1px solid #bae6fd;">
                         <ion-icon name="image-outline" style="margin-right: 6px; font-size: 16px;"></ion-icon> ${pName.replace('FOTO ', '')}
@@ -829,7 +837,10 @@ function renderKorlapFlow() {
                 `;
             }
             photoHtml += `</div></div>`;
+            
+            // Tampilkan foto di kedua section (Fisik & Logic) agar Korlap pasti melihatnya
             evidenceFisik += photoHtml;
+            evidenceLogic += photoHtml;
         }
 
         window.tempEvidenceFisik = evidenceFisik;
