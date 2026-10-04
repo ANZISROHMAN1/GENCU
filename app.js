@@ -559,21 +559,84 @@ function renderKorlapFlow() {
             blocks = actionText.split(/\n\n(?=\[)/); // Fallback format lama
         }
         
+        function renderFisikFormGroups(props) {
+            if (Object.keys(props).length === 0) return '';
+            
+            let html = '<div style="margin-bottom: 15px;">';
+            
+            let groups = [
+                {
+                    title: "🛠️ Laporan Kerusakan",
+                    keys: ["Penyebab", "Perbaikan", "Segmen", "Material"]
+                },
+                {
+                    title: "🔍 Validasi GCU",
+                    keys: ["GCU Jalur", "GCU ONT", "GCU DC (1)", "Layanan IPTV", "Voice", "Perangkat Tambahan"]
+                },
+                {
+                    title: "🚀 Pengetesan Akhir",
+                    keys: ["SCC/TSC", "Keterangan"]
+                }
+            ];
+            
+            let unmappedKeys = Object.keys(props);
+            
+            groups.forEach(g => {
+                let itemsHtml = '';
+                g.keys.forEach(k => {
+                    if (props[k]) {
+                        itemsHtml += `
+                            <div style="display: flex; justify-content: space-between; padding: 10px 15px; border-bottom: 1px solid var(--border); font-size: 13px;">
+                                <span style="color: var(--text-secondary); font-weight: 500;">${k}</span>
+                                <span style="color: var(--text-primary); font-weight: 600; text-align: right; max-width: 60%;">${props[k]}</span>
+                            </div>
+                        `;
+                        // Remove from unmapped
+                        let idx = unmappedKeys.indexOf(k);
+                        if (idx > -1) unmappedKeys.splice(idx, 1);
+                    }
+                });
+                
+                if (itemsHtml) {
+                    html += `<div style="background: white; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 10px;">`;
+                    html += `<div style="background: #f8fafc; padding: 10px 15px; font-size: 12px; font-weight: bold; color: var(--text-secondary); border-bottom: 1px solid var(--border);">${g.title}</div>`;
+                    html += itemsHtml;
+                    html += `</div>`;
+                }
+            });
+            
+            if (unmappedKeys.length > 0) {
+                html += `<div style="background: white; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 10px;">`;
+                html += `<div style="background: #f8fafc; padding: 10px 15px; font-size: 12px; font-weight: bold; color: var(--text-secondary); border-bottom: 1px solid var(--border);">📝 Data Lainnya</div>`;
+                unmappedKeys.forEach(k => {
+                    html += `
+                        <div style="display: flex; justify-content: space-between; padding: 10px 15px; border-bottom: 1px solid var(--border); font-size: 13px;">
+                            <span style="color: var(--text-secondary); font-weight: 500;">${k}</span>
+                            <span style="color: var(--text-primary); font-weight: 600; text-align: right; max-width: 60%;">${props[k]}</span>
+                        </div>
+                    `;
+                });
+                html += `</div>`;
+            }
+            
+            html += '</div>';
+            return html;
+        }
+
         // Format string helper to simulate form view
         function formatEvidenceBlock(text) {
             let lines = text.split('\n');
             let html = '';
-            let inList = false;
+            
+            let fisikProps = {};
+            let isParsingFisik = false;
 
             lines.forEach(line => {
                 let trimmed = line.trim();
                 
-                // Parse key-value pairs (GCU FISIK style)
+                // Collect key-value pairs (GCU FISIK style)
                 if (trimmed.startsWith('- ')) {
-                    if (!inList) {
-                        html += `<div style="background: white; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-top: 10px; margin-bottom: 10px;">`;
-                        inList = true;
-                    }
+                    isParsingFisik = true;
                     let parts = trimmed.substring(2).split(':');
                     let key = parts[0].trim();
                     let val = parts.slice(1).join(':').trim();
@@ -583,36 +646,36 @@ function renderKorlapFlow() {
                     } else if (val === 'Tidak Aman' || val === 'Gagal' || val === 'Tidak Normal') {
                         val = `<span style="color: var(--danger); font-weight: 600;">${val} ❌</span>`;
                     }
-                    
-                    html += `
-                        <div style="display: flex; justify-content: space-between; padding: 10px 15px; border-bottom: 1px solid var(--border); font-size: 13px;">
-                            <span style="color: var(--text-secondary); font-weight: 500;">${key}</span>
-                            <span style="color: var(--text-primary); font-weight: 600; text-align: right; max-width: 60%;">${val || '-'}</span>
-                        </div>
-                    `;
+                    fisikProps[key] = val;
                 } 
-                // Parse Logic Checklist (GCU LOGIC style)
-                else if (trimmed.includes('Eksekusi Logic:')) {
-                    if (inList) { html += `</div>`; inList = false; }
-                    
-                    let parts = trimmed.split('Eksekusi Logic:');
-                    let prefix = parts[0].trim();
-                    let logicStr = parts[1].trim();
-                    
-                    if (prefix) {
-                        html += `<div style="font-weight: 600; color: var(--text-primary); margin-bottom: 10px;">${prefix}</div>`;
-                    }
-                    
-                    if (logicStr.includes('| Catatan:')) {
-                        let logicParts = logicStr.split('| Catatan:');
-                        logicStr = logicParts[0].trim();
-                        let notes = logicParts[1].trim();
-                        html += `<div style="margin-bottom: 10px; padding: 10px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; font-size: 13px; color: #b45309;"><strong>📝 Catatan Logic:</strong> ${notes}</div>`;
+                else {
+                    // Jika baru selesai nge-parse baris fisik beruntun, render grup form-nya
+                    if (isParsingFisik) {
+                        isParsingFisik = false;
+                        html += renderFisikFormGroups(fisikProps);
+                        fisikProps = {}; // reset
                     }
 
-                    let logicItems = logicStr.split(',').map(item => item.trim()).filter(i => i);
+                    // Parse Logic Checklist (GCU LOGIC style)
+                    if (trimmed.includes('Eksekusi Logic:')) {
+                        let parts = trimmed.split('Eksekusi Logic:');
+                        let prefix = parts[0].trim();
+                        let logicStr = parts[1].trim();
+                        
+                        if (prefix) {
+                            html += `<div style="font-weight: 600; color: var(--text-primary); margin-bottom: 10px;">${prefix}</div>`;
+                        }
+                        
+                        if (logicStr.includes('| Catatan:')) {
+                            let logicParts = logicStr.split('| Catatan:');
+                            logicStr = logicParts[0].trim();
+                            let notes = logicParts[1].trim();
+                            html += `<div style="margin-bottom: 10px; padding: 10px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; font-size: 13px; color: #b45309;"><strong>📝 Catatan Logic:</strong> ${notes}</div>`;
+                        }
 
-                    let allLogicTasks = {
+                        let logicItems = logicStr.split(',').map(item => item.trim()).filter(i => i);
+
+                        let allLogicTasks = {
                         "🌐 Layanan Internet": [
                             { id: "Pindah Channel", label: "Cek Interferensi / Pindah Channel" },
                             { id: "Checklist NAT", label: "Checklist NAT" },
@@ -657,8 +720,6 @@ function renderKorlapFlow() {
                 }
                 // Regular Text
                 else {
-                    if (inList) { html += `</div>`; inList = false; }
-                    
                     // Format URLs
                     let processedLine = trimmed.replace(/(https:\/\/[^\s\\]]+)/g, '<a href="$1" target="_blank" style="color: var(--primary); font-weight: bold; text-decoration: underline; word-break: break-all;">📎 Buka Evidence Foto</a>');
                     
@@ -672,7 +733,10 @@ function renderKorlapFlow() {
                 }
             });
             
-            if (inList) { html += `</div>`; }
+            if (isParsingFisik) {
+                html += renderFisikFormGroups(fisikProps);
+            }
+            
             return html;
         }
 
