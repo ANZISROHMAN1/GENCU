@@ -1157,10 +1157,6 @@ function renderHelpdeskFlow() {
         return;
     }
 
-    if (state.workflowState.evidence !== 'submitted' && ticket.technician !== "-") {
-        workflowContainer.innerHTML = `<p style="color: var(--danger); font-weight: 500;">❌ Teknisi belum mensubmit evidence perbaikan fisik.</p>`;
-        return;
-    }
 
     let contentLogic = `
         <p class="info-text" style="margin-bottom:15px;">Silakan jalankan eksekusi pengecekan Logic sesuai flowchart berikut. Centang langkah yang sudah dilakukan:</p>
