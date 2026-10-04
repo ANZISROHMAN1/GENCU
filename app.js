@@ -881,13 +881,13 @@ function renderKorlapFlow() {
             <div style="background: var(--bg-surface); padding: 18px; border-radius: 10px; border: 1px solid var(--border); margin-bottom: 15px;">
                 <h4 style="font-size: 14px; font-weight: bold; color: var(--text-primary); margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">🛠️ Validasi GCU FISIK (Teknisi)</h4>
                 
-                <button class="btn btn-primary" style="margin-bottom: 15px; width: 100%; background: #3b82f6; border: none; color: white; display: flex; justify-content: center; align-items: center; gap: 8px;" onclick="window.showEvidenceModal('fisik')">
-                    <ion-icon name="search-outline" style="font-size: 18px;"></ion-icon> Cek Detail Pekerjaan GCU Fisik
-                </button>
-                
-                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 15px;">
                     <span style="font-size: 12px; color: var(--text-secondary);">Teknisi: <strong style="color: var(--text-primary);">${ticket.technician}</strong></span>
                     <span style="font-size: 12px; color: var(--text-secondary);">| RX: <strong>${ticket.rx}</strong> | TX: <strong>${ticket.tx}</strong></span>
+                </div>
+
+                <div style="font-size: 13px; line-height: 1.6; color: var(--text-primary); background: rgba(0,0,0,0.02); padding: 15px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 15px; max-height: 400px; overflow-y: auto;">
+                    ${window.tempEvidenceFisik}
                 </div>
 
                 <div class="btn-group" style="display: flex; gap: 10px;">
@@ -900,9 +900,9 @@ function renderKorlapFlow() {
             <div style="background: var(--bg-surface); padding: 18px; border-radius: 10px; border: 1px solid var(--border); margin-bottom: 15px;">
                 <h4 style="font-size: 14px; font-weight: bold; color: var(--text-primary); margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">💻 Validasi GCU LOGIC (Helpdesk)</h4>
                 
-                <button class="btn btn-primary" style="margin-bottom: 15px; width: 100%; background: #8b5cf6; border: none; color: white; display: flex; justify-content: center; align-items: center; gap: 8px;" onclick="window.showEvidenceModal('logic')">
-                    <ion-icon name="search-outline" style="font-size: 18px;"></ion-icon> Cek Detail Pekerjaan GCU Logic
-                </button>
+                <div style="font-size: 13px; line-height: 1.6; color: var(--text-primary); background: rgba(0,0,0,0.02); padding: 15px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 15px; max-height: 400px; overflow-y: auto;">
+                    ${window.tempEvidenceLogic}
+                </div>
 
                 <div class="btn-group" style="display: flex; gap: 10px;">
                     <button class="btn ${state.workflowState.logicAman ? 'btn-success' : 'btn-outline'}" onclick="updateState('logicAman', true)">Sesuai SOP ✅</button>
