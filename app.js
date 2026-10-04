@@ -401,7 +401,9 @@ window.selectTicket = function (ticketId, sto) {
 
 window.applyStatusFilter = function () {
     const filterVal = document.getElementById('statusFilter').value;
+    const searchVal = document.getElementById('searchTicketInput') ? document.getElementById('searchTicketInput').value.trim().toUpperCase() : "";
     state.statusFilter = filterVal;
+    state.searchFilter = searchVal;
     renderTable();
 };
 
@@ -411,8 +413,19 @@ function renderTable() {
     ticketTableBody.innerHTML = '';
 
     let displayTickets = state.filteredTickets;
+    
+    // 1. Terapkan Filter Pencarian (Text)
+    if (state.searchFilter) {
+        displayTickets = displayTickets.filter(ticket => {
+            let inc = (ticket.incident || "").toUpperCase();
+            let sn = (ticket.serviceNumber || "").toUpperCase();
+            return inc.includes(state.searchFilter) || sn.includes(state.searchFilter);
+        });
+    }
+
+    // 2. Terapkan Filter Status
     if (state.statusFilter && state.statusFilter !== 'ALL') {
-        displayTickets = state.filteredTickets.filter(ticket => {
+        displayTickets = displayTickets.filter(ticket => {
             let badgeText = '';
             if (ticket.status === 'LOS' || ticket.status.includes('DYING')) badgeText = ticket.status;
             else if (parseFloat(ticket.rx) < -27) badgeText = 'REDAMAN TINGGI';
@@ -420,14 +433,13 @@ function renderTable() {
 
             if (state.statusFilter === 'REDAMAN TINGGI') return badgeText === 'REDAMAN TINGGI';
             if (state.statusFilter === 'LOS') return badgeText === 'LOS';
-            // if (state.statusFilter === 'DYING GASP') return badgeText.includes('DYING');
             return badgeText === state.statusFilter;
         });
     }
 
     const badgeEl = document.getElementById('filteredCountBadge');
     if (badgeEl) {
-        if (state.statusFilter && state.statusFilter !== 'ALL') {
+        if ((state.statusFilter && state.statusFilter !== 'ALL') || state.searchFilter) {
             badgeEl.style.display = 'inline-block';
             badgeEl.innerText = displayTickets.length;
         } else {
