@@ -457,6 +457,11 @@ function renderTable() {
         else if (parseFloat(ticket.rx) < -27) statusBadge = `<span class="status-dot" style="background: #f59e0b; box-shadow: 0 0 10px #f59e0b;"></span>`;
         else statusBadge = `<span class="status-dot"></span>`;
 
+        let actionText = "Checklist / Assign";
+        if (ticket.category === 'GCU LOGIC') actionText = "Proses Logic";
+        else if (ticket.category === 'APPROVAL KORLAP') actionText = "Validasi Korlap";
+        else if (ticket.category === 'COMPLETED') actionText = "Lihat Detail";
+
         let tr = document.createElement('tr');
         tr.innerHTML = `
             <td style="white-space: nowrap; font-size: 13px; color: var(--text-secondary);">${ticket.statusDate || "-"}</td>
@@ -472,7 +477,7 @@ function renderTable() {
             <td>${ticket.rx || "-"}</td>
             <td style="text-align: center;">${statusBadge}</td>
             <td>
-                <button class="btn-action" onclick="selectTicket('${ticket.incident}', '${ticket.sto}')">Checklist / Assign</button>
+                <button class="btn-action" onclick="selectTicket('${ticket.incident}', '${ticket.sto}')">${actionText}</button>
             </td>
         `;
         ticketTableBody.appendChild(tr);
