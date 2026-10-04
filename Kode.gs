@@ -601,6 +601,14 @@ function doGet(e) {
   
   // Cari kolom tambahan yang perlu di-join dari DB ke Scrape
   var columnsToJoin = ["RX POWER", "TX POWER", "OLT", "STATUS ALARM", "ACTION"];
+  
+  // Ambil semua kolom yang mengandung kata "FOTO" untuk ikut di-join
+  dbHeaders.forEach(function(h) {
+      if (h.startsWith("FOTO ") && columnsToJoin.indexOf(h) === -1) {
+          columnsToJoin.push(h);
+      }
+  });
+
   var joinIndicesDB = {};
   columnsToJoin.forEach(function(col) {
       var idx = dbHeaders.indexOf(col);
@@ -719,6 +727,15 @@ function submitFisikBase64(payload) {
             var val = colMap[colName];
             if (val === "") continue;
             var cIdx = headers.indexOf(colName);
+            
+            // Jika kolom belum ada di sheet, tambahkan secara dinamis
+            if (cIdx === -1) {
+                var lastCol = sheet.getLastColumn();
+                sheet.getRange(1, lastCol + 1).setValue(colName);
+                headers.push(colName);
+                cIdx = headers.length - 1;
+            }
+            
             if (cIdx !== -1) {
                 var cell = sheet.getRange(rowToUpdate, cIdx + 1);
                 var oldVal = cell.getValue().toString();
@@ -1739,7 +1756,7 @@ function checkAndCreateHeaders(sheetScrape, sheetDB) {
 function forceCreateHeaders() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheetScrape = ss.getSheetByName("SCRAPING INSERA");
-  var sheetDB = ss.getSheetByName("DATABASE");
+  var sheetDB = ss.getSheetByName("DATABASE ALL TICKET") || ss.getSheetByName("DATABASE");
   
   // Hapus baris pertama agar checkAndCreateHeaders benar-benar memaksa membuat ulang header baru
   if (sheetScrape) sheetScrape.getRange("1:1").clearContent();
