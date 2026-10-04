@@ -666,11 +666,30 @@ function renderKorlapFlow() {
                             html += `<div style="font-weight: 600; color: var(--text-primary); margin-bottom: 10px;">${prefix}</div>`;
                         }
                         
+                        let logicPhoto = null;
+                        if (logicStr.includes('| Foto:')) {
+                            let photoParts = logicStr.split('| Foto:');
+                            logicStr = photoParts[0].trim();
+                            logicPhoto = photoParts[1].trim();
+                        }
+                        
+                        let logicNotes = null;
                         if (logicStr.includes('| Catatan:')) {
                             let logicParts = logicStr.split('| Catatan:');
                             logicStr = logicParts[0].trim();
-                            let notes = logicParts[1].trim();
-                            html += `<div style="margin-bottom: 10px; padding: 10px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; font-size: 13px; color: #b45309;"><strong>📝 Catatan Logic:</strong> ${notes}</div>`;
+                            logicNotes = logicParts[1].trim();
+                        }
+                        
+                        if (logicNotes || logicPhoto) {
+                            html += `<div style="margin-bottom: 10px; padding: 12px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; font-size: 13px; color: #b45309;">`;
+                            if (logicNotes) {
+                                html += `<div style="margin-bottom: ${logicPhoto ? '8px' : '0'};"><strong>📝 Catatan Logic:</strong> ${logicNotes}</div>`;
+                            }
+                            if (logicPhoto) {
+                                let photoLink = logicPhoto.replace(/(https:\/\/[^\s\\]]+)/g, '<a href="$1" target="_blank" style="color: #0284c7; font-weight: bold; text-decoration: underline; word-break: break-all;">📎 Buka Evidence Foto Logic</a>');
+                                html += `<div><strong>📸 Evidence:</strong> ${photoLink}</div>`;
+                            }
+                            html += `</div>`;
                         }
 
                         let logicItems = logicStr.split(',').map(item => item.trim()).filter(i => i);
