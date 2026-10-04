@@ -1700,3 +1700,48 @@ async function compressImageBase64(file) {
     });
 }
 
+// --- GLOBAL PASTE & DRAG HANDLER UNTUK DASHBOARD ---
+document.addEventListener('paste', function(e) {
+    if (e.clipboardData && e.clipboardData.files && e.clipboardData.files.length > 0) {
+        e.preventDefault();
+        handleDashboardDroppedFile(e.clipboardData.files[0]);
+    }
+});
+
+document.addEventListener('dragover', function(e) { e.preventDefault(); });
+document.addEventListener('drop', function(e) {
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        e.preventDefault(); 
+        handleDashboardDroppedFile(e.dataTransfer.files[0]);
+    }
+});
+
+function handleDashboardDroppedFile(file) {
+    if (!file.type.match('image.*')) return;
+    
+    // Cari semua input file yang sedang tampil di layar
+    let fileInputs = document.querySelectorAll('input[type="file"]');
+    let targetInput = null;
+    for (let i=0; i<fileInputs.length; i++) {
+        // Pastikan input file berada dalam elemen yang sedang terlihat
+        if (fileInputs[i].offsetParent !== null && (!fileInputs[i].files || fileInputs[i].files.length === 0)) {
+            targetInput = fileInputs[i];
+            break;
+        }
+    }
+    
+    if (targetInput) {
+        let dt = new DataTransfer();
+        dt.items.add(file);
+        targetInput.files = dt.files;
+        
+        // Beri notifikasi kecil ke layar
+        let toast = document.createElement('div');
+        toast.innerText = '✅ Foto berhasil di-paste!';
+        toast.style.cssText = 'position:fixed; bottom:20px; right:20px; background:#10b981; color:white; padding:10px 20px; border-radius:8px; z-index:9999; box-shadow:0 4px 6px rgba(0,0,0,0.1); font-weight:600;';
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
+    }
+}
+
+
