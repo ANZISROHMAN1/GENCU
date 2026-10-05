@@ -895,7 +895,7 @@ function _writeEvidenceToSheet(sheetName, ticketId, summary) {
   if (!sheet) return false;
   
   var data = sheet.getDataRange().getValues();
-  if (data.length < 2) return false;
+  if (data.length === 0) return false;
   
   var actionCol = -1;
   var summaryCol = -1;
@@ -1100,7 +1100,13 @@ function doPost(e) {
   if (dataObj.action === 'pickup_ticket') {
       try {
           var pickupText = "[PICKED UP BY] " + dataObj.userName;
-          var successMsgPickup = submitEvidenceDariWeb(dataObj.ticketId, pickupText, "");
+          var successMsgPickup = "OK";
+          try {
+              successMsgPickup = submitEvidenceDariWeb(dataObj.ticketId, pickupText, "");
+          } catch (e) {
+              // Abaikan error database agar tidak menghalangi pengiriman Telegram
+              successMsgPickup = "Pickup sukses (Database error: " + e + ")";
+          }
           
           var teknisiNIK = dataObj.teknisiNIK || "-";
           
