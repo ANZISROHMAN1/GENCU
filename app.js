@@ -2067,7 +2067,8 @@ window.pickUpTicket = function(ticketId) {
     let payload = {
         action: 'pickup_ticket',
         ticketId: ticketId,
-        userName: state.userName
+        userName: state.userName + " (" + state.userNik + ")",
+        teknisiNIK: ticket ? ticket.technician : "-"
     };
     
     fetch(SCRIPT_URL, {

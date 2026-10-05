@@ -1101,6 +1101,41 @@ function doPost(e) {
       try {
           var pickupText = "[PICKED UP BY] " + dataObj.userName;
           var successMsgPickup = submitEvidenceDariWeb(dataObj.ticketId, pickupText, "");
+          
+          // Kirim notifikasi Telegram ke Teknisi jika tiket pernah dikerjakan teknisi
+          var teknisiNIK = dataObj.teknisiNIK || "-";
+          if (teknisiNIK !== "-") {
+              var botTokenTg = "8050598199:AAHpPcFNUaLmox5Y6J2Ea0IvDkkPawLsZd8"; 
+              var sheetTeknisi = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("TEKNISI");
+              var chatIdTg = "";
+              if (sheetTeknisi) {
+                  var tekData = sheetTeknisi.getDataRange().getValues();
+                  for (var i = 1; i < tekData.length; i++) {
+                      if (tekData[i][0].toString().trim() === teknisiNIK.toString().trim()) {
+                          chatIdTg = tekData[i][2] ? tekData[i][2].toString().trim() : "";
+                          break;
+                      }
+                  }
+              }
+              if (chatIdTg) {
+                  var message = "🔔 *Info Pickup Tiket*\n\nTiket *" + dataObj.ticketId + "* yang Anda kerjakan sebelumnya telah di-pickup oleh Helpdesk: *" + dataObj.userName + "*.";
+                  var options = {
+                      "method": "post",
+                      "contentType": "application/json",
+                      "payload": JSON.stringify({
+                          "chat_id": chatIdTg,
+                          "text": message,
+                          "parse_mode": "Markdown"
+                      })
+                  };
+                  try {
+                      UrlFetchApp.fetch("https://api.telegram.org/bot" + botTokenTg + "/sendMessage", options);
+                  } catch (e) {
+                      // ignore if telegram fails
+                  }
+              }
+          }
+          
           return ContentService.createTextOutput(successMsgPickup).setMimeType(ContentService.MimeType.TEXT);
       } catch (err) {
           return ContentService.createTextOutput("Error: " + err).setMimeType(ContentService.MimeType.TEXT);
