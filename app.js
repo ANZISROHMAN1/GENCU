@@ -453,6 +453,23 @@ window.showDashboard = function (filterStatus) {
     if (sfEl) sfEl.value = 'ALL';
 
     state.filteredTickets = state.tickets.filter(t => t.category === filterStatus);
+    
+    // Update STO filter options
+    const stoEl = document.getElementById('stoFilter');
+    if (stoEl) {
+        let uniqueSTOs = [...new Set(state.filteredTickets.map(t => t.sto).filter(s => s && s !== "-"))];
+        uniqueSTOs.sort();
+        stoEl.innerHTML = '<option value="ALL">Semua STO</option>';
+        uniqueSTOs.forEach(sto => {
+            let opt = document.createElement('option');
+            opt.value = sto;
+            opt.innerText = sto;
+            stoEl.appendChild(opt);
+        });
+        state.stoFilter = 'ALL';
+        stoEl.value = 'ALL';
+    }
+
     renderTable();
 };
 
@@ -501,8 +518,10 @@ window.selectTicket = function (ticketId, sto) {
 window.applyStatusFilter = function () {
     const filterVal = document.getElementById('statusFilter').value;
     const searchVal = document.getElementById('searchTicketInput') ? document.getElementById('searchTicketInput').value.trim().toUpperCase() : "";
+    const stoVal = document.getElementById('stoFilter') ? document.getElementById('stoFilter').value : "ALL";
     state.statusFilter = filterVal;
     state.searchFilter = searchVal;
+    state.stoFilter = stoVal;
     renderTable();
 };
 
@@ -522,7 +541,12 @@ function renderTable() {
         });
     }
 
-    // 2. Terapkan Filter Status
+    // 2. Terapkan Filter STO
+    if (state.stoFilter && state.stoFilter !== 'ALL') {
+        displayTickets = displayTickets.filter(ticket => ticket.sto === state.stoFilter);
+    }
+
+    // 3. Terapkan Filter Status
     if (state.statusFilter && state.statusFilter !== 'ALL') {
         displayTickets = displayTickets.filter(ticket => {
             let badgeText = '';
