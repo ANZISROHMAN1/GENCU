@@ -67,6 +67,8 @@ function handleLogin() {
         isPasswordValid = true;
     } else if (role === 'korlap' && password === 'korlap123') {
         isPasswordValid = true;
+    } else if (role === 'tif' && password === 'tifadmin123') {
+        isPasswordValid = true;
     }
     
     if (nik && isPasswordValid) {
@@ -79,7 +81,7 @@ function handleLogin() {
         document.getElementById('loginOverlay').style.display = 'none';
         initAfterLogin();
     } else {
-        alert("Password salah atau NIK kosong! Default Password:\nHelp Desk = helpdesk123\nKorlap = korlap123");
+        alert("Password salah atau NIK kosong! Default Password:\nHelp Desk = helpdesk123\nKorlap = korlap123\nTIF = tifadmin123");
     }
 }
 
@@ -93,7 +95,10 @@ function applyUserRole() {
     const userInfoBlock = document.getElementById('userInfoBlock');
     if (userInfoBlock && state.userRole) {
         userInfoBlock.style.display = 'block';
-        document.getElementById('displayRole').innerText = state.userRole === 'korlap' ? 'Korlap' : 'Help Desk';
+        let displayRoleStr = 'Help Desk';
+        if (state.userRole === 'korlap') displayRoleStr = 'Korlap';
+        else if (state.userRole === 'tif') displayRoleStr = 'TIF (Master)';
+        document.getElementById('displayRole').innerText = displayRoleStr;
         document.getElementById('displayNama').innerText = state.userName || state.userNik;
     }
     
