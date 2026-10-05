@@ -8,7 +8,12 @@ const state = {
     activeTicketId: null,
     activeSto: null,
     role: 'korlap', // korlap, teknisi, helpdesk
-    workflowState: {}
+    workflowState: {},
+    // User Identity
+    userRole: null,
+    userNik: null,
+    userName: null,
+    userTelegram: null
 };
 
 // Theme Management
@@ -51,7 +56,76 @@ const dispActiveTicketId = document.getElementById('activeTicketId');
 const dashboardTitle = document.getElementById('dashboardTitle');
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx1UEN5rD39Hw5W4xNYTJaBZCafdP-bmlJgNHqFkfpWPF7_wYotc3-MFqyeAkdCjuLI/exec';
 
+function handleLogin() {
+    const role = document.getElementById('loginRole').value;
+    const nik = document.getElementById('loginNik').value;
+    const nama = document.getElementById('loginNama').value;
+    const telegram = document.getElementById('loginTelegram').value;
+    
+    if (nik && nama && telegram) {
+        localStorage.setItem('userRole', role);
+        localStorage.setItem('userNik', nik);
+        localStorage.setItem('userName', nama);
+        localStorage.setItem('userTelegram', telegram);
+        
+        applyUserRole();
+        document.getElementById('loginOverlay').style.display = 'none';
+        initAfterLogin();
+    }
+}
+
+function applyUserRole() {
+    state.userRole = localStorage.getItem('userRole');
+    state.userNik = localStorage.getItem('userNik');
+    state.userName = localStorage.getItem('userName');
+    state.userTelegram = localStorage.getItem('userTelegram');
+    
+    // Tampilkan informasi login di sidebar
+    const userInfoBlock = document.getElementById('userInfoBlock');
+    if (userInfoBlock && state.userRole) {
+        userInfoBlock.style.display = 'block';
+        document.getElementById('displayRole').innerText = state.userRole === 'korlap' ? 'Korlap' : 'Help Desk';
+        document.getElementById('displayNama').innerText = state.userName || state.userNik;
+    }
+    
+    // Helpdesk tidak bisa lihat menu Approval Korlap
+    const menuApprovalKorlap = document.getElementById('menuApprovalKorlap');
+    const cardApprovalKorlap = countApprovalKorlap ? countApprovalKorlap.closest('.card') : null;
+    
+    if (state.userRole === 'helpdesk') {
+        if (menuApprovalKorlap) menuApprovalKorlap.style.display = 'none';
+        if (cardApprovalKorlap) cardApprovalKorlap.style.display = 'none';
+        // Auto-redirect jika sedang di Approval Korlap
+        if (state.activeFilter === 'APPROVAL KORLAP') {
+            state.activeFilter = 'GCU FISIK';
+        }
+    } else {
+        if (menuApprovalKorlap) menuApprovalKorlap.style.display = 'block';
+        if (cardApprovalKorlap) cardApprovalKorlap.style.display = 'flex';
+    }
+}
+
+function handleLogout() {
+    localStorage.removeItem('userRole');
+    localStorage.removeItem('userNik');
+    localStorage.removeItem('userName');
+    localStorage.removeItem('userTelegram');
+    location.reload();
+}
+
 function init() {
+    // Check if user is logged in
+    const savedRole = localStorage.getItem('userRole');
+    if (savedRole) {
+        document.getElementById('loginOverlay').style.display = 'none';
+        applyUserRole();
+        initAfterLogin();
+    } else {
+        document.getElementById('loginOverlay').style.display = 'flex';
+    }
+}
+
+function initAfterLogin() {
     const today = new Date();
     currentDateRange.innerText = `${today.getDate()} ${today.toLocaleString('default', { month: 'long' })} ${today.getFullYear()}`;
     updateThemeBtn(document.body.classList.contains('light-mode'));
