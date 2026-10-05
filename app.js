@@ -56,14 +56,61 @@ const dispActiveTicketId = document.getElementById('activeTicketId');
 const dashboardTitle = document.getElementById('dashboardTitle');
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx1UEN5rD39Hw5W4xNYTJaBZCafdP-bmlJgNHqFkfpWPF7_wYotc3-MFqyeAkdCjuLI/exec';
 
+function showRegister() {
+    document.getElementById('loginCard').style.display = 'none';
+    document.getElementById('registerCard').style.display = 'block';
+}
+
+function showLogin() {
+    document.getElementById('registerCard').style.display = 'none';
+    document.getElementById('loginCard').style.display = 'block';
+}
+
+function handleRegister() {
+    const role = document.getElementById('regRole').value;
+    const nik = document.getElementById('regNik').value;
+    const name = document.getElementById('regName').value;
+    const password = document.getElementById('regPassword').value;
+    
+    if (nik && name && password) {
+        let users = JSON.parse(localStorage.getItem('registeredUsers') || '[]');
+        const exists = users.find(u => u.nik === nik);
+        if (exists) {
+            alert("NIK sudah terdaftar!");
+            return;
+        }
+        
+        users.push({ role, nik, name, password });
+        localStorage.setItem('registeredUsers', JSON.stringify(users));
+        
+        alert("Pendaftaran berhasil! Silakan login.");
+        
+        // Populate login fields
+        document.getElementById('loginRole').value = role;
+        document.getElementById('loginNik').value = nik;
+        
+        showLogin();
+    } else {
+        alert("Harap lengkapi semua data pendaftaran!");
+    }
+}
+
 function handleLogin() {
     const role = document.getElementById('loginRole').value;
     const nik = document.getElementById('loginNik').value;
     const password = document.getElementById('loginPassword').value;
     
-    // Validasi Password sederhana
+    // Check registered users
+    let users = JSON.parse(localStorage.getItem('registeredUsers') || '[]');
+    let user = users.find(u => u.nik === nik && u.password === password && u.role === role);
+    
+    // Fallback validasi sederhana
     let isPasswordValid = false;
-    if (role === 'helpdesk' && password === 'helpdesk123') {
+    let userName = nik;
+    if (user) {
+        isPasswordValid = true;
+        userName = user.name;
+    } else if (role === 'helpdesk' && password === 'helpdesk123') {
         isPasswordValid = true;
     } else if (role === 'korlap' && password === 'korlap123') {
         isPasswordValid = true;
@@ -74,14 +121,13 @@ function handleLogin() {
     if (nik && isPasswordValid) {
         localStorage.setItem('userRole', role);
         localStorage.setItem('userNik', nik);
-        // Nama dan Telegram ID dihapus, gunakan NIK sebagai display nama
-        localStorage.setItem('userName', nik); 
+        localStorage.setItem('userName', userName); 
         
         applyUserRole();
         document.getElementById('loginOverlay').style.display = 'none';
         initAfterLogin();
     } else {
-        alert("Password salah atau NIK kosong! Default Password:\nHelp Desk = helpdesk123\nKorlap = korlap123\nTIF = tifadmin123");
+        alert("Password salah atau NIK belum terdaftar!\nDefault Password:\nHelp Desk = helpdesk123\nKorlap = korlap123\nTIF = tifadmin123");
     }
 }
 
