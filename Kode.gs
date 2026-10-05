@@ -1118,14 +1118,14 @@ function doPost(e) {
                   }
               }
               if (chatIdTg) {
-                  var message = "🔔 *Info Pickup Tiket*\n\nTiket *" + dataObj.ticketId + "* yang Anda kerjakan sebelumnya telah di-pickup oleh Helpdesk: *" + dataObj.userName + "*.";
+                  var message = "🔔 <b>Info Pickup Tiket</b>\n\nTiket <b>" + dataObj.ticketId + "</b> yang Anda kerjakan sebelumnya telah di-pickup oleh Helpdesk: <b>" + dataObj.userName + "</b>.";
                   var options = {
                       "method": "post",
                       "contentType": "application/json",
                       "payload": JSON.stringify({
                           "chat_id": chatIdTg,
                           "text": message,
-                          "parse_mode": "Markdown"
+                          "parse_mode": "HTML"
                       })
                   };
                   try {
