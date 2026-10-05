@@ -192,6 +192,7 @@ function processData(rows) {
 
     let statusAlarmIdx = headers.findIndex(h => h === "STATUS ALARM" || h === "ONU LINK STATUS");
     let workzoneIdx = headers.indexOf("WORKZONE");
+    let witelIdx = headers.indexOf("WITEL");
     let technicianIdx = headers.findIndex(h => h === "TECHNICIAN" || h === "NAMA TEKNISI");
     let actionIdx = headers.indexOf("ACTION");
     let customerNameIdx = headers.indexOf("CUSTOMER NAME");
@@ -211,7 +212,7 @@ function processData(rows) {
         let ticketId = row[incIdx] ? row[incIdx].toString().trim() : "-";
         if (ticketId === "-" || ticketId === "" || ticketId.toUpperCase() === "INCIDENT") continue;
 
-        let rx = "", tx = "", status = "-", sto = "-", sNum = "-", customerName = "-", statusDate = "-";
+        let rx = "", tx = "", status = "-", sto = "-", witel = "-", sNum = "-", customerName = "-", statusDate = "-";
         if (statusDateIdx !== -1 && row[statusDateIdx]) {
             let val = row[statusDateIdx].toString().trim();
             if (val) {
@@ -236,6 +237,11 @@ function processData(rows) {
         if (customerNameIdx !== -1 && row[customerNameIdx]) {
             let val = row[customerNameIdx].toString().trim();
             if (val) customerName = val;
+        }
+
+        if (witelIdx !== -1 && row[witelIdx]) {
+            let val = row[witelIdx].toString().trim();
+            if (val) witel = val;
         }
 
         // 1. Ekstrak STATUS
@@ -399,6 +405,7 @@ function processData(rows) {
                 incident: ticketId,
                 serviceNumber: sNum !== "-" ? sNum : "Unknown",
                 sto: sto,
+                witel: witel,
                 technician: technician,
                 rx: rx || "-",
                 tx: tx || "-",
@@ -454,6 +461,22 @@ window.showDashboard = function (filterStatus) {
 
     state.filteredTickets = state.tickets.filter(t => t.category === filterStatus);
     
+    // Update WITEL filter options
+    const witelEl = document.getElementById('witelFilter');
+    if (witelEl) {
+        let uniqueWITELs = [...new Set(state.filteredTickets.map(t => t.witel).filter(w => w && w !== "-"))];
+        uniqueWITELs.sort();
+        witelEl.innerHTML = '<option value="ALL">Semua Witel</option>';
+        uniqueWITELs.forEach(w => {
+            let opt = document.createElement('option');
+            opt.value = w;
+            opt.innerText = w;
+            witelEl.appendChild(opt);
+        });
+        state.witelFilter = 'ALL';
+        witelEl.value = 'ALL';
+    }
+
     // Update STO filter options
     const stoEl = document.getElementById('stoFilter');
     if (stoEl) {
@@ -518,10 +541,45 @@ window.selectTicket = function (ticketId, sto) {
 window.applyStatusFilter = function () {
     const filterVal = document.getElementById('statusFilter').value;
     const searchVal = document.getElementById('searchTicketInput') ? document.getElementById('searchTicketInput').value.trim().toUpperCase() : "";
+    const witelVal = document.getElementById('witelFilter') ? document.getElementById('witelFilter').value : "ALL";
     const stoVal = document.getElementById('stoFilter') ? document.getElementById('stoFilter').value : "ALL";
+    
     state.statusFilter = filterVal;
     state.searchFilter = searchVal;
+    state.witelFilter = witelVal;
     state.stoFilter = stoVal;
+    
+    // Opsional: Perbarui opsi STO berdasarkan Witel yang dipilih (untuk UX yang lebih baik)
+    const stoEl = document.getElementById('stoFilter');
+    if (stoEl && state.witelFilter !== 'ALL') {
+        let validSTOs = [...new Set(state.filteredTickets.filter(t => t.witel === state.witelFilter).map(t => t.sto).filter(s => s && s !== "-"))];
+        validSTOs.sort();
+        // Hanya update opsinya, jaga value saat ini jika masih valid
+        let currentSto = stoEl.value;
+        stoEl.innerHTML = '<option value="ALL">Semua STO</option>';
+        validSTOs.forEach(sto => {
+            let opt = document.createElement('option');
+            opt.value = sto;
+            opt.innerText = sto;
+            stoEl.appendChild(opt);
+        });
+        if (validSTOs.includes(currentSto)) stoEl.value = currentSto;
+        else { stoEl.value = 'ALL'; state.stoFilter = 'ALL'; }
+    } else if (stoEl && state.witelFilter === 'ALL') {
+        let allSTOs = [...new Set(state.filteredTickets.map(t => t.sto).filter(s => s && s !== "-"))];
+        allSTOs.sort();
+        let currentSto = stoEl.value;
+        stoEl.innerHTML = '<option value="ALL">Semua STO</option>';
+        allSTOs.forEach(sto => {
+            let opt = document.createElement('option');
+            opt.value = sto;
+            opt.innerText = sto;
+            stoEl.appendChild(opt);
+        });
+        if (allSTOs.includes(currentSto)) stoEl.value = currentSto;
+        else { stoEl.value = 'ALL'; state.stoFilter = 'ALL'; }
+    }
+    
     renderTable();
 };
 
@@ -541,12 +599,17 @@ function renderTable() {
         });
     }
 
-    // 2. Terapkan Filter STO
+    // 2. Terapkan Filter Witel
+    if (state.witelFilter && state.witelFilter !== 'ALL') {
+        displayTickets = displayTickets.filter(ticket => ticket.witel === state.witelFilter);
+    }
+
+    // 3. Terapkan Filter STO
     if (state.stoFilter && state.stoFilter !== 'ALL') {
         displayTickets = displayTickets.filter(ticket => ticket.sto === state.stoFilter);
     }
 
-    // 3. Terapkan Filter Status
+    // 4. Terapkan Filter Status
     if (state.statusFilter && state.statusFilter !== 'ALL') {
         displayTickets = displayTickets.filter(ticket => {
             let badgeText = '';
@@ -632,7 +695,12 @@ function renderTable() {
                     <span class="ticket-sub">${ticket.customerName || "-"}</span>
                 </div>
             </td>
-            <td>${ticket.sto}</td>
+            <td>
+                <div class="ticket-info">
+                    <span class="ticket-title">${ticket.sto}</span>
+                    <span class="ticket-sub" style="font-size: 11px;">${ticket.witel !== "-" ? ticket.witel : ""}</span>
+                </div>
+            </td>
             <td style="color: var(--text-secondary);">${ticket.technician !== "-" ? ticket.technician : "-"}</td>
             <td>${ticket.rx || "-"}</td>
             <td style="text-align: center;">${statusBadge}</td>
