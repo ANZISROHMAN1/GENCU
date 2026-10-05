@@ -1096,7 +1096,17 @@ function doPost(e) {
           return ContentService.createTextOutput("Error: " + err).setMimeType(ContentService.MimeType.TEXT);
       }
   }
-  
+  // NEW: Handle pickup_ticket action
+  if (dataObj.action === 'pickup_ticket') {
+      try {
+          var pickupText = "[PICKED UP BY] " + dataObj.userName;
+          var successMsgPickup = submitEvidenceDariWeb(dataObj.ticketId, pickupText, "");
+          return ContentService.createTextOutput(successMsgPickup).setMimeType(ContentService.MimeType.TEXT);
+      } catch (err) {
+          return ContentService.createTextOutput("Error: " + err).setMimeType(ContentService.MimeType.TEXT);
+      }
+  }
+
   var sheetScrape = ss.getSheetByName(sheetScrapeName);
   if (!sheetScrape) {
       sheetScrape = ss.insertSheet(sheetScrapeName);

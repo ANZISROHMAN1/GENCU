@@ -380,6 +380,13 @@ function processData(rows) {
                 category = 'GCU FISIK';
             }
 
+            // Ekstrak Helpdesk Assignee dari Action History
+            let helpdeskAssignee = "-";
+            let pickupMatch = actionHistory.match(/\[PICKED UP BY\]\s*([^\n\r]+)/i);
+            if (pickupMatch && pickupMatch[1]) {
+                helpdeskAssignee = pickupMatch[1].split('===')[0].trim();
+            }
+
             let photos = {};
             for (let pKey in photoColumns) {
                 let pVal = row[photoColumns[pKey]];
@@ -399,6 +406,7 @@ function processData(rows) {
                 category: category,
                 customerName: customerName,
                 actionHistory: actionHistory,
+                helpdeskAssignee: helpdeskAssignee,
                 photos: photos,
                 statusDate: statusDate
             });
@@ -561,9 +569,34 @@ function renderTable() {
         else statusBadge = `<span class="status-dot"></span>`;
 
         let actionText = "Checklist / Assign";
-        if (ticket.category === 'GCU LOGIC') actionText = "Proses Logic";
-        else if (ticket.category === 'APPROVAL KORLAP') actionText = "Validasi Korlap";
-        else if (ticket.category === 'COMPLETED') actionText = "Lihat Detail";
+        let onClickAction = `selectTicket('${ticket.incident}', '${ticket.sto}')`;
+        let btnStyle = "";
+        let btnDisabled = "";
+
+        if (ticket.category === 'GCU LOGIC') {
+            if (ticket.helpdeskAssignee !== "-") {
+                if (state.userRole === 'helpdesk' && ticket.helpdeskAssignee !== state.userName) {
+                    actionText = "Picked: " + ticket.helpdeskAssignee;
+                    btnStyle = "background: #cbd5e1; cursor: not-allowed; color: #475569;";
+                    btnDisabled = "disabled";
+                    onClickAction = "";
+                } else {
+                    actionText = "Proses Logic";
+                }
+            } else {
+                if (state.userRole === 'helpdesk') {
+                    actionText = "Pick Up";
+                    btnStyle = "background: #10b981; color: white;"; // Green for pick up
+                    onClickAction = `pickUpTicket('${ticket.incident}')`;
+                } else {
+                    actionText = "Proses Logic";
+                }
+            }
+        } else if (ticket.category === 'APPROVAL KORLAP') {
+            actionText = "Validasi Korlap";
+        } else if (ticket.category === 'COMPLETED') {
+            actionText = "Lihat Detail";
+        }
 
         let tr = document.createElement('tr');
         tr.innerHTML = `
@@ -580,7 +613,7 @@ function renderTable() {
             <td>${ticket.rx || "-"}</td>
             <td style="text-align: center;">${statusBadge}</td>
             <td>
-                <button class="btn-action" onclick="selectTicket('${ticket.incident}', '${ticket.sto}')">${actionText}</button>
+                <button class="btn-action" style="${btnStyle}" ${btnDisabled} onclick="${onClickAction}">${actionText}</button>
             </td>
         `;
         ticketTableBody.appendChild(tr);
@@ -1878,5 +1911,40 @@ function handleDashboardDroppedFile(file) {
         setTimeout(() => toast.remove(), 3000);
     }
 }
+
+// === PICK UP TICKET FUNCTION ===
+window.pickUpTicket = function(ticketId) {
+    if (!state.userName) {
+        alert("Silakan login kembali.");
+        return;
+    }
+    
+    // Optimistic UI update
+    let ticket = state.tickets.find(t => t.incident === ticketId);
+    if (ticket) {
+        ticket.helpdeskAssignee = state.userName;
+        renderTable();
+    }
+    
+    let payload = {
+        action: 'pickup_ticket',
+        ticketId: ticketId,
+        userName: state.userName
+    };
+    
+    fetch(SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify(payload)
+    }).then(() => {
+        // Tampilkan pesan sukses sebentar
+        let toast = document.createElement('div');
+        toast.innerText = '✅ Tiket berhasil di-pick up!';
+        toast.style.cssText = 'position:fixed; bottom:20px; right:20px; background:#10b981; color:white; padding:10px 20px; border-radius:8px; z-index:9999; box-shadow:0 4px 6px rgba(0,0,0,0.1); font-weight:600;';
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
+    }).catch(console.error);
+};
 
 
