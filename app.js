@@ -695,12 +695,8 @@ function renderTable() {
                     <span class="ticket-sub">${ticket.customerName || "-"}</span>
                 </div>
             </td>
-            <td>
-                <div class="ticket-info">
-                    <span class="ticket-title">${ticket.sto}</span>
-                    <span class="ticket-sub" style="font-size: 11px;">${ticket.witel !== "-" ? ticket.witel : ""}</span>
-                </div>
-            </td>
+            <td>${ticket.sto}</td>
+            <td style="font-size: 13px;">${ticket.witel !== "-" ? ticket.witel : "-"}</td>
             <td style="color: var(--text-secondary);">${ticket.technician !== "-" ? ticket.technician : "-"}</td>
             <td>${ticket.rx || "-"}</td>
             <td style="text-align: center;">${statusBadge}</td>
