@@ -1102,8 +1102,36 @@ function doPost(e) {
           var pickupText = "[PICKED UP BY] " + dataObj.userName;
           var successMsgPickup = submitEvidenceDariWeb(dataObj.ticketId, pickupText, "");
           
-          // Kirim notifikasi Telegram ke Teknisi jika tiket pernah dikerjakan teknisi
           var teknisiNIK = dataObj.teknisiNIK || "-";
+          
+          // Fallback: Cari teknisiNIK dari sheetScrape jika frontend tidak mengirim (misal karena cache)
+          if (teknisiNIK === "-") {
+              var sheetScrapeFallback = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("SCRAPING INSERA");
+              if (sheetScrapeFallback) {
+                  var sData = sheetScrapeFallback.getDataRange().getValues();
+                  var incCol = -1;
+                  var tekCol = -1;
+                  for (var c = 0; c < sData[0].length; c++) {
+                      var h = sData[0][c].toString().toUpperCase().trim();
+                      if (h.match(/^(INCIDENT|INC)/)) incCol = c;
+                      if (h === "TEKNISI") tekCol = c;
+                  }
+                  if (incCol !== -1 && tekCol !== -1) {
+                      for (var r = 1; r < sData.length; r++) {
+                          if (sData[r][incCol].toString().trim() === dataObj.ticketId.toString().trim()) {
+                              var tVal = sData[r][tekCol].toString().trim();
+                              var matchNIK = tVal.match(/\d+/);
+                              if (matchNIK) {
+                                  teknisiNIK = matchNIK[0];
+                              }
+                              break;
+                          }
+                      }
+                  }
+              }
+          }
+
+          // Kirim notifikasi Telegram ke Teknisi jika tiket pernah dikerjakan teknisi
           if (teknisiNIK !== "-") {
               var botTokenTg = "8050598199:AAHpPcFNUaLmox5Y6J2Ea0IvDkkPawLsZd8"; 
               var sheetTeknisi = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("TEKNISI");
