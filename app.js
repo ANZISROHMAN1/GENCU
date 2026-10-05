@@ -145,7 +145,11 @@ function applyUserRole() {
         if (state.userRole === 'korlap') displayRoleStr = 'Korlap';
         else if (state.userRole === 'tif') displayRoleStr = 'TIF (Master)';
         document.getElementById('displayRole').innerText = displayRoleStr;
-        document.getElementById('displayNama').innerText = state.userName || state.userNik;
+        let displayNameText = state.userNik;
+        if (state.userName && state.userName !== state.userNik) {
+            displayNameText = `${state.userName} - ${state.userNik}`;
+        }
+        document.getElementById('displayNama').innerText = displayNameText;
     }
     
     // Helpdesk tidak bisa lihat menu Approval Korlap
