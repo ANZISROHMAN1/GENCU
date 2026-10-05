@@ -59,18 +59,27 @@ const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx1UEN5rD39Hw5W4xNYT
 function handleLogin() {
     const role = document.getElementById('loginRole').value;
     const nik = document.getElementById('loginNik').value;
-    const nama = document.getElementById('loginNama').value;
-    const telegram = document.getElementById('loginTelegram').value;
+    const password = document.getElementById('loginPassword').value;
     
-    if (nik && nama && telegram) {
+    // Validasi Password sederhana
+    let isPasswordValid = false;
+    if (role === 'helpdesk' && password === 'helpdesk123') {
+        isPasswordValid = true;
+    } else if (role === 'korlap' && password === 'korlap123') {
+        isPasswordValid = true;
+    }
+    
+    if (nik && isPasswordValid) {
         localStorage.setItem('userRole', role);
         localStorage.setItem('userNik', nik);
-        localStorage.setItem('userName', nama);
-        localStorage.setItem('userTelegram', telegram);
+        // Nama dan Telegram ID dihapus, gunakan NIK sebagai display nama
+        localStorage.setItem('userName', nik); 
         
         applyUserRole();
         document.getElementById('loginOverlay').style.display = 'none';
         initAfterLogin();
+    } else {
+        alert("Password salah atau NIK kosong! Default Password:\nHelp Desk = helpdesk123\nKorlap = korlap123");
     }
 }
 
