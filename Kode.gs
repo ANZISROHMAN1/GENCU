@@ -996,6 +996,33 @@ function doPost(e) {
     return ContentService.createTextOutput("Error parsing data: " + err.message).setMimeType(ContentService.MimeType.TEXT);
   }
   
+  // --- NEW: Handle Telegram Webhook untuk /start ---
+  if (dataObj && dataObj.message) {
+      try {
+          var msgText = dataObj.message.text || "";
+          var chatId = dataObj.message.chat.id;
+          
+          if (msgText.startsWith("/start")) {
+              var botTokenTg = "8050598199:AAHpPcFNUaLmox5Y6J2Ea0IvDkkPawLsZd8";
+              var welcomeMsg = "Halo! Selamat, Anda sudah berhasil terhubung dengan bot ini. 🎉\n\nNotifikasi tiket dan tugas akan dikirimkan ke sini.";
+              var payloadTg = {
+                  "chat_id": chatId,
+                  "text": welcomeMsg
+              };
+              UrlFetchApp.fetch("https://api.telegram.org/bot" + botTokenTg + "/sendMessage", {
+                  "method": "post",
+                  "contentType": "application/json",
+                  "payload": JSON.stringify(payloadTg)
+              });
+          }
+          // Kembalikan OK ke Telegram agar webhook tidak retrying
+          return ContentService.createTextOutput("OK").setMimeType(ContentService.MimeType.TEXT);
+      } catch (err) {
+          return ContentService.createTextOutput("Telegram Error: " + err.message).setMimeType(ContentService.MimeType.TEXT);
+      }
+  }
+  // -------------------------------------------------
+  
   // Penentuan nama sheet berdasarkan source
   var sheetScrapeName = (dataObj.source === 'oss_all_ticket_canggih') ? "ALL TICKET INSERA" : "SCRAPING INSERA";
   var sheetDBName = (dataObj.source === 'oss_all_ticket_canggih') ? "DATABASE ALL TICKET" : "DATABASE";
@@ -1387,6 +1414,28 @@ function doPost(e) {
   var dynamicHeaders = null;
   var scrapeIncIdx = -1;
   var scrapeSumIdx = -1;
+  var scrapeTeknisiIdx = -1;
+  var scrapeSnumIdx = -1;
+  var scrapeStoIdx = -1;
+  var scrapeCustNameIdx = -1;
+  
+  // Baca map TEKNISI untuk Auto-Assign
+  var teknisiMap = {};
+  var sheetTeknisi = ss.getSheetByName("TEKNISI");
+  if (sheetTeknisi) {
+      var tekLastRow = sheetTeknisi.getLastRow();
+      if (tekLastRow > 1) {
+          var tekData = sheetTeknisi.getRange(2, 1, tekLastRow - 1, 3).getValues();
+          for (var i = 0; i < tekData.length; i++) {
+              var n = tekData[i][0] ? tekData[i][0].toString().trim() : "";
+              var nm = tekData[i][1] ? tekData[i][1].toString().trim() : "";
+              var tg = tekData[i][2] ? tekData[i][2].toString().trim() : "";
+              if (n && tg) {
+                  teknisiMap[n] = { nama: nm, idTele: tg };
+              }
+          }
+      }
+  }
   
   allTickets.forEach(function(ticketData, index) {
     // Tangkap header dari scraper secara dinamis
@@ -1398,6 +1447,10 @@ function doPost(e) {
                 var h = ticketData[c] ? ticketData[c].toString().toUpperCase() : "";
                 if (h.includes("INCIDENT") || h === "TICKET") scrapeIncIdx = c;
                 if (h.includes("SUMMARY") || h.includes("DESCRIPTION")) scrapeSumIdx = c;
+                if (h.includes("TEKNISI") || h.includes("ASSIGNEE") || h.includes("NIK") || h.includes("ENGINEER")) scrapeTeknisiIdx = c;
+                if (h.includes("SERVICE NUMBER") || h.includes("NO INET") || h.includes("NO SPEEDY") || h.includes("ND")) scrapeSnumIdx = c;
+                if (h.includes("STO") || h.includes("WORKZONE") || h.includes("LOKASI")) scrapeStoIdx = c;
+                if (h.includes("CUSTOMER NAME") || h.includes("NAMA PELANGGAN")) scrapeCustNameIdx = c;
             }
             return; 
         }
@@ -1433,6 +1486,15 @@ function doPost(e) {
       sheetScrape.getRange(1, 1, 1, dynamicHeaders.length).setFontWeight("bold").setBackground("#e0f7fa");
   }
 
+  // Normalisasi array untuk mencegah error setValues (jagged array)
+  var maxColsScrape = 0;
+  for (var i = 0; i < rowsToInsert.length; i++) {
+      if (rowsToInsert[i].length > maxColsScrape) maxColsScrape = rowsToInsert[i].length;
+  }
+  for (var i = 0; i < rowsToInsert.length; i++) {
+      while (rowsToInsert[i].length < maxColsScrape) rowsToInsert[i].push("");
+  }
+  
   // Tulis semua baris hasil scraping ke tab SCRAPING INSERA sekaligus mulai dari baris ke-2
   if (rowsToInsert.length > 0) {
       sheetScrape.getRange(2, 1, rowsToInsert.length, rowsToInsert[0].length).setValues(rowsToInsert);
@@ -1508,11 +1570,57 @@ function doPost(e) {
        if (isGaul) {
           sendToTelegram(ticketId, ticketData);
        }
+       
+       // 4. AUTO-ASSIGN LOGIC
+       var tekNIK = "";
+       if (scrapeTeknisiIdx !== -1 && ticketData[scrapeTeknisiIdx]) {
+           var potentialNik = ticketData[scrapeTeknisiIdx].toString().trim();
+           var matchNik = potentialNik.match(/\b\d{6,8}\b/);
+           if (matchNik) {
+               tekNIK = matchNik[0];
+           } else {
+               tekNIK = potentialNik;
+           }
+       } else {
+           // Fallback regex scan for NIK in the row if we know the map
+           for (var x = 0; x < ticketData.length; x++) {
+               var valStr = ticketData[x] ? ticketData[x].toString().trim() : "";
+               var matchNik2 = valStr.match(/\b([1-9]\d{5,7})\b/);
+               if (matchNik2 && teknisiMap[matchNik2[1]]) {
+                   tekNIK = matchNik2[1];
+                   break;
+               }
+           }
+       }
+       
+       if (tekNIK && teknisiMap[tekNIK]) {
+           var tInfo = teknisiMap[tekNIK];
+           var sNum = (scrapeSnumIdx !== -1 && ticketData[scrapeSnumIdx]) ? ticketData[scrapeSnumIdx] : "-";
+           var sto = (scrapeStoIdx !== -1 && ticketData[scrapeStoIdx]) ? ticketData[scrapeStoIdx] : "-";
+           var custName = (scrapeCustNameIdx !== -1 && ticketData[scrapeCustNameIdx]) ? ticketData[scrapeCustNameIdx] : "-";
+           
+           // Cari fallback jika gagal dapat sNum (Regex di summary)
+           if (sNum === "-" || !sNum) {
+               var matchInet = summaryText.match(/1[1-9]\d{10,11}/);
+               if (matchInet) sNum = matchInet[0];
+           }
+           
+           autoAssignTicket(tInfo.idTele, tInfo.nama, ticketId, sNum, custName, sto);
+       }
     }
   });
 
   // Masukkan tiket yang benar-benar baru ke tab DATABASE
   if (newTicketsForDB.length > 0) {
+    // Normalisasi array untuk mencegah error setValues (jagged array)
+    var maxColsDB = 0;
+    for (var i = 0; i < newTicketsForDB.length; i++) {
+        if (newTicketsForDB[i].length > maxColsDB) maxColsDB = newTicketsForDB[i].length;
+    }
+    for (var i = 0; i < newTicketsForDB.length; i++) {
+        while (newTicketsForDB[i].length < maxColsDB) newTicketsForDB[i].push("");
+    }
+
     var dbLast = sheetDB.getLastRow();
     var requiredDbRows = dbLast + newTicketsForDB.length;
     if (sheetDB.getMaxRows() < requiredDbRows) {
@@ -1883,3 +1991,60 @@ function authorizeGoogleDrive() {
   } catch(e) {}
 }
 
+function setWebhookTelegram() {
+  var botToken = "8050598199:AAHpPcFNUaLmox5Y6J2Ea0IvDkkPawLsZd8"; 
+  var webAppUrl = ScriptApp.getService().getUrl(); 
+  var url = "https://api.telegram.org/bot" + botToken + "/setWebhook?url=" + webAppUrl;
+  
+  try {
+    var response = UrlFetchApp.fetch(url);
+    Logger.log("Webhook response: " + response.getContentText());
+    SpreadsheetApp.getUi().alert("✅ Webhook berhasil di-set: " + response.getContentText());
+  } catch (err) {
+    Logger.log("Error: " + err.message);
+    SpreadsheetApp.getUi().alert("❌ Gagal set webhook: " + err.message);
+  }
+}
+
+function autoAssignTicket(chatIdTg, teknisiName, ticketId, sNum, custName, sto) {
+    var botTokenTg = "8050598199:AAHpPcFNUaLmox5Y6J2Ea0IvDkkPawLsZd8";
+    if (botTokenTg.includes("MASUKKAN_TOKEN")) return;
+    
+    var webAppUrl = ScriptApp.getService().getUrl();
+    var rx = "-";
+    var tx = "-";
+    
+    var evidenceLink = webAppUrl + "?action=form_evidence&ticket=" + encodeURIComponent(ticketId) + "&inet=" + encodeURIComponent(sNum) + "&rx=" + encodeURIComponent(rx) + "&tx=" + encodeURIComponent(tx);
+    var logicLink = webAppUrl + "?action=mark_gcu_logic&ticket=" + encodeURIComponent(ticketId);
+    
+    var textMsg = "👨‍🔧 <b>AUTO ASSIGNMENT TICKET!</b>\n\n";
+    textMsg += "Halo <b>" + escapeHTML(teknisiName) + "</b>, Anda otomatis ditugaskan untuk tiket berikut:\n\n";
+    textMsg += "🎫 <b>INCIDENT:</b> <code>" + escapeHTML(ticketId) + "</code>\n";
+    textMsg += "🔌 <b>NO INET:</b> <code>" + escapeHTML(sNum) + "</code>\n";
+    textMsg += "👤 <b>CUSTOMER:</b> <code>" + escapeHTML(custName) + "</code>\n";
+    textMsg += "🏢 <b>STO:</b> <code>" + escapeHTML(sto) + "</code>\n\n";
+    
+    textMsg += "Silakan klik salah satu tombol di bawah sesuai dengan penanganan yang dilakukan!";
+    
+    var payloadTg = {
+        "chat_id": chatIdTg,
+        "text": textMsg,
+        "parse_mode": "HTML",
+        "reply_markup": {
+            "inline_keyboard": [
+                [
+                    { "text": "🛠️ GCU FISIK", "url": evidenceLink },
+                    { "text": "💻 GCU LOGIC", "url": logicLink }
+                ]
+            ]
+        }
+    };
+    
+    try {
+        UrlFetchApp.fetch("https://api.telegram.org/bot" + botTokenTg + "/sendMessage", {
+            "method": "post",
+            "contentType": "application/json",
+            "payload": JSON.stringify(payloadTg)
+        });
+    } catch(e) {}
+}
