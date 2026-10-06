@@ -246,9 +246,9 @@ function processData(rows) {
     let technicianIdx = headers.findIndex(h => h === "TECHNICIAN" || h === "NAMA TEKNISI");
     let actionIdx = headers.indexOf("ACTION");
     let customerNameIdx = headers.indexOf("CUSTOMER NAME");
-    let statusDateIdx = headers.findIndex(h => h === "STATUS DATE" || h === "REPORTED DATE");
     let onuRxIdx = headers.indexOf("ONU RX");
     let serviceTypeIdx = headers.indexOf("SERVICE TYPE");
+    let ticketStatusIdx = headers.indexOf("STATUS");
     if (customerNameIdx === -1) customerNameIdx = headers.findIndex(h => h.includes("CUSTOMER NAM"));
 
     let photoColumns = {};
@@ -263,7 +263,7 @@ function processData(rows) {
         let ticketId = row[incIdx] ? row[incIdx].toString().trim() : "-";
         if (ticketId === "-" || ticketId === "" || ticketId.toUpperCase() === "INCIDENT") continue;
 
-        let rx = "", tx = "", status = "-", sto = "-", witel = "-", sNum = "-", customerName = "-", statusDate = "-", serviceType = "-";
+        let rx = "", tx = "", status = "-", sto = "-", witel = "-", sNum = "-", customerName = "-", statusDate = "-", serviceType = "-", ticketStatus = "-";
         if (statusDateIdx !== -1 && row[statusDateIdx]) {
             let val = row[statusDateIdx].toString().trim();
             if (val) {
@@ -383,6 +383,11 @@ function processData(rows) {
             if (val) serviceType = val;
         }
 
+        if (ticketStatusIdx !== -1 && row[ticketStatusIdx]) {
+            let val = row[ticketStatusIdx].toString().trim();
+            if (val) ticketStatus = val;
+        }
+
         let isGangguan = true; // SEMUA tiket masuk GENCU, apapun redamannya
         let rxNum = parseFloat(rx.replace(',', '.'));
 
@@ -466,6 +471,7 @@ function processData(rows) {
                 rx: rx || "-",
                 tx: tx || "-",
                 serviceType: serviceType || "-",
+                ticketStatus: ticketStatus || "-",
                 status: status || "-",
                 category: category,
                 customerName: customerName,
@@ -750,7 +756,10 @@ function renderTable() {
             <td>
                 <div class="ticket-info">
                     <span class="ticket-title">${ticket.serviceNumber || "Unknown"}</span>
-                    <span class="ticket-sub">${ticket.customerName || "-"} <span style="background: #e2e8f0; color: #475569; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 6px; white-space: nowrap;">${ticket.serviceType !== "-" ? ticket.serviceType : "N/A"}</span></span>
+                    <span class="ticket-sub">${ticket.customerName || "-"} 
+                        <span style="background: #e2e8f0; color: #475569; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 6px; white-space: nowrap;">${ticket.serviceType !== "-" ? ticket.serviceType : "N/A"}</span>
+                        <span style="background: #e0e7ff; color: #4338ca; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 4px; white-space: nowrap;">${ticket.ticketStatus !== "-" ? ticket.ticketStatus : "N/A"}</span>
+                    </span>
                 </div>
             </td>
             <td>${ticket.sto}</td>
@@ -1406,7 +1415,8 @@ window.assignTicketToTelegram = function (btn) {
         tx: ticket ? ticket.tx : '-',
         serviceNumber: ticket ? ticket.serviceNumber : '-',
         customerName: ticket ? ticket.customerName : '-',
-        serviceType: ticket ? ticket.serviceType : '-'
+        serviceType: ticket ? ticket.serviceType : '-',
+        ticketStatus: ticket ? ticket.ticketStatus : '-'
     };
 
     fetch(SCRIPT_URL, {
@@ -1905,7 +1915,8 @@ window.assignAndReturnToFisik = async function (btn) {
         tx: ticket ? ticket.tx : '-',
         serviceNumber: ticket ? ticket.serviceNumber : '-',
         customerName: ticket ? ticket.customerName : '-',
-        serviceType: ticket ? ticket.serviceType : '-'
+        serviceType: ticket ? ticket.serviceType : '-',
+        ticketStatus: ticket ? ticket.ticketStatus : '-'
     };
 
     try {
