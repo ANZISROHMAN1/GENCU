@@ -1,4 +1,57 @@
 function doGet(e) {
+  // NEW: Handle action register_user
+  if (e && e.parameter && e.parameter.action === 'register_user') {
+      var ss = SpreadsheetApp.getActiveSpreadsheet();
+      var sheetUser = ss.getSheetByName("USERS");
+      if (!sheetUser) {
+          sheetUser = ss.insertSheet("USERS");
+          sheetUser.appendRow(["Timestamp", "Role", "NIK", "Name", "Telegram", "Password"]);
+          sheetUser.getRange("A1:F1").setFontWeight("bold").setBackground("#e0e0e0");
+      }
+      
+      var data = sheetUser.getDataRange().getValues();
+      for (var i = 1; i < data.length; i++) {
+          if (data[i][2] == e.parameter.nik) {
+              return ContentService.createTextOutput(JSON.stringify({success: false, message: "NIK sudah terdaftar!"})).setMimeType(ContentService.MimeType.JSON);
+          }
+      }
+      
+      sheetUser.appendRow([new Date(), e.parameter.role, e.parameter.nik, e.parameter.name, e.parameter.telegram || "", e.parameter.password]);
+      return ContentService.createTextOutput(JSON.stringify({success: true, message: "Pendaftaran berhasil!"})).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  // NEW: Handle action login_user
+  if (e && e.parameter && e.parameter.action === 'login_user') {
+      var ss = SpreadsheetApp.getActiveSpreadsheet();
+      var sheetUser = ss.getSheetByName("USERS");
+      if (!sheetUser) {
+          return ContentService.createTextOutput(JSON.stringify({success: false, message: "Belum ada user yang terdaftar di database."})).setMimeType(ContentService.MimeType.JSON);
+      }
+      
+      var data = sheetUser.getDataRange().getValues();
+      var found = false;
+      var userData = {};
+      
+      for (var i = 1; i < data.length; i++) {
+          if (data[i][2] == e.parameter.nik && data[i][5] == e.parameter.password && data[i][1] == e.parameter.role) {
+              found = true;
+              userData = {
+                  role: data[i][1],
+                  nik: data[i][2],
+                  name: data[i][3],
+                  telegram: data[i][4]
+              };
+              break;
+          }
+      }
+      
+      if (found) {
+          return ContentService.createTextOutput(JSON.stringify({success: true, user: userData})).setMimeType(ContentService.MimeType.JSON);
+      } else {
+          return ContentService.createTextOutput(JSON.stringify({success: false, message: "NIK, Password, atau Role salah!"})).setMimeType(ContentService.MimeType.JSON);
+      }
+  }
+
   // Handle action get_teknisi - mengembalikan list teknisi (NIK, Nama, Telegram ID) sebagai JSON
   if (e && e.parameter && e.parameter.action === 'get_teknisi') {
       var ss = SpreadsheetApp.getActiveSpreadsheet();

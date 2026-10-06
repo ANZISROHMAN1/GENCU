@@ -66,68 +66,122 @@ function showLogin() {
     document.getElementById('loginCard').style.display = 'block';
 }
 
-function handleRegister() {
+async function handleRegister() {
     const role = document.getElementById('regRole').value;
     const nik = document.getElementById('regNik').value;
     const name = document.getElementById('regName').value;
+    const telegram = document.getElementById('regTelegram').value;
     const password = document.getElementById('regPassword').value;
     
-    if (nik && name && password) {
-        let users = JSON.parse(localStorage.getItem('registeredUsers') || '[]');
-        const exists = users.find(u => u.nik === nik);
-        if (exists) {
-            alert("NIK sudah terdaftar!");
+    if (role === 'helpdesk' || role === 'korlap') {
+        if (!telegram || telegram.trim() === '') {
+            alert("Harap masukkan Username Telegram untuk role Helpdesk dan Korlap!");
             return;
         }
+    }
+    
+    if (nik && name && password) {
+        const btn = document.querySelector('#registerForm button[type="submit"]');
+        const oldText = btn.innerText;
+        btn.innerText = "Mendaftarkan...";
+        btn.disabled = true;
         
-        users.push({ role, nik, name, password });
-        localStorage.setItem('registeredUsers', JSON.stringify(users));
-        
-        alert("Pendaftaran berhasil! Silakan login.");
-        
-        // Populate login fields
-        document.getElementById('loginRole').value = role;
-        document.getElementById('loginNik').value = nik;
-        
-        showLogin();
+        try {
+            const params = new URLSearchParams({
+                action: 'register_user',
+                role: role,
+                nik: nik,
+                name: name,
+                telegram: telegram,
+                password: password
+            });
+            
+            const res = await fetch(SCRIPT_URL + '?' + params.toString());
+            const data = await res.json();
+            
+            if (data.success) {
+                alert("Pendaftaran berhasil! Silakan login.");
+                document.getElementById('loginRole').value = role;
+                document.getElementById('loginNik').value = nik;
+                showLogin();
+            } else {
+                alert(data.message || "Gagal mendaftar.");
+            }
+        } catch (e) {
+            alert("Terjadi kesalahan jaringan atau server.");
+            console.error(e);
+        } finally {
+            btn.innerText = oldText;
+            btn.disabled = false;
+        }
     } else {
         alert("Harap lengkapi semua data pendaftaran!");
     }
 }
 
-function handleLogin() {
+async function handleLogin() {
     const role = document.getElementById('loginRole').value;
     const nik = document.getElementById('loginNik').value;
     const password = document.getElementById('loginPassword').value;
     
-    // Check registered users
-    let users = JSON.parse(localStorage.getItem('registeredUsers') || '[]');
-    let user = users.find(u => u.nik === nik && u.password === password && u.role === role);
-    
-    // Fallback validasi sederhana
-    let isPasswordValid = false;
-    let userName = nik;
-    if (user) {
-        isPasswordValid = true;
-        userName = user.name;
-    } else if (role === 'helpdesk' && password === 'helpdesk123') {
-        isPasswordValid = true;
-    } else if (role === 'korlap' && password === 'korlap123') {
-        isPasswordValid = true;
-    } else if (role === 'tif' && password === 'tifadmin123') {
-        isPasswordValid = true;
+    if (!nik || !password) {
+        alert("Harap isi NIK dan Password.");
+        return;
     }
-    
-    if (nik && isPasswordValid) {
-        localStorage.setItem('userRole', role);
-        localStorage.setItem('userNik', nik);
-        localStorage.setItem('userName', userName); 
+
+    const btn = document.querySelector('#loginForm button[type="submit"]');
+    const oldText = btn.innerText;
+    btn.innerText = "Memverifikasi...";
+    btn.disabled = true;
+
+    try {
+        const params = new URLSearchParams({
+            action: 'login_user',
+            role: role,
+            nik: nik,
+            password: password
+        });
         
-        applyUserRole();
-        document.getElementById('loginOverlay').style.display = 'none';
-        initAfterLogin();
-    } else {
-        alert("Password salah atau NIK belum terdaftar!\nDefault Password:\nHelp Desk = helpdesk123\nKorlap = korlap123\nTIF = tifadmin123");
+        const res = await fetch(SCRIPT_URL + '?' + params.toString());
+        const data = await res.json();
+        
+        let isPasswordValid = false;
+        let userName = nik;
+        let userTelegram = "";
+        
+        if (data.success) {
+            isPasswordValid = true;
+            userName = data.user.name;
+            userTelegram = data.user.telegram || "";
+        } else {
+            // Fallback validasi sederhana
+            if (role === 'helpdesk' && password === 'helpdesk123') {
+                isPasswordValid = true;
+            } else if (role === 'korlap' && password === 'korlap123') {
+                isPasswordValid = true;
+            } else if (role === 'tif' && password === 'tifadmin123') {
+                isPasswordValid = true;
+            }
+        }
+        
+        if (isPasswordValid) {
+            localStorage.setItem('userRole', role);
+            localStorage.setItem('userNik', nik);
+            localStorage.setItem('userName', userName); 
+            if (userTelegram) localStorage.setItem('userTelegram', userTelegram);
+            
+            applyUserRole();
+            document.getElementById('loginOverlay').style.display = 'none';
+            initAfterLogin();
+        } else {
+            alert(data.message || "Password salah atau NIK belum terdaftar!\nDefault Password:\nHelp Desk = helpdesk123\nKorlap = korlap123\nTIF = tifadmin123");
+        }
+    } catch (e) {
+        alert("Terjadi kesalahan jaringan atau server.");
+        console.error(e);
+    } finally {
+        btn.innerText = oldText;
+        btn.disabled = false;
     }
 }
 
@@ -727,13 +781,13 @@ function renderTable() {
         if (ticket.category === 'GCU LOGIC') {
             if (ticket.helpdeskAssignee !== "-") {
                 let isMyTicket = (ticket.helpdeskAssignee === state.userName) || (state.userNik && ticket.helpdeskAssignee.includes(state.userNik));
-                if (state.userRole === 'helpdesk' && !isMyTicket) {
+                if (isMyTicket) {
+                    actionText = "Proses Logic";
+                } else {
                     actionText = "Picked: " + ticket.helpdeskAssignee;
                     btnStyle = "background: #cbd5e1; cursor: not-allowed; color: #475569;";
                     btnDisabled = "disabled";
                     onClickAction = "";
-                } else {
-                    actionText = "Proses Logic";
                 }
             } else {
                 if (state.userRole === 'helpdesk') {
@@ -741,7 +795,10 @@ function renderTable() {
                     btnStyle = "background: #10b981; color: white;"; // Green for pick up
                     onClickAction = `pickUpTicket('${ticket.incident}')`;
                 } else {
-                    actionText = "Proses Logic";
+                    actionText = "Belum Pick Up";
+                    btnStyle = "background: #cbd5e1; cursor: not-allowed; color: #475569;";
+                    btnDisabled = "disabled";
+                    onClickAction = "";
                 }
             }
         } else if (ticket.category === 'APPROVAL KORLAP') {
