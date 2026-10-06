@@ -712,7 +712,8 @@ function renderTable() {
 
         if (ticket.category === 'GCU LOGIC') {
             if (ticket.helpdeskAssignee !== "-") {
-                if (state.userRole === 'helpdesk' && ticket.helpdeskAssignee !== state.userName) {
+                let isMyTicket = (ticket.helpdeskAssignee === state.userName) || (state.userNik && ticket.helpdeskAssignee.includes(state.userNik));
+                if (state.userRole === 'helpdesk' && !isMyTicket) {
                     actionText = "Picked: " + ticket.helpdeskAssignee;
                     btnStyle = "background: #cbd5e1; cursor: not-allowed; color: #475569;";
                     btnDisabled = "disabled";
