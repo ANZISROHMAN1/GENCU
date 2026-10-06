@@ -246,6 +246,7 @@ function processData(rows) {
     let technicianIdx = headers.findIndex(h => h === "TECHNICIAN" || h === "NAMA TEKNISI");
     let actionIdx = headers.indexOf("ACTION");
     let customerNameIdx = headers.indexOf("CUSTOMER NAME");
+    let statusDateIdx = headers.findIndex(h => h === "STATUS DATE" || h === "REPORTED DATE");
     let onuRxIdx = headers.indexOf("ONU RX");
     let serviceTypeIdx = headers.indexOf("SERVICE TYPE");
     let ticketStatusIdx = headers.indexOf("STATUS");
