@@ -248,18 +248,35 @@ function initAfterLogin() {
     currentDateRange.innerText = `${today.getDate()} ${today.toLocaleString('default', { month: 'long' })} ${today.getFullYear()}`;
     updateThemeBtn(document.body.classList.contains('light-mode'));
     fetchTickets();
+    
+    // Auto refresh every 1 minute
+    setInterval(() => {
+        fetchTickets(true);
+    }, 60000);
 }
 
-function fetchTickets() {
-    emptyState.style.display = 'flex';
-    emptyState.innerHTML = '<ion-icon name="sync-outline" style="animation: spin 1s linear infinite;"></ion-icon><p>Memuat Data dari Spreadsheet...</p>';
-    ticketTable.style.display = 'none';
+function fetchTickets(isBackground = false) {
+    if (!isBackground) {
+        emptyState.style.display = 'flex';
+        emptyState.innerHTML = '<ion-icon name="sync-outline" style="animation: spin 1s linear infinite;"></ion-icon><p>Memuat Data dari Spreadsheet...</p>';
+        ticketTable.style.display = 'none';
+    } else {
+        // Optional: you can show a subtle loading indicator on the reload button
+        const reloadIcon = document.querySelector('.btn-reload ion-icon');
+        if (reloadIcon) {
+            reloadIcon.style.animation = 'spin 1s linear infinite';
+        }
+    }
 
-    fetch(SCRIPT_URL)
+    fetch(SCRIPT_URL + "?t=" + new Date().getTime())
         .then(res => res.json())
-        .then(data => processData(data))
+        .then(data => {
+            processData(data);
+            if (isBackground) stopReloadAnimation();
+        })
         .catch(err => {
             console.warn("Fetch failed, using local simulation.");
+            if (isBackground) stopReloadAnimation();
             setTimeout(() => {
                 const mockData = [
                     ["", "INC52772921", "", "", "", "", "", "", "", "", "", "", "BGR", "-27.7", "2.13", "", "LOS"],
@@ -269,6 +286,13 @@ function fetchTickets() {
                 processData(mockData);
             }, 500);
         });
+}
+
+function stopReloadAnimation() {
+    const reloadIcon = document.querySelector('.btn-reload ion-icon');
+    if (reloadIcon) {
+        reloadIcon.style.animation = 'none';
+    }
 }
 
 function processData(rows) {

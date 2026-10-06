@@ -691,7 +691,14 @@ function doGet(e) {
           var dbData = sheetDB.getRange(1, 1, dbLastRow, dbLastCol).getValues();
           dbHeaders = dbData[0].map(function(h) { return h.toString().toUpperCase().trim(); });
           
-          var incIdxDB = dbHeaders.indexOf("INCIDENT");
+          var incIdxDB = -1;
+          for (var c = 0; c < dbHeaders.length; c++) {
+              var h = dbHeaders[c];
+              if (h.includes("INCIDENT") || h === "TICKET") {
+                  incIdxDB = c;
+                  break;
+              }
+          }
           if (incIdxDB !== -1) {
               for (var i = 1; i < dbData.length; i++) {
                   var incId = (dbData[i][incIdxDB] || "").toString().trim();
@@ -726,7 +733,14 @@ function doGet(e) {
   var resultData = [headers];
   
   // Cari index INCIDENT di scrape data
-  var incIdxScrape = headers.map(function(h) { return h.toUpperCase(); }).indexOf("INCIDENT");
+  var incIdxScrape = -1;
+  for (var c = 0; c < headers.length; c++) {
+      var hName = headers[c].toString().toUpperCase();
+      if (hName.includes("INCIDENT") || hName === "TICKET") {
+          incIdxScrape = c;
+          break;
+      }
+  }
   
   for(var i = 0; i < dataRows.length; i++) {
       var row = dataRows[i].slice(); // copy array
@@ -1163,25 +1177,24 @@ function doPost(e) {
           
           var teknisiNIK = dataObj.teknisiNIK || "-";
           
-          // Fallback: Cari teknisiNIK dari sheetScrape jika frontend tidak mengirim (misal karena cache)
+          // Fallback: Cari teknisiNIK dari history ACTION jika frontend tidak mengirim
           if (teknisiNIK === "-") {
-              var sheetScrapeFallback = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("SCRAPING INSERA");
-              if (sheetScrapeFallback) {
-                  var sData = sheetScrapeFallback.getDataRange().getValues();
-                  var incCol = -1;
-                  var tekCol = -1;
-                  for (var c = 0; c < sData[0].length; c++) {
-                      var h = sData[0][c].toString().toUpperCase().trim();
-                      if (h.match(/^(INCIDENT|INC)/)) incCol = c;
-                      if (h === "TEKNISI") tekCol = c;
+              var sheetDB = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("DATABASE ALL TICKET");
+              if (sheetDB) {
+                  var dbData = sheetDB.getDataRange().getValues();
+                  var incCol = -1, actCol = -1;
+                  for (var c = 0; c < dbData[0].length; c++) {
+                      var h = dbData[0][c].toString().toUpperCase().trim();
+                      if (h.includes("INCIDENT") || h === "TICKET") incCol = c;
+                      if (h === "ACTION") actCol = c;
                   }
-                  if (incCol !== -1 && tekCol !== -1) {
-                      for (var r = 1; r < sData.length; r++) {
-                          if (sData[r][incCol].toString().trim() === dataObj.ticketId.toString().trim()) {
-                              var tVal = sData[r][tekCol].toString().trim();
-                              var matchNIK = tVal.match(/\d+/);
-                              if (matchNIK) {
-                                  teknisiNIK = matchNIK[0];
+                  if (incCol !== -1 && actCol !== -1) {
+                      for (var r = 1; r < dbData.length; r++) {
+                          if (dbData[r][incCol].toString().trim() === dataObj.ticketId.toString().trim()) {
+                              var actText = dbData[r][actCol].toString();
+                              var assignMatch = actText.match(/\[ASSIGNED\] TEKNISI:\s*([A-Z0-9_]+)/i);
+                              if (assignMatch && assignMatch[1]) {
+                                  teknisiNIK = assignMatch[1];
                               }
                               break;
                           }
@@ -1205,7 +1218,21 @@ function doPost(e) {
                   }
               }
               if (chatIdTg) {
-                  var message = "🔔 <b>Info Pickup Tiket</b>\n\nTiket <b>" + dataObj.ticketId + "</b> yang Anda kerjakan sebelumnya telah di-pickup oleh Helpdesk: <b>" + dataObj.userName + "</b>.";
+                  // Format pesan lebih rapi dan jelas sesuai permintaan user
+                  var hdName = dataObj.userName;
+                  var hdNik = "-";
+                  if (hdName.includes(" (") && hdName.includes(")")) {
+                      var parts = hdName.split(" (");
+                      hdName = parts[0];
+                      hdNik = parts[1].replace(")", "");
+                  }
+
+                  var message = "🔔 <b>INFO PICKUP TIKET (GCU LOGIC)</b>\n\n";
+                  message += "Tiket <code>" + dataObj.ticketId + "</code> yang telah Anda kerjakan, saat ini sedang di-pickup / dicek oleh Helpdesk:\n\n";
+                  message += "👤 <b>Username HD:</b> " + hdName + "\n";
+                  message += "🆔 <b>NIK HD:</b> " + hdNik + "\n\n";
+                  message += "Terima kasih atas kerja samanya! 🫡";
+
                   var options = {
                       "method": "post",
                       "contentType": "application/json",
