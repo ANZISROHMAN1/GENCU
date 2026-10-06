@@ -757,11 +757,14 @@ function renderTable() {
             <td>
                 <div class="ticket-info">
                     <span class="ticket-title">${ticket.serviceNumber || "Unknown"}</span>
-                    <span class="ticket-sub">${ticket.customerName || "-"} 
-                        <span style="background: #e2e8f0; color: #475569; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 6px; white-space: nowrap;">${ticket.serviceType !== "-" ? ticket.serviceType : "N/A"}</span>
-                        <span style="background: #e0e7ff; color: #4338ca; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 4px; white-space: nowrap;">${ticket.ticketStatus !== "-" ? ticket.ticketStatus : "N/A"}</span>
-                    </span>
+                    <span class="ticket-sub">${ticket.customerName || "-"}</span>
                 </div>
+            </td>
+            <td>
+                <span style="background: #e2e8f0; color: #475569; padding: 4px 8px; border-radius: 4px; font-size: 11px; white-space: nowrap; font-weight: 600;">${ticket.serviceType !== "-" ? ticket.serviceType : "N/A"}</span>
+            </td>
+            <td>
+                <span style="background: #e0e7ff; color: #4338ca; padding: 4px 8px; border-radius: 4px; font-size: 11px; white-space: nowrap; font-weight: 600;">${ticket.ticketStatus !== "-" ? ticket.ticketStatus : "N/A"}</span>
             </td>
             <td>${ticket.sto}</td>
             <td style="font-size: 13px;">${ticket.witel !== "-" ? ticket.witel : "-"}</td>
