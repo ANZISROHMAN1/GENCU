@@ -1196,6 +1196,7 @@ function doPost(e) {
         var sto = dataObj.sto || "-";
         var rx = dataObj.rx || "-";
         var tx = dataObj.tx || "-";
+        var svcType = dataObj.serviceType || "-";
         
         var botTokenTg = "8050598199:AAHpPcFNUaLmox5Y6J2Ea0IvDkkPawLsZd8";
         var chatIdTg = idTele || "6874834483"; // Gunakan ID Tele dari Web, atau fallback
@@ -1228,6 +1229,7 @@ function doPost(e) {
         textMsg += "🎫 <b>INCIDENT:</b> <code>" + escapeHTML(ticketId) + "</code>\n";
         textMsg += "🔌 <b>NO INET:</b> <code>" + escapeHTML(sNum) + "</code>\n";
         textMsg += "👤 <b>CUSTOMER:</b> <code>" + escapeHTML(custName) + "</code>\n";
+        textMsg += "🏷️ <b>SERVICE:</b> <code>" + escapeHTML(svcType) + "</code>\n";
         textMsg += "🏢 <b>STO:</b> <code>" + escapeHTML(sto) + "</code>\n";
         textMsg += "🔴 <b>RX POWER:</b> <code>" + escapeHTML(rx) + "</code>\n";
         textMsg += "🟢 <b>TX POWER:</b> <code>" + escapeHTML(tx) + "</code>\n\n";
