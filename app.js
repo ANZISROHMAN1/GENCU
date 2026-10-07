@@ -1842,8 +1842,8 @@ window.requestApprovalBackend = async function (event) {
         try {
             const base64String = await compressImageBase64(file);
             payload.photoBase64 = base64String;
-            payload.photoMimeType = file.type;
-            payload.photoName = "Evidence_Logic_" + state.activeTicketId + "_" + file.name;
+            payload.photoMimeType = 'image/jpeg';
+            payload.photoName = "Evidence_Logic_" + state.activeTicketId + ".jpeg";
         } catch (e) {
             console.error(e);
             alert("Gagal memproses foto.");

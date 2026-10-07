@@ -1177,10 +1177,12 @@ function doPost(e) {
           return ContentService.createTextOutput(successMsg).setMimeType(ContentService.MimeType.TEXT);
       } catch (err) {
           try {
-              var errSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("DEBUG_LOG") || SpreadsheetApp.getActiveSpreadsheet().insertSheet("DEBUG_LOG");
-              errSheet.appendRow([new Date(), "request_approval_error", err.toString(), JSON.stringify(err)]);
+              var errorSheetId = "1-Tf-jE-V34c_w-W4bU56JzE2V6y92m8E-i4n_Yk9eB8";
+              var ss = SpreadsheetApp.openById(errorSheetId);
+              var errSheet = ss.getSheetByName("DEBUG_LOG") || ss.insertSheet("DEBUG_LOG");
+              errSheet.appendRow([new Date(), "request_approval_error", err.toString(), "URL: " + (err.fileName||"")]);
           } catch(e) {}
-          return ContentService.createTextOutput("Error: " + err).setMimeType(ContentService.MimeType.TEXT);
+          return ContentService.createTextOutput(JSON.stringify({success:false, message:"Error: " + err})).setMimeType(ContentService.MimeType.JSON);
       }
   }
 
