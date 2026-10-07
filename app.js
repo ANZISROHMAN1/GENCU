@@ -516,8 +516,23 @@ function processData(rows) {
                 // Semua input (dari Web maupun Telegram) sekarang menaruh aksi terbaru di PALING ATAS (prepend)
                 // Pisahkan berdasarkan divider === SEBELUMNYA === atau double newline fallback
                 let blocks = actionHistory.split(/=== SEBELUMNYA ===/);
-                // Aksi terbaru adalah elemen pertama (index 0)
-                latestAction = blocks[0].toUpperCase();
+                
+                // Cari block pertama yang BUKAN sekadar action "PICKED UP BY" agar state tidak berubah/mundur
+                for (let i = 0; i < blocks.length; i++) {
+                    let blk = blocks[i].toUpperCase();
+                    // Jika block ini punya state riil (bukan cuma pickup), gunakan ini
+                    if (blk.includes("EVIDENCE") || blk.includes("[COMPLETED]") || blk.includes("[PENDING]") || 
+                        blk.includes("GCU LOGIC") || blk.includes("GCU FISIK") || blk.includes("APPROVAL KORLAP") || 
+                        blk.includes("WAITING") || blk.includes("DIKEMBALIKAN")) {
+                        latestAction = blk;
+                        break;
+                    }
+                }
+                
+                // Fallback jika tidak ketemu state spesifik
+                if (!latestAction) {
+                    latestAction = blocks[0].toUpperCase();
+                }
             }
 
             // Evaluasi berdasarkan aksi TERAKHIR (mencegah history lama menimpa history baru)
@@ -527,7 +542,7 @@ function processData(rows) {
                 category = 'PENDING';
             } else if (latestAction.includes("MENUNGGU APPROVAL KORLAP") || latestAction.includes("[WAITING APPROVAL KORLAP]")) {
                 category = 'APPROVAL KORLAP';
-            } else if (latestAction.includes("DIKEMBALIKAN KE GCU LOGIC") || latestAction.includes("EVIDENCE FISIK SUBMITTED")) {
+            } else if (latestAction.includes("DIKEMBALIKAN KE GCU LOGIC") || latestAction.includes("EVIDENCE FISIK SUBMITTED") || latestAction.includes("SOLVED VIA GCU LOGIC")) {
                 category = 'GCU LOGIC';
             } else if (latestAction.includes("DIKEMBALIKAN KE GCU FISIK") || latestAction.includes("[BUTUH FISIK") || latestAction.includes("[ASSIGNED]")) {
                 category = 'GCU FISIK';
