@@ -846,6 +846,11 @@ function renderTable() {
         }
 
         let tr = document.createElement('tr');
+        if (ticket.category === 'PENDING') {
+            tr.classList.add('row-pending');
+        } else if (ticket.category === 'COMPLETED') {
+            tr.classList.add('row-completed');
+        }
         tr.innerHTML = `
             <td style="white-space: nowrap; font-size: 13px; color: var(--text-secondary);">${ticket.statusDate || "-"}</td>
             <td>${ticket.incident}</td>
