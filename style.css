@@ -280,23 +280,23 @@ body {
 
 /* Custom Summary Cards Colors */
 .card-fisik {
-    background: linear-gradient(135deg, #64748b, #475569);
+    background: linear-gradient(135deg, #64748b, #475569) !important;
     border: none;
 }
 .card-logic {
-    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    background: linear-gradient(135deg, #3b82f6, #2563eb) !important;
     border: none;
 }
 .card-korlap {
-    background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+    background: linear-gradient(135deg, #8b5cf6, #6d28d9) !important;
     border: none;
 }
 .card-pending {
-    background: linear-gradient(135deg, #f59e0b, #d97706);
+    background: linear-gradient(135deg, #f59e0b, #d97706) !important;
     border: none;
 }
 .card-completed {
-    background: linear-gradient(135deg, #10b981, #059669);
+    background: linear-gradient(135deg, #10b981, #059669) !important;
     border: none;
 }
 
