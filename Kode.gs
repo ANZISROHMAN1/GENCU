@@ -2148,7 +2148,7 @@ function sendSummaryAlert(totalMeasured, totalHigh, stoBadTickets) {
 function checkAndCreateHeaders(sheetScrape, sheetDB) {
   // Update header agar sesuai dengan tarikan Insera terbaru
   var baseHeaders = ["TIMESTAMP", "C_PARENT_ID", "INCIDENT", "ITR CUSTOMER", "SUMMARY", "REPORTED DATE", "OWNER GROUP", "OWNER", "CUSTOMER SEGMENT", "SERVICE TYPE", "WITEL", "WORKZONE", "STATUS", "STATUS DATE", "TICKET ID GAMAS"];
-  var dbHeaders = baseHeaders.concat(["RX POWER", "TX POWER", "OLT", "STATUS ALARM"]);
+  var dbHeaders = baseHeaders.concat(["RX POWER", "TX POWER", "OLT", "STATUS ALARM", "UMUR"]);
   
   if (sheetScrape) {
       var valScrape = sheetScrape.getRange(1, 1).getValue();
@@ -2166,23 +2166,37 @@ function checkAndCreateHeaders(sheetScrape, sheetDB) {
           sheetDB.getRange(1, 1, 1, dbHeaders.length).setValues([dbHeaders]);
       }
       
-      // Berikan warna spesifik ke header DATABASE
+      // Berikan warna spesifik ke header DATABASE dan set Formula Umur
       var lastCol = sheetDB.getLastColumn();
       if (lastCol > 0) {
           var headers = sheetDB.getRange(1, 1, 1, lastCol).getValues()[0];
+          var umurColIdx = -1;
+          var reportedColIdx = -1;
+          
           for (var c = 0; c < headers.length; c++) {
               var h = headers[c].toString().toUpperCase().trim();
+              if (h === "UMUR") umurColIdx = c + 1;
+              if (h === "REPORTED DATE") reportedColIdx = c + 1;
+              
               var color = "#f3f3f3"; // default abu-abu
               if (h === "") {
                   continue;
-              } else if (["RX POWER", "TX POWER", "OLT"].indexOf(h) !== -1) {
-                  color = "#fff9c4"; // Kuning (Ukur Massal ACS)
+              } else if (["RX POWER", "TX POWER", "OLT", "UMUR"].indexOf(h) !== -1) {
+                  color = "#fff9c4"; // Kuning
               } else if (h === "ACTION") {
-                  color = "#e8f5e9"; // Hijau (Submit Evidence Teknisi)
+                  color = "#e8f5e9"; // Hijau
               } else {
-                  color = "#e0f7fa"; // Biru Muda (Data Scraper Telegram)
+                  color = "#e0f7fa"; // Biru Muda
               }
               sheetDB.getRange(1, c + 1).setBackground(color).setFontWeight("bold");
+          }
+          
+          // Inject ArrayFormula untuk kolom UMUR agar otomatis menghitung selisih hari
+          if (umurColIdx !== -1 && reportedColIdx !== -1) {
+              var colLetter = String.fromCharCode(64 + reportedColIdx);
+              // Jika > 26 (misal AA), butuh fungsi pencari huruf yang lebih kompleks, tapi karena REPORTED DATE ada di kolom F (6), ini aman.
+              var formula = '={"UMUR"; ARRAYFORMULA(IF(' + colLetter + '2:' + colLetter + '="","", INT(NOW() - ' + colLetter + '2:' + colLetter + ') & " Hari"))}';
+              sheetDB.getRange(1, umurColIdx).setFormula(formula);
           }
       }
   }
