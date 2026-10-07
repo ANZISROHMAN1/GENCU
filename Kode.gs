@@ -327,6 +327,11 @@ function doGet(e) {
                       <label>Hasil Ukur Redaman di ODP</label>
                       <input type="text" id="redaman_odp" placeholder="Masukkan nilai redaman" style="padding:8px; border:1px solid #cbd5e1; border-radius:6px; width:100%; box-sizing:border-box;">
                   </div>
+
+                  <div class="form-group">
+                      <label>Upload Foto Evidence Redaman</label>
+                      <input type="file" id="ev_redaman" name="ev_redaman_file" accept="image/*" style="padding:8px; border:1px solid #cbd5e1; border-radius:6px; width:100%; box-sizing:border-box;">
+                  </div>
               </div>
 
               <!-- LAYANAN TAMBAHAN -->
@@ -805,6 +810,7 @@ function submitFisikBase64(payload) {
         var urlIptvChannel = uploadB64(payload.ev_iptv_channel_file, "IPTV_Channel");
         var urlIptvRemote = uploadB64(payload.ev_iptv_remote_file, "IPTV_Remote");
         var urlPerangkat = uploadB64(payload.ev_perangkat_file, "Perangkat_Tambahan");
+        var urlRedaman = uploadB64(payload.ev_redaman_file, "Redaman_ODP");
         
         var dcLinks = [];
         for (var i = 1; i <= dcCount; i++) {
@@ -842,6 +848,7 @@ function submitFisikBase64(payload) {
         if (urlIptvChannel !== "-") colMap["FOTO IPTV CHANNEL"] = urlIptvChannel;
         if (urlIptvRemote !== "-") colMap["FOTO IPTV REMOTE"] = urlIptvRemote;
         if (urlPerangkat !== "-") colMap["FOTO PERANGKAT TAMBAHAN"] = urlPerangkat;
+        if (urlRedaman !== "-") colMap["FOTO REDAMAN ODP"] = urlRedaman;
 
         for (var i = 1; i <= dcCount; i++) {
             if (dcLinks[i-1] !== "-") colMap["FOTO DC " + i] = dcLinks[i-1];
