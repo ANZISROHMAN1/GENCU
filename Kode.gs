@@ -322,6 +322,11 @@ function doGet(e) {
                       <label>Foto di Lokasi / Pelanggan</label>
                       <input type="file" id="ev_lokasi" name="ev_lokasi_file" accept="image/*" style="padding:8px; border:1px solid #cbd5e1; border-radius:6px; width:100%; box-sizing:border-box;">
                   </div>
+                  
+                  <div class="form-group">
+                      <label>Hasil Ukur Redaman di ODP</label>
+                      <input type="text" id="redaman_odp" placeholder="Masukkan nilai redaman" style="padding:8px; border:1px solid #cbd5e1; border-radius:6px; width:100%; box-sizing:border-box;">
+                  </div>
               </div>
 
               <!-- LAYANAN TAMBAHAN -->
@@ -384,8 +389,8 @@ function doGet(e) {
               <br><br><br>
               <div id="statusMsg" style="display:none; position:fixed; top:0; left:0; right:0; padding:15px; z-index:9999; font-size:14px; font-weight:600; text-align:center;"></div>
               <div class="btn-submit-container">
-                  <button type="submit">Kirim Evidence Fisik</button>
-                  <div style="text-align:center; margin-top:5px; font-size:10px; color:#94a3b8;">v2.2-file-upload</div>
+                  <button type="submit">Submit Evidence</button>
+                  <div style="text-align:center; margin-top:5px; font-size:10px; color:#94a3b8;">v2.3-file-upload</div>
               </div>
           </div>
           <input type="hidden" name="ticketId" value="${ticketId}">
@@ -542,7 +547,7 @@ function doGet(e) {
                       
                       if(!penyebab || !perbaikan || !segmen) {
                           showMsg('⚠️ Harap isi Penyebab, Perbaikan, dan Segmen terlebih dahulu!', 'error');
-                          btn.innerText = 'Kirim Evidence Fisik';
+                          btn.innerText = 'Submit Evidence';
                           btn.disabled = false;
                           return;
                       }
@@ -556,6 +561,7 @@ function doGet(e) {
                       summary += "- GCU ONT: " + (document.getElementById('ev_ont_status').checked ? "Aman" : "Tidak Aman") + "\\n";
                       summary += "- GCU DC ("+dcCount+")\\n";
                       summary += "- SCC/TSC: " + (getVal('close_scc') || 'Sukses') + "\\n";
+                      summary += "- Redaman ODP: " + (getVal('redaman_odp') || '-') + "\\n";
                       
                       if(document.getElementById('toggle_voice') && document.getElementById('toggle_voice').checked) {
                           summary += "- VOICE: RJ11/Phone (" + (document.getElementById('voice_status').checked ? "Aman" : "Tidak Aman") + ")\\n";
@@ -594,12 +600,12 @@ function doGet(e) {
                               document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;min-height:80vh;"><div class="card" style="text-align:center;"><h2 style="color: #10b981; font-size:40px; margin-bottom:10px;">✅</h2><h3 style="color: #374151;">Berhasil Terkirim!</h3><p style="color: #6b7280; font-size:14px;">Laporan evidence dan foto telah tersimpan ke sistem.</p></div></div>';
                           } else {
                               showMsg('❌ Gagal: ' + res, 'error');
-                              document.querySelector('button').innerText = 'Kirim Evidence Fisik';
+                              document.querySelector('button').innerText = 'Submit Evidence';
                               document.querySelector('button').disabled = false;
                           }
                       }).withFailureHandler(function(err) {
                           showMsg('❌ Gagal: ' + err, 'error');
-                          btn.innerText = 'Kirim Evidence Fisik';
+                          btn.innerText = 'Submit Evidence';
                           btn.disabled = false;
                       });
                       
@@ -607,7 +613,7 @@ function doGet(e) {
                   } catch (err) {
                       showMsg('❌ ERROR: ' + err.message, 'error');
                       document.querySelector('button').disabled = false;
-                      document.querySelector('button').innerText = 'Kirim Evidence Fisik';
+                      document.querySelector('button').innerText = 'Submit Evidence';
                   }
               }
               
