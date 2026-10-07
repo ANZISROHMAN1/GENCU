@@ -2208,6 +2208,50 @@ function forceCreateHeaders() {
   Logger.log("✅ Header berhasil diperbarui tanpa merusak format asli!");
 }
 
+function fixMySheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName("DATABASE ALL TICKET") || ss.getSheetByName("DATABASE");
+  if (!sheet) return;
+  
+  var data = sheet.getDataRange().getValues();
+  var realHeaderRowIdx = -1;
+  
+  // 1. Cari baris mana yang BENAR-BENAR berisi header asli (mengandung "REPORTED BY" atau "SUMMARY")
+  for (var r = 0; r < Math.min(data.length, 10); r++) {
+      var rowStr = data[r].join(" ").toUpperCase();
+      if (rowStr.includes("REPORTED BY") && rowStr.includes("SUMMARY")) {
+          realHeaderRowIdx = r;
+          break;
+      }
+  }
+  
+  if (realHeaderRowIdx > 0) {
+      // Hapus baris-baris palsu di atas header asli
+      sheet.deleteRows(1, realHeaderRowIdx);
+  } else if (realHeaderRowIdx === -1) {
+      Logger.log("Header asli tidak ditemukan!");
+      return;
+  }
+  
+  // 2. Bersihkan kolom-kolom kosong di ujung kanan yang membuat sheet jadi terlalu lebar
+  var lastCol = sheet.getLastColumn();
+  var realLastCol = 1;
+  var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  for (var c = headers.length - 1; c >= 0; c--) {
+      if (headers[c].toString().trim() !== "") {
+          realLastCol = c + 1;
+          break;
+      }
+  }
+  
+  if (lastCol > realLastCol) {
+      sheet.deleteColumns(realLastCol + 1, lastCol - realLastCol);
+  }
+  
+  // 3. Tambahkan ulang UMUR dengan benar
+  checkAndCreateHeaders(null, sheet);
+}
+
 function testTelegramAuth() {
   UrlFetchApp.fetch("https://api.telegram.org/");
 }
