@@ -78,7 +78,7 @@ function doGet(e) {
   if (e && e.parameter && e.parameter.action === 'mark_gcu_logic') {
       var ticketId = e.parameter.ticket || "";
       try {
-          submitEvidenceDariWeb(ticketId, "[EVIDENCE FISIK SUBMITTED] - Solved via GCU LOGIC", "");
+          submitEvidenceDariWeb(ticketId, "[EVIDENCE FISIK SUBMITTED] - Solved via GCU LOGIC", "", "EVIDENCE LOGIC");
           var successHtml = `
           <html>
           <head>
@@ -839,6 +839,7 @@ function submitFisikBase64(payload) {
 
         var colMap = {
             "ACTION": summary,
+            "EVIDENCE FISIK": summary,
             "FOTO JALUR": urlJalur !== "-" ? urlJalur : "",
             "FOTO ONT": urlOnt !== "-" ? urlOnt : "",
             "FOTO LOKASI": urlLokasi !== "-" ? urlLokasi : ""
@@ -863,6 +864,9 @@ function submitFisikBase64(payload) {
             if (cIdx === -1) {
                 var lastCol = sheet.getLastColumn();
                 sheet.getRange(1, lastCol + 1).setValue(colName);
+                if (colName.includes("EVIDENCE") || colName === "ACTION") {
+                    sheet.getRange(1, lastCol + 1).setBackground("#e0f7fa").setFontWeight("bold");
+                }
                 headers.push(colName);
                 cIdx = headers.length - 1;
             }
@@ -870,8 +874,13 @@ function submitFisikBase64(payload) {
             if (cIdx !== -1) {
                 var cell = sheet.getRange(rowToUpdate, cIdx + 1);
                 var oldVal = cell.getValue().toString();
-                if (colName === "ACTION") {
-                    cell.setValue(val + "\n\n=== SEBELUMNYA ===\n" + oldVal);
+                if (colName === "ACTION" || colName.includes("EVIDENCE")) {
+                    var d = new Date();
+                    var ts = ("0" + d.getDate()).slice(-2) + "/" + ("0" + (d.getMonth() + 1)).slice(-2) + " " + ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2);
+                    var tsString = "[" + ts + "] ";
+                    var summaryWithTime = val.indexOf(tsString) === 0 ? val : (tsString + val);
+                    
+                    cell.setValue(summaryWithTime + "\n\n=== SEBELUMNYA ===\n" + oldVal);
                 } else {
                     cell.setValue(val);
                 }
@@ -969,7 +978,7 @@ function submitFisikToGAS(formObject) {
 }
 
 // Fungsi pembantu untuk menulis evidence ke sheet spesifik
-function _writeEvidenceToSheet(sheetName, ticketId, summary) {
+function _writeEvidenceToSheet(sheetName, ticketId, summary, dedicatedColName) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName(sheetName);
   if (!sheet) return false;
@@ -978,42 +987,54 @@ function _writeEvidenceToSheet(sheetName, ticketId, summary) {
   if (data.length === 0) return false;
   
   var actionCol = -1;
-  var summaryCol = -1;
-  for(var c = 0; c < data[0].length; c++) {
-     var h = data[0][c].toString().toUpperCase().trim();
+  var dedicatedCol = -1;
+  var headers = data[0];
+  for(var c = 0; c < headers.length; c++) {
+     var h = headers[c] ? headers[c].toString().toUpperCase().trim() : "";
      if(h === "ACTION") actionCol = c;
-     if(h === "SUMMARY" || h === "WORKLOG SUMMARY") summaryCol = c;
+     if(dedicatedColName && h === dedicatedColName.toUpperCase()) dedicatedCol = c;
   }
   
   // Selalu pastikan kolom ACTION ada, jika tidak buat baru di ujung
   if(actionCol === -1) {
-     actionCol = data[0].length;
+     actionCol = headers.length;
      sheet.getRange(1, actionCol + 1).setValue("ACTION");
      sheet.getRange(1, actionCol + 1).setBackground("#e8f5e9").setFontWeight("bold");
-     // Update data array memory
-     for(var r=0; r<data.length; r++) data[r].push("");
-     data[0][actionCol] = "ACTION";
+     headers.push("ACTION");
+     for(var r=0; r<data.length; r++) if(r>0) data[r].push("");
+  }
+  
+  if (dedicatedColName && dedicatedCol === -1) {
+     dedicatedCol = headers.length;
+     sheet.getRange(1, dedicatedCol + 1).setValue(dedicatedColName.toUpperCase());
+     sheet.getRange(1, dedicatedCol + 1).setBackground("#e0f7fa").setFontWeight("bold");
+     headers.push(dedicatedColName.toUpperCase());
+     for(var r=0; r<data.length; r++) if(r>0) data[r].push("");
   }
   
   // Buat timestamp
   var d = new Date();
   var ts = ("0" + d.getDate()).slice(-2) + "/" + ("0" + (d.getMonth() + 1)).slice(-2) + " " + ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2);
   var tsString = "[" + ts + "] ";
-  
-  // Hindari double timestamp jika dipanggil berkali-kali
   var summaryWithTime = summary.indexOf(tsString) === 0 ? summary : (tsString + summary);
 
   var found = false;
   for(var r = 1; r < data.length; r++) {
      for (var c = 0; c < data[r].length; c++) {
          if (data[r][c] && data[r][c].toString().trim() === ticketId) {
+             
+             // 1. Tulis history panjang ke kolom terdedikasi (Fisik/Logic) agar rapi
+             if (dedicatedCol !== -1) {
+                 var oldDedicated = sheet.getRange(r + 1, dedicatedCol + 1).getValue();
+                 var newDedicated = oldDedicated ? summaryWithTime + "\n\n=== SEBELUMNYA ===\n" + oldDedicated : summaryWithTime;
+                 sheet.getRange(r + 1, dedicatedCol + 1).setValue(newDedicated);
+             }
+             
+             // 2. Tulis history ke ACTION agar dashboard tetap bisa baca
              if (actionCol !== -1) {
                  var oldAction = sheet.getRange(r + 1, actionCol + 1).getValue();
                  var newAction = oldAction ? summaryWithTime + "\n\n=== SEBELUMNYA ===\n" + oldAction : summaryWithTime;
                  sheet.getRange(r + 1, actionCol + 1).setValue(newAction);
-             } else if (summaryCol !== -1) {
-                 var oldSum = sheet.getRange(r + 1, summaryCol + 1).getValue();
-                 sheet.getRange(r + 1, summaryCol + 1).setValue(summaryWithTime + "\n\n=== SEBELUMNYA ===\n" + oldSum);
              }
              found = true;
              break;
@@ -1025,16 +1046,16 @@ function _writeEvidenceToSheet(sheetName, ticketId, summary) {
   // Jika tidak ketemu di DATABASE ALL TICKET, tambahkan baris baru agar action tersimpan
   if (!found && sheetName === "DATABASE ALL TICKET") {
       var incCol = -1;
-      for (var c = 0; c < data[0].length; c++) {
-          var h = data[0][c].toString().toUpperCase().trim();
+      for (var c = 0; c < headers.length; c++) {
+          var h = headers[c] ? headers[c].toString().toUpperCase().trim() : "";
           if (h.match(/^(INCIDENT|INC)/)) { incCol = c; break; }
       }
       
-      // Jika kolom INCIDENT dan ACTION ada, buat baris baru
       if (incCol !== -1 && actionCol !== -1) {
-          var newRow = new Array(data[0].length).fill("");
+          var newRow = new Array(headers.length).fill("");
           newRow[incCol] = ticketId;
           newRow[actionCol] = summaryWithTime;
+          if (dedicatedCol !== -1) newRow[dedicatedCol] = summaryWithTime;
           sheet.appendRow(newRow);
           found = true;
       }
@@ -1044,9 +1065,9 @@ function _writeEvidenceToSheet(sheetName, ticketId, summary) {
 }
 
 // Fungsi yang dipanggil oleh HTML form
-function submitEvidenceDariWeb(ticketId, summary, unused) {
-  var foundInActive = _writeEvidenceToSheet("DATABASE", ticketId, summary);
-  var foundInAll = _writeEvidenceToSheet("DATABASE ALL TICKET", ticketId, summary);
+function submitEvidenceDariWeb(ticketId, summary, unused, dedicatedColName) {
+  var foundInActive = _writeEvidenceToSheet("DATABASE", ticketId, summary, dedicatedColName);
+  var foundInAll = _writeEvidenceToSheet("DATABASE ALL TICKET", ticketId, summary, dedicatedColName);
   
   if (foundInActive || foundInAll) {
       return "OK";
@@ -1112,7 +1133,7 @@ function doPost(e) {
       try {
           var pendingMsg = dataObj.summaryText || "[PENDING]";
           if (pendingMsg.indexOf("[PENDING]") !== 0) pendingMsg = "[PENDING] " + pendingMsg;
-          var successMsgPending = submitEvidenceDariWeb(dataObj.ticketId, pendingMsg, "");
+          var successMsgPending = submitEvidenceDariWeb(dataObj.ticketId, pendingMsg, "", "EVIDENCE PENDING");
           return ContentService.createTextOutput(successMsgPending).setMimeType(ContentService.MimeType.TEXT);
       } catch (err) {
           return ContentService.createTextOutput("Error: " + err).setMimeType(ContentService.MimeType.TEXT);
@@ -1124,7 +1145,7 @@ function doPost(e) {
       try {
           var approveText = "[COMPLETED] - Approved by Korlap";
           if (dataObj.korlapNote) approveText += " | " + dataObj.korlapNote;
-          var successMsg = submitEvidenceDariWeb(dataObj.ticketId, approveText, "");
+          var successMsg = submitEvidenceDariWeb(dataObj.ticketId, approveText, "", "EVIDENCE KORLAP");
           return ContentService.createTextOutput(successMsg).setMimeType(ContentService.MimeType.TEXT);
       } catch (err) {
           return ContentService.createTextOutput("Error: " + err).setMimeType(ContentService.MimeType.TEXT);
@@ -1144,7 +1165,7 @@ function doPost(e) {
               sumText += " | Foto: " + file.getUrl();
           }
 
-          var successMsg = submitEvidenceDariWeb(dataObj.ticketId, sumText, "");
+          var successMsg = submitEvidenceDariWeb(dataObj.ticketId, sumText, "", "EVIDENCE LOGIC");
           return ContentService.createTextOutput(successMsg).setMimeType(ContentService.MimeType.TEXT);
       } catch (err) {
           return ContentService.createTextOutput("Error: " + err).setMimeType(ContentService.MimeType.TEXT);
@@ -1164,7 +1185,7 @@ function doPost(e) {
               sumTextFisik += " | Foto: " + file.getUrl();
           }
           
-          var successMsgFisik = submitEvidenceDariWeb(dataObj.ticketId, sumTextFisik, "");
+          var successMsgFisik = submitEvidenceDariWeb(dataObj.ticketId, sumTextFisik, "", "EVIDENCE FISIK");
           return ContentService.createTextOutput(successMsgFisik).setMimeType(ContentService.MimeType.TEXT);
       } catch (err) {
           return ContentService.createTextOutput("Error: " + err).setMimeType(ContentService.MimeType.TEXT);
@@ -1184,7 +1205,8 @@ function doPost(e) {
               sumTextRework += " | Foto: " + file.getUrl();
           }
 
-          var successMsgRework = submitEvidenceDariWeb(dataObj.ticketId, sumTextRework, "");
+          var colName = dataObj.targetCategory === "GCU FISIK" ? "EVIDENCE FISIK" : "EVIDENCE LOGIC";
+          var successMsgRework = submitEvidenceDariWeb(dataObj.ticketId, sumTextRework, "", colName);
           return ContentService.createTextOutput(successMsgRework).setMimeType(ContentService.MimeType.TEXT);
       } catch (err) {
           return ContentService.createTextOutput("Error: " + err).setMimeType(ContentService.MimeType.TEXT);
@@ -1196,7 +1218,7 @@ function doPost(e) {
           var pickupText = "[PICKED UP BY] " + dataObj.userName;
           var successMsgPickup = "OK";
           try {
-              successMsgPickup = submitEvidenceDariWeb(dataObj.ticketId, pickupText, "");
+              successMsgPickup = submitEvidenceDariWeb(dataObj.ticketId, pickupText, "", null); // Null karena ini cuma notifikasi, bukan evidence.
           } catch (e) {
               // Abaikan error database agar tidak menghalangi pengiriman Telegram
               successMsgPickup = "Pickup sukses (Database error: " + e + ")";
