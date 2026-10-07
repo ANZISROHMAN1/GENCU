@@ -1054,7 +1054,7 @@ function _writeEvidenceToSheet(sheetName, ticketId, summary, dedicatedColName) {
       var incCol = -1;
       for (var c = 0; c < headers.length; c++) {
           var h = headers[c] ? headers[c].toString().toUpperCase().trim() : "";
-          if (h.match(/^(INCIDENT|INC)/)) { incCol = c; break; }
+          if (h.match(/^(INCIDENT|INC|TICKET)/)) { incCol = c; break; }
       }
       
       if (incCol !== -1 && actionCol !== -1) {
@@ -1176,6 +1176,10 @@ function doPost(e) {
           var successMsg = submitEvidenceDariWeb(dataObj.ticketId, sumText, "", "EVIDENCE LOGIC");
           return ContentService.createTextOutput(successMsg).setMimeType(ContentService.MimeType.TEXT);
       } catch (err) {
+          try {
+              var errSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("DEBUG_LOG") || SpreadsheetApp.getActiveSpreadsheet().insertSheet("DEBUG_LOG");
+              errSheet.appendRow([new Date(), "request_approval_error", err.toString(), JSON.stringify(err)]);
+          } catch(e) {}
           return ContentService.createTextOutput("Error: " + err).setMimeType(ContentService.MimeType.TEXT);
       }
   }
