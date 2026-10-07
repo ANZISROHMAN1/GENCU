@@ -2213,7 +2213,7 @@ function forceCreateHeaders() {
   if (sheetDB) sheetDB.getRange("1:1").clearContent();
   
   checkAndCreateHeaders(sheetScrape, sheetDB);
-  SpreadsheetApp.getUi().alert("✅ Header berhasil diperbarui sesuai dengan format Insera yang baru!");
+  Logger.log("✅ Header berhasil diperbarui sesuai dengan format Insera yang baru!");
 }
 
 function testTelegramAuth() {
