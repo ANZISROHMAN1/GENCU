@@ -1094,6 +1094,18 @@ function doPost(e) {
   var sheetScrapeName = (dataObj.source === 'oss_all_ticket_canggih') ? "ALL TICKET INSERA" : "SCRAPING INSERA";
   var sheetDBName = (dataObj.source === 'oss_all_ticket_canggih') ? "DATABASE ALL TICKET" : "DATABASE";
   
+  // NEW: Handle pending_ticket action dari Web Dashboard (Korlap)
+  if (dataObj.action === 'pending_ticket') {
+      try {
+          var pendingMsg = dataObj.summaryText || "[PENDING]";
+          if (pendingMsg.indexOf("[PENDING]") !== 0) pendingMsg = "[PENDING] " + pendingMsg;
+          var successMsgPending = submitEvidenceDariWeb(dataObj.ticketId, pendingMsg, "");
+          return ContentService.createTextOutput(successMsgPending).setMimeType(ContentService.MimeType.TEXT);
+      } catch (err) {
+          return ContentService.createTextOutput("Error: " + err).setMimeType(ContentService.MimeType.TEXT);
+      }
+  }
+
   // NEW: Handle approve_completed action dari Web Dashboard
   if (dataObj.action === 'approve_completed') {
       try {

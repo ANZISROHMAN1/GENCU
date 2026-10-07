@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GENCU - GENeral Control & Update</title>
-    <link rel="stylesheet" href="style.css?v=2.1">
+    <link rel="stylesheet" href="style.css?v=2.2">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
     <!-- Ionicons for icons -->
     <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
@@ -117,6 +117,7 @@
                         <a href="#" class="nav-item active" id="menuGcuFisik" onclick="showDashboard('GCU FISIK')"><ion-icon name="disc-outline" style="margin-right: 10px;"></ion-icon> GCU FISIK</a>
                         <a href="#" class="nav-item" id="menuGcuLogic" onclick="showDashboard('GCU LOGIC')"><ion-icon name="laptop-outline" style="margin-right: 10px;"></ion-icon> GCU LOGIC</a>
                         <a href="#" class="nav-item" id="menuApprovalKorlap" onclick="showDashboard('APPROVAL KORLAP')"><ion-icon name="checkmark-done-outline" style="margin-right: 10px;"></ion-icon> APPROVAL KORLAP</a>
+                        <a href="#" class="nav-item" id="menuPending" onclick="showDashboard('PENDING')"><ion-icon name="pause-circle-outline" style="margin-right: 10px;"></ion-icon> PENDING</a>
                         <a href="#" class="nav-item" id="menuCompleted" onclick="showDashboard('COMPLETED')"><ion-icon name="ribbon-outline" style="margin-right: 10px;"></ion-icon> COMPLETED</a>
                     </nav>
                 </div>
@@ -181,6 +182,15 @@
                                 <p><ion-icon name="checkmark-circle"></ion-icon> APPROVAL KORLAP</p>
                             </div>
                             <ion-icon name="shield-checkmark" style="font-size: 36px; color: #60a5fa;"></ion-icon>
+                        </div>
+                    </div>
+                    <div class="card summary-card" onclick="showDashboard('PENDING')">
+                        <div class="card-content">
+                            <div>
+                                <h1 id="countPending">0</h1>
+                                <p><ion-icon name="pause-circle-outline"></ion-icon> PENDING</p>
+                            </div>
+                            <ion-icon name="pause-circle" style="font-size: 36px; color: #f59e0b;"></ion-icon>
                         </div>
                     </div>
                     <div class="card summary-card" onclick="showDashboard('COMPLETED')">
@@ -297,7 +307,7 @@
         </main>
     </div>
 
-    <script src="app.js?v=2.3"></script>
+    <script src="app.js?v=2.4"></script>
     <script>
         // Mobile sidebar toggle
         function toggleSidebar() {

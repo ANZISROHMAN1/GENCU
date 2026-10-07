@@ -41,6 +41,7 @@ const currentDateRange = document.getElementById('currentDateRange');
 const countGcuFisik = document.getElementById('countGcuFisik');
 const countGcuLogic = document.getElementById('countGcuLogic');
 const countApprovalKorlap = document.getElementById('countApprovalKorlap');
+const countPending = document.getElementById('countPending');
 const countCompleted = document.getElementById('countCompleted');
 
 const emptyState = document.getElementById('emptyState');
@@ -210,16 +211,23 @@ function applyUserRole() {
     const menuApprovalKorlap = document.getElementById('menuApprovalKorlap');
     const cardApprovalKorlap = countApprovalKorlap ? countApprovalKorlap.closest('.card') : null;
     
+    const menuPending = document.getElementById('menuPending');
+    const cardPending = countPending ? countPending.closest('.card') : null;
+
     if (state.userRole === 'helpdesk') {
         if (menuApprovalKorlap) menuApprovalKorlap.style.display = 'none';
         if (cardApprovalKorlap) cardApprovalKorlap.style.display = 'none';
-        // Auto-redirect jika sedang di Approval Korlap
-        if (state.activeFilter === 'APPROVAL KORLAP') {
+        if (menuPending) menuPending.style.display = 'none';
+        if (cardPending) cardPending.style.display = 'none';
+        // Auto-redirect jika sedang di Approval Korlap / Pending
+        if (state.activeFilter === 'APPROVAL KORLAP' || state.activeFilter === 'PENDING') {
             state.activeFilter = 'GCU FISIK';
         }
     } else {
         if (menuApprovalKorlap) menuApprovalKorlap.style.display = 'block';
         if (cardApprovalKorlap) cardApprovalKorlap.style.display = 'flex';
+        if (menuPending) menuPending.style.display = 'block';
+        if (cardPending) cardPending.style.display = 'flex';
     }
 }
 
@@ -515,6 +523,8 @@ function processData(rows) {
             // Evaluasi berdasarkan aksi TERAKHIR (mencegah history lama menimpa history baru)
             if (latestAction.includes("[COMPLETED]") || rowText.includes("[COMPLETED]")) {
                 category = 'COMPLETED';
+            } else if (latestAction.includes("[PENDING]")) {
+                category = 'PENDING';
             } else if (latestAction.includes("MENUNGGU APPROVAL KORLAP") || latestAction.includes("[WAITING APPROVAL KORLAP]")) {
                 category = 'APPROVAL KORLAP';
             } else if (latestAction.includes("DIKEMBALIKAN KE GCU LOGIC") || latestAction.includes("EVIDENCE FISIK SUBMITTED")) {
@@ -572,6 +582,7 @@ function updateDashboardSummary() {
     countGcuFisik.innerText = state.tickets.filter(t => t.category === 'GCU FISIK').length;
     countGcuLogic.innerText = state.tickets.filter(t => t.category === 'GCU LOGIC').length;
     countApprovalKorlap.innerText = state.tickets.filter(t => t.category === 'APPROVAL KORLAP').length;
+    if (countPending) countPending.innerText = state.tickets.filter(t => t.category === 'PENDING').length;
     countCompleted.innerText = state.tickets.filter(t => t.category === 'COMPLETED').length;
 
     // Automatically show active dashboard
@@ -594,6 +605,7 @@ window.showDashboard = function (filterStatus) {
     if (filterStatus === 'GCU FISIK') document.getElementById('menuGcuFisik').classList.add('active');
     else if (filterStatus === 'GCU LOGIC') document.getElementById('menuGcuLogic').classList.add('active');
     else if (filterStatus === 'APPROVAL KORLAP') document.getElementById('menuApprovalKorlap').classList.add('active');
+    else if (filterStatus === 'PENDING') document.getElementById('menuPending').classList.add('active');
     else if (filterStatus === 'COMPLETED') document.getElementById('menuCompleted').classList.add('active');
 
     // Reset status filter
@@ -672,7 +684,7 @@ window.selectTicket = function (ticketId, sto) {
         } else if (ticket.category === 'GCU FISIK') {
             // Selalu arahkan ke Korlap terlebih dahulu agar Korlap bisa melihat status assignment
             targetRole = 'korlap';
-        } else if (ticket.category === 'APPROVAL KORLAP') {
+        } else if (ticket.category === 'APPROVAL KORLAP' || ticket.category === 'PENDING') {
             targetRole = 'korlap';
         }
     }
@@ -827,6 +839,8 @@ function renderTable() {
             }
         } else if (ticket.category === 'APPROVAL KORLAP') {
             actionText = "Validasi Korlap";
+        } else if (ticket.category === 'PENDING') {
+            actionText = "Lihat / Proses Pending";
         } else if (ticket.category === 'COMPLETED') {
             actionText = "Lihat Detail";
         }
@@ -937,7 +951,7 @@ function renderKorlapFlow() {
         return;
     }
 
-    if (ticket.category === 'APPROVAL KORLAP') {
+    if (ticket.category === 'APPROVAL KORLAP' || ticket.category === 'PENDING') {
         // Parse evidence dari ACTION history
         let actionText = ticket.actionHistory || '';
         
@@ -1344,12 +1358,8 @@ function renderKorlapFlow() {
         const selStyle = "width: 100%; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px; font-size: 13px; box-sizing: border-box; background: var(--bg-surface); color: var(--text-primary);";
         contentApprove += `
             <div style="margin-bottom: 15px;">
-                <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">⏸️ Status Pending (Opsional)</label>
-                <select id="korlapPending" onchange="window.onKorlapPendingChange()" style="${selStyle}">
-                    <option value="" ${!kd.pending ? 'selected' : ''}>Tidak Pending</option>
-                    <option value="pending" ${kd.pending ? 'selected' : ''}>Pending</option>
-                </select>
-                <select id="korlapPendingReason" onchange="window.onKorlapPendingChange()" style="${selStyle} margin-top: 8px; display: ${kd.pending ? 'block' : 'none'};">
+                <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">⏸️ Alasan Pending (wajib dipilih jika klik tombol Pending)</label>
+                <select id="korlapPendingReason" onchange="window.onKorlapPendingChange()" style="${selStyle}">
                     <option value="">-- Pilih alasan pending --</option>
                     ${pendingReasons.map(r => `<option value="${r}" ${kd.reason === r ? 'selected' : ''}>${r}</option>`).join('')}
                 </select>
@@ -1360,10 +1370,12 @@ function renderKorlapFlow() {
             </div>
         `;
 
+        const pendingBtnHtml = `<button class="btn" style="width: 100%; background: linear-gradient(135deg, #f59e0b, #d97706); border: none; padding: 14px; color: white; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 15px; box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3);" onclick="pendingTicket()">⏸️ Pending</button>`;
         if (state.workflowState.fisikAman && state.workflowState.logicAman) {
             contentApprove += `
-                <div style="margin-top: 10px; padding-top: 15px; border-top: 1px solid var(--border);">
+                <div style="margin-top: 10px; padding-top: 15px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 10px;">
                     <button class="btn btn-success" style="width: 100%; background: linear-gradient(135deg, #10b981, #059669); border: none; padding: 14px; color: white; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 15px; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);" onclick="approveTicketFinal()">✅ GCU Closed — Approve & Selesaikan</button>
+                    ${pendingBtnHtml}
                 </div>
             `;
         } else {
@@ -1371,6 +1383,7 @@ function renderKorlapFlow() {
                 <div style="margin-top: 10px; padding: 12px; background: rgba(234, 179, 8, 0.1); border: 1px solid rgba(234, 179, 8, 0.3); border-radius: 8px;">
                     <p style="margin: 0; font-size: 13px; color: #eab308; font-weight: 500;">⏳ Centang kedua validasi (Fisik & Logic) agar tombol Approve muncul.</p>
                 </div>
+                <div style="margin-top: 10px;">${pendingBtnHtml}</div>
             `;
         }
         
@@ -1408,33 +1421,59 @@ function renderKorlapFlow() {
 }
 
 window.onKorlapPendingChange = function () {
-    const pSel = document.getElementById('korlapPending');
     const rSel = document.getElementById('korlapPendingReason');
     const nTxt = document.getElementById('korlapNotes');
-    if (!window.korlapDraft) window.korlapDraft = { ticket: state.activeTicketId, pending: false, reason: '', notes: '' };
-    window.korlapDraft.pending = pSel ? pSel.value === 'pending' : false;
-    window.korlapDraft.reason = (rSel && window.korlapDraft.pending) ? rSel.value : '';
+    if (!window.korlapDraft) window.korlapDraft = { ticket: state.activeTicketId, reason: '', notes: '' };
+    window.korlapDraft.reason = rSel ? rSel.value : '';
     window.korlapDraft.notes = nTxt ? nTxt.value : '';
-    if (rSel) rSel.style.display = window.korlapDraft.pending ? 'block' : 'none';
 };
 
-// Gabungkan pilihan Pending + Catatan Korlap menjadi satu teks. Return '' jika kosong.
+// Catatan Korlap untuk approve/reject. Return '' jika kosong.
 window.getKorlapNoteText = function () {
     window.onKorlapPendingChange();
     const d = window.korlapDraft;
-    let parts = [];
-    if (d.pending) parts.push('PENDING: ' + (d.reason || 'Tanpa alasan'));
-    if (d.notes && d.notes.trim()) parts.push('Catatan Korlap: ' + d.notes.trim());
-    return parts.join(' | ');
+    return (d.notes && d.notes.trim()) ? 'Catatan Korlap: ' + d.notes.trim() : '';
+};
+
+window.pendingTicket = function () {
+    window.onKorlapPendingChange();
+    const d = window.korlapDraft;
+    if (!d.reason) {
+        alert("Pilih alasan pending terlebih dahulu!");
+        return;
+    }
+    if (!confirm(`Pending tiket ${state.activeTicketId}?\nAlasan: ${d.reason}`)) return;
+
+    let pendingText = '[PENDING] ' + d.reason;
+    if (d.notes && d.notes.trim()) pendingText += ' | Catatan Korlap: ' + d.notes.trim();
+
+    const payload = {
+        action: 'pending_ticket',
+        ticketId: state.activeTicketId,
+        summaryText: pendingText
+    };
+
+    fetch(SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify(payload)
+    }).then(() => {
+        const t = state.tickets.find(x => x.incident === state.activeTicketId);
+        if (t) t.actionHistory = pendingText + (t.actionHistory ? '\n\n=== SEBELUMNYA ===\n' + t.actionHistory : '');
+        updateTicketCategory(state.activeTicketId, 'PENDING');
+        window.korlapDraft = null;
+        alert(`Tiket ${payload.ticketId} dipindah ke PENDING.`);
+        showDashboard('PENDING');
+    }).catch(err => {
+        console.error(err);
+        alert("Gagal koneksi ke server!");
+    });
 };
 
 window.approveTicketFinal = function () {
     const btn = event.target;
     const oldText = btn.innerText;
-    if (window.korlapDraft && window.korlapDraft.pending && !window.korlapDraft.reason) {
-        alert("Pilih alasan pending terlebih dahulu!");
-        return;
-    }
     btn.innerText = "Processing...";
     btn.disabled = true;
 
