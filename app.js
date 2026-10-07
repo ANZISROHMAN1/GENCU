@@ -850,6 +850,10 @@ function renderTable() {
             tr.classList.add('row-pending');
         } else if (ticket.category === 'COMPLETED') {
             tr.classList.add('row-completed');
+        } else if (ticket.category === 'GCU LOGIC') {
+            tr.classList.add('row-gcu-logic');
+        } else if (ticket.category === 'APPROVAL KORLAP') {
+            tr.classList.add('row-approval');
         }
         tr.innerHTML = `
             <td style="white-space: nowrap; font-size: 13px; color: var(--text-secondary);">${ticket.statusDate || "-"}</td>

@@ -368,6 +368,20 @@ body {
     background: rgba(16, 185, 129, 0.25);
 }
 
+.data-table tr.row-gcu-logic td {
+    background: rgba(59, 130, 246, 0.12); /* Blue for GCU LOGIC */
+}
+.data-table tr.row-gcu-logic:hover td {
+    background: rgba(59, 130, 246, 0.22);
+}
+
+.data-table tr.row-approval td {
+    background: rgba(139, 92, 246, 0.12); /* Purple for APPROVAL KORLAP */
+}
+.data-table tr.row-approval:hover td {
+    background: rgba(139, 92, 246, 0.22);
+}
+
 .data-table td:first-child {
     border-left: 1px solid transparent;
     border-radius: 12px 0 0 12px;
