@@ -982,7 +982,7 @@ function renderKorlapFlow() {
                 },
                 {
                     title: "🚀 Pengetesan Akhir",
-                    keys: ["SCC/TSC", "Keterangan"]
+                    keys: ["SCC/TSC", "Redaman ODP", "Keterangan"]
                 }
             ];
             
