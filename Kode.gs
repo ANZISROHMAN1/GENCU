@@ -998,6 +998,9 @@ function _writeEvidenceToSheet(sheetName, ticketId, summary, dedicatedColName) {
   // Selalu pastikan kolom ACTION ada, jika tidak buat baru di ujung
   if(actionCol === -1) {
      actionCol = headers.length;
+     if (actionCol + 1 > sheet.getMaxColumns()) {
+         sheet.insertColumnAfter(sheet.getMaxColumns());
+     }
      sheet.getRange(1, actionCol + 1).setValue("ACTION");
      sheet.getRange(1, actionCol + 1).setBackground("#e8f5e9").setFontWeight("bold");
      headers.push("ACTION");
@@ -1006,6 +1009,9 @@ function _writeEvidenceToSheet(sheetName, ticketId, summary, dedicatedColName) {
   
   if (dedicatedColName && dedicatedCol === -1) {
      dedicatedCol = headers.length;
+     if (dedicatedCol + 1 > sheet.getMaxColumns()) {
+         sheet.insertColumnAfter(sheet.getMaxColumns());
+     }
      sheet.getRange(1, dedicatedCol + 1).setValue(dedicatedColName.toUpperCase());
      sheet.getRange(1, dedicatedCol + 1).setBackground("#e0f7fa").setFontWeight("bold");
      headers.push(dedicatedColName.toUpperCase());
