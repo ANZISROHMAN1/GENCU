@@ -280,50 +280,57 @@ body {
 
 /* Custom Summary Cards Colors */
 .card-fisik {
-    background: rgba(148, 163, 184, 0.1);
-    border-color: rgba(148, 163, 184, 0.3);
+    background: linear-gradient(135deg, #64748b, #475569);
+    border: none;
 }
 .card-logic {
-    background: rgba(59, 130, 246, 0.1);
-    border-color: rgba(59, 130, 246, 0.3);
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    border: none;
 }
 .card-korlap {
-    background: rgba(139, 92, 246, 0.1);
-    border-color: rgba(139, 92, 246, 0.3);
+    background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+    border: none;
 }
 .card-pending {
-    background: rgba(245, 158, 11, 0.1);
-    border-color: rgba(245, 158, 11, 0.3);
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    border: none;
 }
 .card-completed {
-    background: rgba(16, 185, 129, 0.1);
-    border-color: rgba(16, 185, 129, 0.3);
+    background: linear-gradient(135deg, #10b981, #059669);
+    border: none;
 }
 
+/* Force text and icons inside colored cards to be white */
+.card-fisik h1, .card-logic h1, .card-korlap h1, .card-pending h1, .card-completed h1 {
+    color: #ffffff !important;
+}
+.card-fisik p, .card-logic p, .card-korlap p, .card-pending p, .card-completed p {
+    color: rgba(255, 255, 255, 0.9) !important;
+}
+.card-fisik ion-icon, .card-logic ion-icon, .card-korlap ion-icon, .card-pending ion-icon, .card-completed ion-icon {
+    color: #ffffff !important;
+}
+
+/* Hover Effects */
 .card-fisik:hover {
-    background: rgba(148, 163, 184, 0.15);
-    border-color: rgba(148, 163, 184, 0.5);
-    box-shadow: 0 10px 25px rgba(148, 163, 184, 0.15);
+    transform: translateY(-4px);
+    box-shadow: 0 12px 20px -8px rgba(71, 85, 105, 0.6);
 }
 .card-logic:hover {
-    background: rgba(59, 130, 246, 0.15);
-    border-color: rgba(59, 130, 246, 0.5);
-    box-shadow: 0 10px 25px rgba(59, 130, 246, 0.15);
+    transform: translateY(-4px);
+    box-shadow: 0 12px 20px -8px rgba(59, 130, 246, 0.6);
 }
 .card-korlap:hover {
-    background: rgba(139, 92, 246, 0.15);
-    border-color: rgba(139, 92, 246, 0.5);
-    box-shadow: 0 10px 25px rgba(139, 92, 246, 0.15);
+    transform: translateY(-4px);
+    box-shadow: 0 12px 20px -8px rgba(139, 92, 246, 0.6);
 }
 .card-pending:hover {
-    background: rgba(245, 158, 11, 0.15);
-    border-color: rgba(245, 158, 11, 0.5);
-    box-shadow: 0 10px 25px rgba(245, 158, 11, 0.15);
+    transform: translateY(-4px);
+    box-shadow: 0 12px 20px -8px rgba(245, 158, 11, 0.6);
 }
 .card-completed:hover {
-    background: rgba(16, 185, 129, 0.15);
-    border-color: rgba(16, 185, 129, 0.5);
-    box-shadow: 0 10px 25px rgba(16, 185, 129, 0.15);
+    transform: translateY(-4px);
+    box-shadow: 0 12px 20px -8px rgba(16, 185, 129, 0.6);
 }
 
 /* Status Breakdown */
