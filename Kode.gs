@@ -724,9 +724,9 @@ function doGet(e) {
   // Cari kolom tambahan yang perlu di-join dari DB ke Scrape
   var columnsToJoin = ["RX POWER", "TX POWER", "OLT", "STATUS ALARM", "ACTION"];
   
-  // Ambil semua kolom yang mengandung kata "FOTO" untuk ikut di-join
+  // Ambil semua kolom yang mengandung kata "FOTO" atau "EVIDENCE" untuk ikut di-join
   dbHeaders.forEach(function(h) {
-      if (h.startsWith("FOTO ") && columnsToJoin.indexOf(h) === -1) {
+      if ((h.startsWith("FOTO ") || h.includes("EVIDENCE")) && columnsToJoin.indexOf(h) === -1) {
           columnsToJoin.push(h);
       }
   });

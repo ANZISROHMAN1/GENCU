@@ -1665,7 +1665,17 @@ function renderTeknisiFlow() {
 
         <label class="block text-sm font-medium text-gray-700 mb-1">Upload Foto Evidence (Dari Galeri/Kamera)</label>
         <input type="file" id="tekPhoto" accept="image/*" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 10px; background: white;">
-        <textarea id="tekNotes" placeholder="Tulis catatan perbaikan tambahan di sini..." rows="3" style="width: 100%; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px; margin-bottom: 10px;">${state.workflowState.evidence || ''}</textarea>
+        
+        <label class="block text-sm font-medium text-gray-700 mb-1">Status Pekerjaan / Pending (Opsional)</label>
+        <select id="tekPendingReason" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 10px; background: white;" onchange="updateState('pendingReason', this.value)">
+            <option value="">-- Selesai (Submit ke GCU Logic) --</option>
+            <option value="RNA" ${state.workflowState.pendingReason === 'RNA' ? 'selected' : ''}>Pending: RNA (Pelanggan Tidak Ada)</option>
+            <option value="Tarikan Jauh" ${state.workflowState.pendingReason === 'Tarikan Jauh' ? 'selected' : ''}>Pending: Tarikan Jauh / Kabel Kurang</option>
+            <option value="Tiang" ${state.workflowState.pendingReason === 'Tiang' ? 'selected' : ''}>Pending: Tiang / Izin Warga</option>
+            <option value="Lainnya" ${state.workflowState.pendingReason === 'Lainnya' ? 'selected' : ''}>Pending: Lainnya (Tulis di Catatan)</option>
+        </select>
+        
+        <textarea id="tekNotes" placeholder="Tulis catatan perbaikan tambahan / alasan pending di sini..." rows="3" style="width: 100%; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px; margin-bottom: 10px;">${state.workflowState.evidence || ''}</textarea>
         <button class="btn btn-primary" onclick="window.submitTeknisiEvidence(event)">Submit Evidence Fisik</button>
     `;
 
@@ -1868,8 +1878,18 @@ window.submitTeknisiEvidence = async function (event) {
     if(state.workflowState.cekOnt) checkedItems.push("Cek Redaman ONT");
     if(state.workflowState.gantiKabel) checkedItems.push("Patching/Ganti Kabel");
     
+    let pendingReason = document.getElementById('tekPendingReason') ? document.getElementById('tekPendingReason').value : "";
     let notes = document.getElementById('tekNotes') ? document.getElementById('tekNotes').value : "";
-    let summaryText = "[GCU LOGIC] - EVIDENCE FISIK SUBMITTED: " + (checkedItems.length > 0 ? checkedItems.join(", ") : "Selesai") + (notes ? " | Catatan: " + notes : "");
+    
+    let summaryText = "";
+    let targetCategory = "GCU LOGIC";
+    
+    if (pendingReason) {
+        summaryText = "[PENDING] - Alasan: " + pendingReason + (notes ? " | Catatan: " + notes : "");
+        targetCategory = "PENDING";
+    } else {
+        summaryText = "[GCU LOGIC] - EVIDENCE FISIK SUBMITTED: " + (checkedItems.length > 0 ? checkedItems.join(", ") : "Selesai") + (notes ? " | Catatan: " + notes : "");
+    }
 
     const payload = {
         action: 'submit_evidence_fisik',
@@ -1908,9 +1928,9 @@ window.submitTeknisiEvidence = async function (event) {
         body: JSON.stringify(payload)
     }).then(() => {
         updateState('evidence', 'submitted');
-        updateTicketCategory(state.activeTicketId, 'GCU LOGIC');
-        alert("Evidence fisik & foto berhasil dikirim ke Google Sheet!");
-        showDashboard('GCU LOGIC');
+        updateTicketCategory(state.activeTicketId, targetCategory);
+        alert(targetCategory === 'PENDING' ? "Tiket dipindahkan ke antrean PENDING!" : "Evidence fisik & foto berhasil dikirim ke Google Sheet!");
+        showDashboard(targetCategory);
     }).catch(err => {
         console.error(err);
         alert("Gagal menghubungi server!");
