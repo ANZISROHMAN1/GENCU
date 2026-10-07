@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GENCU - GENeral Control & Update</title>
-    <link rel="stylesheet" href="style.css?v=2.6">
+    <link rel="stylesheet" href="style.css?v=2.7">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
     <!-- Ionicons for icons -->
     <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
@@ -157,7 +157,7 @@
                 </header>
 
                 <div class="summary-cards">
-                    <div class="card summary-card" onclick="showDashboard('GCU FISIK')">
+                    <div class="card summary-card card-fisik" onclick="showDashboard('GCU FISIK')">
                         <div class="card-content">
                             <div>
                                 <h1 id="countGcuFisik">0</h1>
@@ -166,7 +166,7 @@
                             <ion-icon name="settings" style="font-size: 36px;"></ion-icon>
                         </div>
                     </div>
-                    <div class="card summary-card" onclick="showDashboard('GCU LOGIC')">
+                    <div class="card summary-card card-logic" onclick="showDashboard('GCU LOGIC')">
                         <div class="card-content">
                             <div>
                                 <h1 id="countGcuLogic">0</h1>
@@ -175,7 +175,7 @@
                             <ion-icon name="hardware-chip" style="font-size: 36px; color: #3b82f6;"></ion-icon>
                         </div>
                     </div>
-                    <div class="card summary-card" onclick="showDashboard('APPROVAL KORLAP')">
+                    <div class="card summary-card card-korlap" onclick="showDashboard('APPROVAL KORLAP')">
                         <div class="card-content">
                             <div>
                                 <h1 id="countApprovalKorlap">0</h1>
@@ -184,7 +184,7 @@
                             <ion-icon name="shield-checkmark" style="font-size: 36px; color: #60a5fa;"></ion-icon>
                         </div>
                     </div>
-                    <div class="card summary-card" onclick="showDashboard('PENDING')">
+                    <div class="card summary-card card-pending" onclick="showDashboard('PENDING')">
                         <div class="card-content">
                             <div>
                                 <h1 id="countPending">0</h1>
@@ -193,7 +193,7 @@
                             <ion-icon name="pause-circle" style="font-size: 36px; color: #f59e0b;"></ion-icon>
                         </div>
                     </div>
-                    <div class="card summary-card" onclick="showDashboard('COMPLETED')">
+                    <div class="card summary-card card-completed" onclick="showDashboard('COMPLETED')">
                         <div class="card-content">
                             <div>
                                 <h1 id="countCompleted">0</h1>
