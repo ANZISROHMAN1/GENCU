@@ -1217,6 +1217,12 @@ function doPost(e) {
                       }
                   }
               }
+              var chatIdMissing = false;
+              if (!chatIdTg) {
+                  // Chat ID teknisi belum terdaftar di sheet TEKNISI -> kirim ke admin sebagai fallback agar tidak silent
+                  chatIdTg = "6874834483";
+                  chatIdMissing = true;
+              }
               if (chatIdTg) {
                   // Format pesan lebih rapi dan jelas sesuai permintaan user
                   var hdName = dataObj.userName;
@@ -1232,6 +1238,9 @@ function doPost(e) {
                   message += "👤 <b>Username HD:</b> " + hdName + "\n";
                   message += "🆔 <b>NIK HD:</b> " + hdNik + "\n\n";
                   message += "Terima kasih atas kerja samanya! 🫡";
+                  if (chatIdMissing) {
+                      message += "\n\n⚠️ <i>(Chat ID Telegram teknisi " + teknisiNIK + " belum terdaftar di sheet TEKNISI kolom C, pesan dialihkan ke admin)</i>";
+                  }
 
                   var options = {
                       "method": "post",
@@ -1300,6 +1309,29 @@ function doPost(e) {
             }
         }
         
+        // Simpan/Update Chat ID teknisi di sheet TEKNISI agar notifikasi lain (mis. pickup HD) bisa menemukan chat ID-nya
+        try {
+            if (idTele) {
+                if (!sheetTeknisi) {
+                    sheetTeknisi = ss.insertSheet("TEKNISI");
+                    sheetTeknisi.appendRow(["NIK", "NAMA", "TELEGRAM CHAT ID"]);
+                }
+                var tekRows = sheetTeknisi.getLastRow();
+                var foundRow = -1;
+                if (tekRows > 1) {
+                    var nikCol = sheetTeknisi.getRange(2, 1, tekRows - 1, 1).getValues();
+                    for (var k = 0; k < nikCol.length; k++) {
+                        if (nikCol[k][0].toString().trim() === teknisiNIK.toString().trim()) { foundRow = k + 2; break; }
+                    }
+                }
+                if (foundRow === -1) {
+                    sheetTeknisi.appendRow([teknisiNIK.toString(), teknisiNIK.toString(), idTele.toString()]);
+                } else {
+                    sheetTeknisi.getRange(foundRow, 3).setValue(idTele.toString());
+                }
+            }
+        } catch (e) {}
+
         // Gunakan SCRIPT_URL statis untuk mencegah error getUrl()
         var webAppUrl = ScriptApp.getService().getUrl();
         var evidenceLink = webAppUrl + "?action=form_evidence&ticket=" + encodeURIComponent(ticketId) + "&inet=" + encodeURIComponent(sNum) + "&rx=" + encodeURIComponent(rx) + "&tx=" + encodeURIComponent(tx);
