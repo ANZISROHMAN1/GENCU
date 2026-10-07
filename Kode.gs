@@ -2146,27 +2146,8 @@ function sendSummaryAlert(totalMeasured, totalHigh, stoBadTickets) {
 }
 
 function checkAndCreateHeaders(sheetScrape, sheetDB) {
-  // Update header agar sesuai dengan tarikan Insera terbaru
-  var baseHeaders = ["TIMESTAMP", "C_PARENT_ID", "INCIDENT", "ITR CUSTOMER", "SUMMARY", "REPORTED DATE", "OWNER GROUP", "OWNER", "CUSTOMER SEGMENT", "SERVICE TYPE", "WITEL", "WORKZONE", "STATUS", "STATUS DATE", "TICKET ID GAMAS"];
-  var dbHeaders = baseHeaders.concat(["RX POWER", "TX POWER", "OLT", "STATUS ALARM", "UMUR"]);
-  
-  if (sheetScrape) {
-      var valScrape = sheetScrape.getRange(1, 1).getValue();
-      if (valScrape !== "TIMESTAMP") {
-          if (valScrape !== "") sheetScrape.insertRowBefore(1);
-          sheetScrape.getRange(1, 1, 1, baseHeaders.length).setValues([baseHeaders]);
-          sheetScrape.getRange(1, 1, 1, baseHeaders.length).setFontWeight("bold").setBackground("#e0f7fa"); // Default biru scraper
-      }
-  }
-  
+  // Hanya memastikan pewarnaan dan formula UMUR berjalan tanpa merusak header dinamis
   if (sheetDB) {
-      var valDB = sheetDB.getRange(1, 1).getValue();
-      if (valDB !== "TIMESTAMP") {
-          if (valDB !== "") sheetDB.insertRowBefore(1);
-          sheetDB.getRange(1, 1, 1, dbHeaders.length).setValues([dbHeaders]);
-      }
-      
-      // Berikan warna spesifik ke header DATABASE dan set Formula Umur
       var lastCol = sheetDB.getLastColumn();
       if (lastCol > 0) {
           var headers = sheetDB.getRange(1, 1, 1, lastCol).getValues()[0];
@@ -2177,7 +2158,19 @@ function checkAndCreateHeaders(sheetScrape, sheetDB) {
               var h = headers[c].toString().toUpperCase().trim();
               if (h === "UMUR") umurColIdx = c + 1;
               if (h === "REPORTED DATE") reportedColIdx = c + 1;
-              
+          }
+          
+          // Jika tidak ada kolom UMUR, tambahkan di ujung kanan
+          if (umurColIdx === -1) {
+              umurColIdx = lastCol + 1;
+              sheetDB.getRange(1, umurColIdx).setValue("UMUR");
+              headers.push("UMUR");
+              lastCol = umurColIdx;
+          }
+          
+          // Warnai Header
+          for (var c = 0; c < lastCol; c++) {
+              var h = headers[c].toString().toUpperCase().trim();
               var color = "#f3f3f3"; // default abu-abu
               if (h === "") {
                   continue;
@@ -2192,9 +2185,12 @@ function checkAndCreateHeaders(sheetScrape, sheetDB) {
           }
           
           // Inject ArrayFormula untuk kolom UMUR agar otomatis menghitung selisih hari
-          if (umurColIdx !== -1 && reportedColIdx !== -1) {
+          if (reportedColIdx !== -1) {
               var colLetter = String.fromCharCode(64 + reportedColIdx);
-              // Jika > 26 (misal AA), butuh fungsi pencari huruf yang lebih kompleks, tapi karena REPORTED DATE ada di kolom F (6), ini aman.
+              if (reportedColIdx > 26) {
+                 // Fallback simpel jika > 26 (kemungkinan kecil karena Reported Date biasanya di F)
+                 colLetter = String.fromCharCode(64 + Math.floor((reportedColIdx-1)/26)) + String.fromCharCode(64 + ((reportedColIdx-1)%26) + 1);
+              }
               var formula = '={"UMUR"; ARRAYFORMULA(IF(' + colLetter + '2:' + colLetter + '="","", INT(NOW() - ' + colLetter + '2:' + colLetter + ') & " Hari"))}';
               sheetDB.getRange(1, umurColIdx).setFormula(formula);
           }
@@ -2208,12 +2204,8 @@ function forceCreateHeaders() {
   var sheetScrape = ss.getSheetByName("SCRAPING INSERA");
   var sheetDB = ss.getSheetByName("DATABASE ALL TICKET") || ss.getSheetByName("DATABASE");
   
-  // Hapus baris pertama agar checkAndCreateHeaders benar-benar memaksa membuat ulang header baru
-  if (sheetScrape) sheetScrape.getRange("1:1").clearContent();
-  if (sheetDB) sheetDB.getRange("1:1").clearContent();
-  
   checkAndCreateHeaders(sheetScrape, sheetDB);
-  Logger.log("✅ Header berhasil diperbarui sesuai dengan format Insera yang baru!");
+  Logger.log("✅ Header berhasil diperbarui tanpa merusak format asli!");
 }
 
 function testTelegramAuth() {
