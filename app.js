@@ -1330,11 +1330,33 @@ function renderKorlapFlow() {
             </div>
         `;
 
-        // Catatan Korlap (opsional)
+        // Catatan Korlap (opsional) + Pending
+        if (!window.korlapDraft || window.korlapDraft.ticket !== state.activeTicketId) {
+            window.korlapDraft = { ticket: state.activeTicketId, pending: false, reason: '', notes: '' };
+        }
+        const kd = window.korlapDraft;
+        const pendingReasons = [
+            'Tarikan jauh (> 250 meter)',
+            'Pelanggan tidak mengizinkan perbaikan',
+            'Pelanggan RNA',
+            'Masuk Kawasan / HRB'
+        ];
+        const selStyle = "width: 100%; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px; font-size: 13px; box-sizing: border-box; background: var(--bg-surface); color: var(--text-primary);";
         contentApprove += `
             <div style="margin-bottom: 15px;">
+                <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">⏸️ Status Pending (Opsional)</label>
+                <select id="korlapPending" onchange="window.onKorlapPendingChange()" style="${selStyle}">
+                    <option value="" ${!kd.pending ? 'selected' : ''}>Tidak Pending</option>
+                    <option value="pending" ${kd.pending ? 'selected' : ''}>Pending</option>
+                </select>
+                <select id="korlapPendingReason" onchange="window.onKorlapPendingChange()" style="${selStyle} margin-top: 8px; display: ${kd.pending ? 'block' : 'none'};">
+                    <option value="">-- Pilih alasan pending --</option>
+                    ${pendingReasons.map(r => `<option value="${r}" ${kd.reason === r ? 'selected' : ''}>${r}</option>`).join('')}
+                </select>
+            </div>
+            <div style="margin-bottom: 15px;">
                 <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">📝 Catatan Korlap (Opsional)</label>
-                <textarea id="korlapNotes" placeholder="Tulis catatan validasi di sini..." rows="2" style="width: 100%; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px; font-size: 13px; box-sizing: border-box; background: var(--bg-surface); color: var(--text-primary);"></textarea>
+                <textarea id="korlapNotes" oninput="window.onKorlapPendingChange()" placeholder="Tulis catatan validasi di sini..." rows="2" style="width: 100%; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px; font-size: 13px; box-sizing: border-box; background: var(--bg-surface); color: var(--text-primary);">${(kd.notes || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</textarea>
             </div>
         `;
 
@@ -1385,15 +1407,41 @@ function renderKorlapFlow() {
     workflowContainer.appendChild(createStep('step-k1', 'Assign Tiket ke Teknisi', contentAssign));
 }
 
+window.onKorlapPendingChange = function () {
+    const pSel = document.getElementById('korlapPending');
+    const rSel = document.getElementById('korlapPendingReason');
+    const nTxt = document.getElementById('korlapNotes');
+    if (!window.korlapDraft) window.korlapDraft = { ticket: state.activeTicketId, pending: false, reason: '', notes: '' };
+    window.korlapDraft.pending = pSel ? pSel.value === 'pending' : false;
+    window.korlapDraft.reason = (rSel && window.korlapDraft.pending) ? rSel.value : '';
+    window.korlapDraft.notes = nTxt ? nTxt.value : '';
+    if (rSel) rSel.style.display = window.korlapDraft.pending ? 'block' : 'none';
+};
+
+// Gabungkan pilihan Pending + Catatan Korlap menjadi satu teks. Return '' jika kosong.
+window.getKorlapNoteText = function () {
+    window.onKorlapPendingChange();
+    const d = window.korlapDraft;
+    let parts = [];
+    if (d.pending) parts.push('PENDING: ' + (d.reason || 'Tanpa alasan'));
+    if (d.notes && d.notes.trim()) parts.push('Catatan Korlap: ' + d.notes.trim());
+    return parts.join(' | ');
+};
+
 window.approveTicketFinal = function () {
     const btn = event.target;
     const oldText = btn.innerText;
+    if (window.korlapDraft && window.korlapDraft.pending && !window.korlapDraft.reason) {
+        alert("Pilih alasan pending terlebih dahulu!");
+        return;
+    }
     btn.innerText = "Processing...";
     btn.disabled = true;
 
     const payload = {
         action: 'approve_completed',
-        ticketId: state.activeTicketId
+        ticketId: state.activeTicketId,
+        korlapNote: window.getKorlapNoteText()
     };
 
     fetch(SCRIPT_URL, {
@@ -1444,9 +1492,9 @@ window.reworkTicket = function (targetCategory) {
 };
 
 window.rejectToQueue = function (targetCategory, reason) {
-    const korlapNotes = document.getElementById('korlapNotes') ? document.getElementById('korlapNotes').value : '';
+    const korlapNoteText = window.getKorlapNoteText();
     let fullReason = reason;
-    if (korlapNotes) fullReason += ` | Catatan Korlap: ${korlapNotes}`;
+    if (korlapNoteText) fullReason += ` | ${korlapNoteText}`;
 
     const confirmReject = confirm(`REJECT tiket ini kembali ke ${targetCategory}?\nAlasan: ${fullReason}`);
     if (!confirmReject) return;

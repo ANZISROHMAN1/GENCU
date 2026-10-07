@@ -1097,7 +1097,9 @@ function doPost(e) {
   // NEW: Handle approve_completed action dari Web Dashboard
   if (dataObj.action === 'approve_completed') {
       try {
-          var successMsg = submitEvidenceDariWeb(dataObj.ticketId, "[COMPLETED] - Approved by Korlap", "");
+          var approveText = "[COMPLETED] - Approved by Korlap";
+          if (dataObj.korlapNote) approveText += " | " + dataObj.korlapNote;
+          var successMsg = submitEvidenceDariWeb(dataObj.ticketId, approveText, "");
           return ContentService.createTextOutput(successMsg).setMimeType(ContentService.MimeType.TEXT);
       } catch (err) {
           return ContentService.createTextOutput("Error: " + err).setMimeType(ContentService.MimeType.TEXT);
