@@ -1166,9 +1166,9 @@ function renderKorlapFlow() {
                                 let statusText = isExecuted ? `<span style="color: var(--success); font-weight: 600;">Executed ✅</span>` : `<span style="color: var(--text-secondary); font-weight: 500;">Dilewati ➖</span>`;
                                 
                                 html += `
-                                    <div style="display: flex; justify-content: space-between; padding: 10px 15px; border-bottom: 1px solid var(--border); font-size: 13px;">
+                                    <div style="display: flex; flex-wrap: wrap; gap: 5px; justify-content: space-between; padding: 10px 15px; border-bottom: 1px solid var(--border); font-size: 13px;">
                                         <span style="color: ${isExecuted ? 'var(--text-primary)' : 'var(--text-secondary)'}; font-weight: ${isExecuted ? '600' : '400'};">${task.label}</span>
-                                        <span style="text-align: right;">${statusText}</span>
+                                        <span style="text-align: right; min-width: max-content;">${statusText}</span>
                                     </div>
                                 `;
                             });
