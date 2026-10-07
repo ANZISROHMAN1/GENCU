@@ -331,6 +331,8 @@ function processData(rows) {
     let witelIdx = headers.indexOf("WITEL");
     let technicianIdx = headers.findIndex(h => h === "TECHNICIAN" || h === "NAMA TEKNISI");
     let actionIdx = headers.indexOf("ACTION");
+    let evLogicIdx = headers.indexOf("EVIDENCE LOGIC");
+    let evFisikIdx = headers.indexOf("EVIDENCE FISIK");
     let customerNameIdx = headers.indexOf("CUSTOMER NAME");
     let statusDateIdx = headers.findIndex(h => h === "STATUS DATE" || h === "REPORTED DATE");
     let onuRxIdx = headers.indexOf("ONU RX");
@@ -495,6 +497,16 @@ function processData(rows) {
         if (actionIdx !== -1 && row[actionIdx]) {
             actionHistory = row[actionIdx].toString().trim();
         }
+        let evLogic = "";
+        if (evLogicIdx !== -1 && row[evLogicIdx]) {
+            evLogic = row[evLogicIdx].toString().trim();
+        }
+        let evFisik = "";
+        if (evFisikIdx !== -1 && row[evFisikIdx]) {
+            evFisik = row[evFisikIdx].toString().trim();
+        }
+        
+        let activeEvidenceForParsing = evLogic || evFisik || actionHistory;
 
         // Coba ekstrak teknisi dari ACTION history jika sudah di-assign manual lewat Web
         let assignMatch = rowText.match(/\[ASSIGNED\] TEKNISI:\s*([A-Z0-9_]+)/i);
@@ -512,10 +524,10 @@ function processData(rows) {
 
             // Dapatkan block aksi TERAKHIR untuk penentuan state yang akurat
             let latestAction = "";
-            if (actionHistory) {
+            if (activeEvidenceForParsing) {
                 // Semua input (dari Web maupun Telegram) sekarang menaruh aksi terbaru di PALING ATAS (prepend)
                 // Pisahkan berdasarkan divider === SEBELUMNYA === atau double newline fallback
-                let blocks = actionHistory.split(/=== SEBELUMNYA ===/);
+                let blocks = activeEvidenceForParsing.split(/=== SEBELUMNYA ===/);
                 
                 // Cari block pertama yang BUKAN sekadar action "PICKED UP BY" agar state tidak berubah/mundur
                 for (let i = 0; i < blocks.length; i++) {
@@ -580,6 +592,8 @@ function processData(rows) {
                 category: category,
                 customerName: customerName,
                 actionHistory: actionHistory,
+                evLogic: evLogic,
+                evFisik: evFisik,
                 helpdeskAssignee: helpdeskAssignee,
                 photos: photos,
                 statusDate: statusDate
@@ -977,7 +991,7 @@ function renderKorlapFlow() {
 
     if (ticket.category === 'APPROVAL KORLAP' || ticket.category === 'PENDING') {
         // Parse evidence dari ACTION history
-        let actionText = ticket.actionHistory || '';
+        let actionText = ticket.evLogic || ticket.evFisik || ticket.actionHistory || '';
         
         // Pisahkan history block berdasarkan separator baru atau lama
         let blocks = actionText.split(/\n\n(?:=== SEBELUMNYA ===\n)/);
