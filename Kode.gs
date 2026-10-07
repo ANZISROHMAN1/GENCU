@@ -1166,7 +1166,9 @@ function doPost(e) {
           if (dataObj.photoBase64) {
               var decoded = Utilities.base64Decode(dataObj.photoBase64);
               var blob = Utilities.newBlob(decoded, dataObj.photoMimeType, dataObj.photoName);
-              var file = DriveApp.createFile(blob);
+              var folderId = "1Nrot1WJolVqbgfAlDmxoqHbo7Hu2pl49";
+              var folder = DriveApp.getFolderById(folderId);
+              var file = folder.createFile(blob);
               file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
               sumText += " | Foto: " + file.getUrl();
           }
