@@ -1752,8 +1752,8 @@ function renderHelpdeskFlow() {
             <textarea id="hdNotes" placeholder="Tulis catatan logic / link evidence foto tambahan di sini..." rows="2" style="width: 100%; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px;"></textarea>
         </div>
 
-        <div class="btn-group" style="margin-bottom: 15px;">
-            <button class="btn ${state.workflowState.logicOk ? 'btn-success' : 'btn-outline'}" onclick="updateState('logicOk', true)">Logic Selesai & Layanan Normal ✅</button>
+        <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+            <button class="btn btn-success" style="flex: 1;" onclick="window.requestApprovalBackend(event)">Ajukan Approval Korlap (Logic OK) ✅</button>
             <button class="btn btn-outline" style="border-color: var(--danger); color: var(--danger);" onclick="updateState('showAssignFisik', true)">Masih Gangguan (Butuh Fisik) ❌</button>
         </div>
     `;
@@ -1798,14 +1798,6 @@ function renderHelpdeskFlow() {
             </div>
         `;
         workflowContainer.appendChild(createStep('step-h-assign', 'Assign Teknisi untuk Fisik', contentAssignFisik));
-    }
-
-    if (state.workflowState.logicOk) {
-        let contentClose = `
-            <p style="color: var(--success); font-weight: 500;">🎉 Logic sudah OK! Tiket siap diserahkan kembali ke Korlap untuk persetujuan akhir.</p>
-            <button class="btn btn-primary" onclick="window.requestApprovalBackend(event)">Ajukan Approval Korlap</button>
-        `;
-        workflowContainer.appendChild(createStep('step-h2', 'Selesaikan Pengecekan Logic', contentClose));
     }
 }
 
