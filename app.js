@@ -55,7 +55,7 @@ const workflowPageTitle = document.getElementById('workflowPageTitle');
 const workflowSubtitle = document.getElementById('workflowSubtitle');
 const dispActiveTicketId = document.getElementById('activeTicketId');
 const dashboardTitle = document.getElementById('dashboardTitle');
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwzpj0z2bDKJNuEBuv8LQv0rTs3rN4XCAyG6C_34rVaKKn8o1GMtMpOQ_5oJUiJ9dqn/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzbP1b07gXZP5G17jm8aXGZuEwqsMT0zrooTWQJUbDW4lg-w9lrFdNPwyQIE0c1PdVR/exec';
 
 function showRegister() {
     document.getElementById('loginCard').style.display = 'none';
