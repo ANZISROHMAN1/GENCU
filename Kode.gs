@@ -986,7 +986,7 @@ function submitFisikToGAS(formObject) {
 }
 
 // Fungsi pembantu untuk menulis evidence ke sheet spesifik
-function _writeEvidenceToSheet(sheetName, ticketId, summary, dedicatedColName) {
+function _writeEvidenceToSheet(sheetName, ticketId, summary, dedicatedColName, newStatus) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName(sheetName);
   if (!sheet) return false;
@@ -996,11 +996,15 @@ function _writeEvidenceToSheet(sheetName, ticketId, summary, dedicatedColName) {
   
   var actionCol = -1;
   var dedicatedCol = -1;
+  var statusCol = -1;
   var headers = data[0];
   for(var c = 0; c < headers.length; c++) {
      var h = headers[c] ? headers[c].toString().toUpperCase().trim() : "";
      if(h === "ACTION") actionCol = c;
      if(dedicatedColName && h === dedicatedColName.toUpperCase()) dedicatedCol = c;
+     if(h === "STATUS" || h.includes("STATUS TIKET") || h.includes("STATUS INFO") || (h.startsWith("STATUS") && !h.includes("ALARM") && !h.includes("DATE"))) {
+         if (statusCol === -1) statusCol = c;
+     }
   }
   
   // Selalu pastikan kolom ACTION ada, jika tidak buat baru di ujung
@@ -1023,6 +1027,18 @@ function _writeEvidenceToSheet(sheetName, ticketId, summary, dedicatedColName) {
      sheet.getRange(1, dedicatedCol + 1).setValue(dedicatedColName.toUpperCase());
      sheet.getRange(1, dedicatedCol + 1).setBackground("#e0f7fa").setFontWeight("bold");
      headers.push(dedicatedColName.toUpperCase());
+     for(var r=0; r<data.length; r++) if(r>0) data[r].push("");
+  }
+  
+  // Jika newStatus ada dan kolom STATUS belum ada di sheet ini, buat kolom STATUS
+  if (newStatus && statusCol === -1) {
+     statusCol = headers.length;
+     if (statusCol + 1 > sheet.getMaxColumns()) {
+         sheet.insertColumnAfter(sheet.getMaxColumns());
+     }
+     sheet.getRange(1, statusCol + 1).setValue("STATUS");
+     sheet.getRange(1, statusCol + 1).setBackground("#e0f7fa").setFontWeight("bold");
+     headers.push("STATUS");
      for(var r=0; r<data.length; r++) if(r>0) data[r].push("");
   }
   
@@ -1050,6 +1066,11 @@ function _writeEvidenceToSheet(sheetName, ticketId, summary, dedicatedColName) {
                  var newAction = oldAction ? summaryWithTime + "\n\n=== SEBELUMNYA ===\n" + oldAction : summaryWithTime;
                  sheet.getRange(r + 1, actionCol + 1).setValue(newAction);
              }
+             
+             // 3. Update status jika ada perubahan status (misal CLOSED atau PENDING)
+             if (newStatus && statusCol !== -1) {
+                 sheet.getRange(r + 1, statusCol + 1).setValue(newStatus);
+             }
              found = true;
              break; // Break the inner loop (columns), but continue the outer loop (rows) to find duplicates
          }
@@ -1070,6 +1091,7 @@ function _writeEvidenceToSheet(sheetName, ticketId, summary, dedicatedColName) {
           newRow[incCol] = ticketId;
           newRow[actionCol] = summaryWithTime;
           if (dedicatedCol !== -1) newRow[dedicatedCol] = summaryWithTime;
+          if (newStatus && statusCol !== -1) newRow[statusCol] = newStatus;
           sheet.appendRow(newRow);
           found = true;
       }
@@ -1079,11 +1101,13 @@ function _writeEvidenceToSheet(sheetName, ticketId, summary, dedicatedColName) {
 }
 
 // Fungsi yang dipanggil oleh HTML form
-function submitEvidenceDariWeb(ticketId, summary, unused, dedicatedColName) {
-  var foundInActive = _writeEvidenceToSheet("DATABASE", ticketId, summary, dedicatedColName);
-  var foundInAll = _writeEvidenceToSheet("DATABASE ALL TICKET", ticketId, summary, dedicatedColName);
+function submitEvidenceDariWeb(ticketId, summary, unused, dedicatedColName, newStatus) {
+  var foundInActive = _writeEvidenceToSheet("DATABASE", ticketId, summary, dedicatedColName, newStatus);
+  var foundInAll = _writeEvidenceToSheet("DATABASE ALL TICKET", ticketId, summary, dedicatedColName, newStatus);
+  var foundInScrape = _writeEvidenceToSheet("ALL TICKET INSERA", ticketId, summary, dedicatedColName, newStatus);
+  var foundInScrape2 = _writeEvidenceToSheet("SCRAPING INSERA", ticketId, summary, dedicatedColName, newStatus);
   
-  if (foundInActive || foundInAll) {
+  if (foundInActive || foundInAll || foundInScrape || foundInScrape2) {
       return "OK";
   }
   throw "Tiket " + ticketId + " tidak ditemukan di Database manapun";
@@ -1147,7 +1171,16 @@ function doPost(e) {
       try {
           var pendingMsg = dataObj.summaryText || "[PENDING]";
           if (pendingMsg.indexOf("[PENDING]") !== 0) pendingMsg = "[PENDING] " + pendingMsg;
-          var successMsgPending = submitEvidenceDariWeb(dataObj.ticketId, pendingMsg, "", "EVIDENCE PENDING");
+          var successMsgPending = submitEvidenceDariWeb(dataObj.ticketId, pendingMsg, "", "EVIDENCE PENDING", "PENDING");
+          
+          // === NOTIFIKASI TELEGRAM KE BOT & TEKNISI ===
+          var rawPending = dataObj.summaryText || "";
+          rawPending = rawPending.replace("[PENDING] ", "");
+          var notifyBody = "⏸️ <b>Status Tiket:</b> <code>PENDING</code>\n";
+          notifyBody += "⚠️ <b>Detail Alasan:</b> " + escapeHTML(rawPending) + "\n\n";
+          notifyBody += "Mohon menunggu tindak lanjut atau koordinasi penanganan lebih lanjut.";
+          notifyTeknisi(dataObj.ticketId, "INFO TIKET PENDING (KORLAP)", notifyBody);
+          
           return ContentService.createTextOutput(successMsgPending).setMimeType(ContentService.MimeType.TEXT);
       } catch (err) {
           return ContentService.createTextOutput("Error: " + err).setMimeType(ContentService.MimeType.TEXT);
@@ -1159,14 +1192,15 @@ function doPost(e) {
       try {
           var approveText = "[COMPLETED] - Approved by Korlap";
           if (dataObj.korlapNote) approveText += " | " + dataObj.korlapNote;
-          var successMsg = submitEvidenceDariWeb(dataObj.ticketId, approveText, "", "EVIDENCE KORLAP");
+          var successMsg = submitEvidenceDariWeb(dataObj.ticketId, approveText, "", "EVIDENCE KORLAP", "CLOSED");
           
-          // === NOTIFIKASI KE TEKNISI ===
+          // === NOTIFIKASI KE TEKNISI & BOT ===
           var korlapNote = dataObj.korlapNote ? escapeHTML(dataObj.korlapNote) : "Tidak ada catatan tambahan";
-          var notifyBody = "<b>Selamat! Tiket telah di-APPROVE oleh Korlap!</b> 🎉\n";
-          notifyBody += "Status tiket saat ini telah menjadi <b>COMPLETED (CLOSE)</b>.\n\n";
-          notifyBody += "Catatan Korlap: " + korlapNote;
-          notifyTeknisi(dataObj.ticketId, "APPROVAL KORLAP (COMPLETED)", notifyBody);
+          var notifyBody = "<b>Selamat! Tiket telah di-APPROVE oleh Korlap!</b> 🎉\n\n";
+          notifyBody += "📊 <b>Status Akhir:</b> <code>CLOSED / COMPLETED</code> ✅\n";
+          notifyBody += "📝 <b>Catatan Korlap:</b> " + korlapNote + "\n\n";
+          notifyBody += "Terima kasih atas kerja keras rekan-rekan! 🫡";
+          notifyTeknisi(dataObj.ticketId, "APPROVAL KORLAP (TIKET CLOSED)", notifyBody);
           
           return ContentService.createTextOutput(successMsg).setMimeType(ContentService.MimeType.TEXT);
       } catch (err) {
@@ -1266,6 +1300,29 @@ function doPost(e) {
 
           var colName = dataObj.targetCategory === "GCU FISIK" ? "EVIDENCE FISIK" : "EVIDENCE LOGIC";
           var successMsgRework = submitEvidenceDariWeb(dataObj.ticketId, sumTextRework, "", colName);
+          
+          // === NOTIFIKASI TELEGRAM KE BOT & TEKNISI ===
+          var cleanReason = sumTextRework;
+          cleanReason = cleanReason.replace(/^\[(REWORK|REJECTED OLEH KORLAP|BUTUH FISIK)[^\]]*\]\s*-?\s*/i, '');
+          
+          var targetCat = (dataObj.targetCategory || "").toUpperCase();
+          var titleRework = "";
+          var bodyRework = "";
+          
+          if (targetCat.includes("FISIK")) {
+              titleRework = "TIKET DIKEMBALIKAN KE GCU FISIK (REWORK) 🛠️";
+              bodyRework = "⚠️ <b>Tiket Mental / Dikembalikan ke:</b> <code>GCU FISIK</code>\n\n";
+              bodyRework += "📝 <b>Catatan / Alasan:</b>\n" + escapeHTML(cleanReason) + "\n\n";
+              bodyRework += "Tiket butuh perbaikan fisik. Mohon rekan Teknisi segera melakukan pengecekan & perbaikan di lapangan.";
+          } else {
+              titleRework = "TIKET DIKEMBALIKAN KE GCU LOGIC (REWORK) 💻";
+              bodyRework = "⚠️ <b>Tiket Mental / Dikembalikan ke:</b> <code>GCU LOGIC</code>\n\n";
+              bodyRework += "📝 <b>Catatan / Alasan:</b>\n" + escapeHTML(cleanReason) + "\n\n";
+              bodyRework += "Tiket dikembalikan ke antrean GCU Logic. Mohon rekan Helpdesk segera melakukan pengecekan logic ulang.";
+          }
+          
+          notifyTeknisi(dataObj.ticketId, titleRework, bodyRework);
+
           return ContentService.createTextOutput(successMsgRework).setMimeType(ContentService.MimeType.TEXT);
       } catch (err) {
           return ContentService.createTextOutput("Error: " + err).setMimeType(ContentService.MimeType.TEXT);
@@ -2442,20 +2499,29 @@ function autoAssignTicket(chatIdTg, teknisiName, ticketId, sNum, custName, sto, 
 function notifyTeknisi(ticketId, title, bodyText) {
     try {
         var teknisiNIK = "-";
+        var sto = "-";
+        var snum = "-";
+        var custName = "-";
         var ss = SpreadsheetApp.getActiveSpreadsheet();
         var sheetDB = ss.getSheetByName("DATABASE ALL TICKET") || ss.getSheetByName("DATABASE");
         if (sheetDB) {
             var dbData = sheetDB.getDataRange().getValues();
-            var incCol = -1, actCol = -1, tekCol = -1;
+            var incCol = -1, actCol = -1, tekCol = -1, stoCol = -1, snumCol = -1, custCol = -1;
             for (var c = 0; c < dbData[0].length; c++) {
                 var h = dbData[0][c].toString().toUpperCase().trim();
                 if (h.includes("INCIDENT") || h === "TICKET") incCol = c;
                 if (h === "ACTION") actCol = c;
                 if (h.includes("TEKNISI") || h.includes("ASSIGNEE") || h.includes("NIK") || h.includes("ENGINEER")) tekCol = c;
+                if (h.includes("STO") || h.includes("WORKZONE")) stoCol = c;
+                if (h.includes("SERVICE NUMBER") || h.includes("NO INET") || h.includes("ND")) snumCol = c;
+                if (h.includes("CUSTOMER NAME") || h.includes("NAMA PELANGGAN")) custCol = c;
             }
             if (incCol !== -1) {
                 for (var r = 1; r < dbData.length; r++) {
                     if (dbData[r][incCol].toString().trim() === ticketId.toString().trim()) {
+                        if (stoCol !== -1 && dbData[r][stoCol]) sto = dbData[r][stoCol].toString().trim();
+                        if (snumCol !== -1 && dbData[r][snumCol]) snum = dbData[r][snumCol].toString().trim();
+                        if (custCol !== -1 && dbData[r][custCol]) custName = dbData[r][custCol].toString().trim();
                         
                         // 1. Coba baca dari kolom TEKNISI langsung
                         if (tekCol !== -1 && dbData[r][tekCol]) {
@@ -2482,10 +2548,14 @@ function notifyTeknisi(ticketId, title, bodyText) {
             }
         }
 
-        if (teknisiNIK !== "-") {
-            var botTokenTg = "8050598199:AAHpPcFNUaLmox5Y6J2Ea0IvDkkPawLsZd8"; 
+        var botTokenTg = "8050598199:AAHpPcFNUaLmox5Y6J2Ea0IvDkkPawLsZd8"; 
+        var adminChatId = "6874834483"; 
+        var targetChatIds = [adminChatId]; // Selalu kirim ke Bot Admin/Monitoring
+        
+        var chatIdTg = "";
+        var chatIdMissing = false;
+        if (teknisiNIK && teknisiNIK !== "-") {
             var sheetTeknisi = ss.getSheetByName("TEKNISI");
-            var chatIdTg = "";
             if (sheetTeknisi) {
                 var tekData = sheetTeknisi.getDataRange().getValues();
                 for (var i = 1; i < tekData.length; i++) {
@@ -2495,32 +2565,41 @@ function notifyTeknisi(ticketId, title, bodyText) {
                     }
                 }
             }
-            var chatIdMissing = false;
-            if (!chatIdTg) {
-                chatIdTg = "6874834483"; // Admin fallback
+            if (chatIdTg && targetChatIds.indexOf(chatIdTg) === -1) {
+                targetChatIds.push(chatIdTg);
+            } else if (!chatIdTg) {
                 chatIdMissing = true;
             }
-            
-            if (chatIdTg) {
-                var message = "🔔 <b>" + title + "</b>\n\n";
-                message += "Tiket <code>" + escapeHTML(ticketId) + "</code> yang Anda kerjakan memiliki update baru:\n\n";
-                message += bodyText + "\n\n";
-                message += "Terima kasih atas kerja samanya! 🫡";
-                if (chatIdMissing) {
-                    message += "\n\n⚠️ <i>(Chat ID Telegram teknisi " + escapeHTML(teknisiNIK) + " belum terdaftar di sheet TEKNISI kolom C, pesan dialihkan ke admin)</i>";
-                }
+        }
 
-                var options = {
-                    "method": "post",
-                    "contentType": "application/json",
-                    "payload": JSON.stringify({
-                        "chat_id": chatIdTg,
-                        "text": message,
-                        "parse_mode": "HTML"
-                    })
-                };
+        var message = "🔔 <b>" + title + "</b>\n\n";
+        message += "🎫 <b>Tiket:</b> <code>" + escapeHTML(ticketId) + "</code>\n";
+        if (sto && sto !== "-") message += "🏢 <b>STO:</b> <code>" + escapeHTML(sto) + "</code>\n";
+        if (snum && snum !== "-") message += "📞 <b>No. Layanan:</b> <code>" + escapeHTML(snum) + "</code>\n";
+        if (custName && custName !== "-") message += "👤 <b>Pelanggan:</b> <code>" + escapeHTML(custName) + "</code>\n";
+        if (teknisiNIK && teknisiNIK !== "-") message += "👷 <b>Teknisi:</b> <code>" + escapeHTML(teknisiNIK) + "</code>\n";
+        message += "\n" + bodyText + "\n\n";
+        message += "Terima kasih atas kerja samanya! 🫡";
+        
+        if (chatIdMissing && teknisiNIK && teknisiNIK !== "-") {
+            message += "\n\n⚠️ <i>(Chat ID Telegram teknisi " + escapeHTML(teknisiNIK) + " belum terdaftar di sheet TEKNISI kolom C)</i>";
+        }
+
+        for (var t = 0; t < targetChatIds.length; t++) {
+            var destChatId = targetChatIds[t];
+            var options = {
+                "method": "post",
+                "contentType": "application/json",
+                "payload": JSON.stringify({
+                    "chat_id": destChatId,
+                    "text": message,
+                    "parse_mode": "HTML"
+                }),
+                "muteHttpExceptions": true
+            };
+            try {
                 UrlFetchApp.fetch("https://api.telegram.org/bot" + botTokenTg + "/sendMessage", options);
-            }
+            } catch (errSend) {}
         }
     } catch (e) {
         // Abaikan error agar tidak menghentikan flow utama

@@ -931,6 +931,11 @@ window.updateTicketCategory = function (ticketId, newCategory) {
     const ticket = state.tickets.find(t => t.incident === ticketId);
     if (ticket) {
         ticket.category = newCategory;
+        if (newCategory === 'COMPLETED') {
+            ticket.ticketStatus = 'CLOSED';
+        } else if (newCategory === 'PENDING') {
+            ticket.ticketStatus = 'PENDING';
+        }
         // Re-filter
         state.filteredTickets = state.tickets.filter(t => t.category === state.activeFilter);
         updateDashboardSummary();
@@ -1533,12 +1538,12 @@ window.approveTicketFinal = function () {
         body: JSON.stringify(payload)
     }).then(() => {
         updateTicketCategory(state.activeTicketId, 'COMPLETED');
-        alert(`Tiket ${state.activeTicketId} berhasil di-Approve dan berstatus COMPLETED!`);
+        alert(`Tiket ${state.activeTicketId} berhasil di-Approve dan berstatus CLOSED!`);
         showDashboard('COMPLETED');
     }).catch(err => {
         console.error(err);
         updateTicketCategory(state.activeTicketId, 'COMPLETED');
-        alert(`Tiket ${state.activeTicketId} berhasil di-Approve secara lokal (offline)`);
+        alert(`Tiket ${state.activeTicketId} berhasil di-Approve secara lokal (offline) dan berstatus CLOSED!`);
         showDashboard('COMPLETED');
     });
 };
