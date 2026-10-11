@@ -374,16 +374,62 @@ body {
     padding: 8px 16px;
 }
 
+/* Table Container & Horizontal Scroll */
+.table-container {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(99, 102, 241, 0.5) transparent;
+    padding-bottom: 12px;
+    margin-top: 10px;
+    position: relative;
+    cursor: grab;
+}
+
+.table-container.is-dragging {
+    cursor: grabbing;
+    user-select: none;
+}
+
+/* Custom Visible Scrollbar */
+.table-container::-webkit-scrollbar {
+    height: 8px;
+}
+
+.table-container::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.04);
+    border-radius: 8px;
+}
+
+[data-theme="dark"] .table-container::-webkit-scrollbar-track,
+body:not(.light-mode) .table-container::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.table-container::-webkit-scrollbar-thumb {
+    background: rgba(99, 102, 241, 0.45);
+    border-radius: 8px;
+    transition: background 0.2s ease;
+}
+
+.table-container::-webkit-scrollbar-thumb:hover {
+    background: rgba(99, 102, 241, 0.85);
+}
+
 /* Table */
 .data-table {
     width: 100%;
+    min-width: 1250px; /* Pastikan kolom tetap rapi dan bisa digeser leluasa */
     border-collapse: separate;
     border-spacing: 0 8px;
 }
 
 .data-table th {
     text-align: left;
-    padding: 0 24px 10px;
+    padding: 0 20px 10px;
     font-size: 11px;
     font-weight: 600;
     color: var(--text-secondary);
@@ -391,16 +437,18 @@ body {
     letter-spacing: 1px;
     border: none;
     background: transparent;
+    white-space: nowrap;
 }
 
 .data-table td {
-    padding: 18px 24px;
+    padding: 16px 20px;
     font-size: 13px;
     color: var(--text-primary);
     background: var(--bg-table-row);
     border-top: 1px solid transparent;
     border-bottom: 1px solid transparent;
     transition: var(--transition);
+    white-space: nowrap;
 }
 
 .data-table tr:hover td {
@@ -679,15 +727,16 @@ body {
     }
 
     /* Table - horizontal scroll */
+    .table-container,
     .table-wrapper {
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
         margin: 0 -16px;
-        padding: 0 16px;
+        padding: 0 16px 12px;
     }
 
     .data-table {
-        min-width: 600px;
+        min-width: 1150px;
     }
 
     .data-table th {

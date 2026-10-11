@@ -240,6 +240,7 @@ function handleLogout() {
 }
 
 function init() {
+    initTableDragScroll();
     // Check if user is logged in
     const savedRole = localStorage.getItem('userRole');
     if (savedRole) {
@@ -256,11 +257,50 @@ function initAfterLogin() {
     currentDateRange.innerText = `${today.getDate()} ${today.toLocaleString('default', { month: 'long' })} ${today.getFullYear()}`;
     updateThemeBtn(document.body.classList.contains('light-mode'));
     fetchTickets();
+    initTableDragScroll();
     
     // Auto refresh every 1 minute
     setInterval(() => {
         fetchTickets(true);
     }, 60000);
+}
+
+// === DRAG TO SCROLL TABLE FEATURE ===
+function initTableDragScroll() {
+    const slider = document.getElementById('ticketTableContainer');
+    if (!slider || slider.dataset.dragInit) return;
+    slider.dataset.dragInit = "true";
+
+    let isDown = false;
+    let startX = 0;
+    let scrollLeft = 0;
+
+    slider.addEventListener('mousedown', (e) => {
+        // Jangan aktifkan drag jika user mengklik tombol, link, input, atau select
+        if (e.target.closest('button') || e.target.closest('a') || e.target.closest('input') || e.target.closest('select')) return;
+        isDown = true;
+        slider.classList.add('is-dragging');
+        startX = e.pageX - slider.offsetLeft;
+        scrollLeft = slider.scrollLeft;
+    });
+
+    slider.addEventListener('mouseleave', () => {
+        isDown = false;
+        slider.classList.remove('is-dragging');
+    });
+
+    slider.addEventListener('mouseup', () => {
+        isDown = false;
+        slider.classList.remove('is-dragging');
+    });
+
+    slider.addEventListener('mousemove', (e) => {
+        if (!isDown) return;
+        e.preventDefault();
+        const x = e.pageX - slider.offsetLeft;
+        const walk = (x - startX) * 1.5; // Multiplier kecepatan geser
+        slider.scrollLeft = scrollLeft - walk;
+    });
 }
 
 function fetchTickets(isBackground = false) {
