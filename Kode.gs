@@ -332,6 +332,11 @@ function doGet(e) {
                       <label>Upload Foto Evidence Redaman</label>
                       <input type="file" id="ev_redaman" name="ev_redaman_file" accept="image/*" style="padding:8px; border:1px solid #cbd5e1; border-radius:6px; width:100%; box-sizing:border-box;">
                   </div>
+
+                  <div class="form-group">
+                      <label>Note Kendala (Opsional)</label>
+                      <textarea id="note_kendala" placeholder="Tuliskan kendala / note tambahan jika ada..." style="padding:8px; border:1px solid #cbd5e1; border-radius:6px; width:100%; box-sizing:border-box; min-height:80px; font-family:inherit;"></textarea>
+                  </div>
               </div>
 
               <!-- LAYANAN TAMBAHAN -->
@@ -568,6 +573,11 @@ function doGet(e) {
                       summary += "- SCC/TSC: " + (getVal('close_scc') || 'Sukses') + "\\n";
                       summary += "- Redaman ODP: " + (getVal('redaman_odp') || '-') + "\\n";
                       
+                      var noteK = getVal('note_kendala');
+                      if(noteK) {
+                          summary += "- Note Kendala: " + noteK + "\\n";
+                      }
+                      
                       if(document.getElementById('toggle_voice') && document.getElementById('toggle_voice').checked) {
                           summary += "- VOICE: RJ11/Phone (" + (document.getElementById('voice_status').checked ? "Aman" : "Tidak Aman") + ")\\n";
                       }
@@ -798,7 +808,6 @@ function submitFisikBase64(payload) {
             try {
                 var blob = Utilities.newBlob(Utilities.base64Decode(fileObj.base64), fileObj.mimeType || 'image/jpeg', namePrefix + "_" + ticketId + "_" + fileObj.name);
                 var file = folder ? folder.createFile(blob) : DriveApp.createFile(blob);
-                file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
                 return file.getUrl();
             } catch (e) { return "[Error Upload: " + e.message + "]"; }
         }
@@ -925,7 +934,6 @@ function submitFisikToGAS(formObject) {
                     // Gunakan folder jika ada, jika tidak taruh di root
                     var file = folder ? folder.createFile(actualBlob) : DriveApp.createFile(actualBlob);
                     file.setName(namePrefix + "_" + ticketId + "_" + actualBlob.getName());
-                    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
                     return file.getUrl();
                 }
             } catch (e) {
@@ -1043,10 +1051,10 @@ function _writeEvidenceToSheet(sheetName, ticketId, summary, dedicatedColName) {
                  sheet.getRange(r + 1, actionCol + 1).setValue(newAction);
              }
              found = true;
-             break;
+             break; // Break the inner loop (columns), but continue the outer loop (rows) to find duplicates
          }
      }
-     if (found) break;
+     // DO NOT break here, so we can update all duplicate rows for the same ticket
   }
   
   // Jika tidak ketemu di DATABASE ALL TICKET, tambahkan baris baru agar action tersimpan
@@ -1152,6 +1160,14 @@ function doPost(e) {
           var approveText = "[COMPLETED] - Approved by Korlap";
           if (dataObj.korlapNote) approveText += " | " + dataObj.korlapNote;
           var successMsg = submitEvidenceDariWeb(dataObj.ticketId, approveText, "", "EVIDENCE KORLAP");
+          
+          // === NOTIFIKASI KE TEKNISI ===
+          var korlapNote = dataObj.korlapNote ? escapeHTML(dataObj.korlapNote) : "Tidak ada catatan tambahan";
+          var notifyBody = "<b>Selamat! Tiket telah di-APPROVE oleh Korlap!</b> 🎉\n";
+          notifyBody += "Status tiket saat ini telah menjadi <b>COMPLETED (CLOSE)</b>.\n\n";
+          notifyBody += "Catatan Korlap: " + korlapNote;
+          notifyTeknisi(dataObj.ticketId, "APPROVAL KORLAP (COMPLETED)", notifyBody);
+          
           return ContentService.createTextOutput(successMsg).setMimeType(ContentService.MimeType.TEXT);
       } catch (err) {
           return ContentService.createTextOutput("Error: " + err).setMimeType(ContentService.MimeType.TEXT);
@@ -1164,21 +1180,36 @@ function doPost(e) {
           var sumText = dataObj.summaryText || "[WAITING APPROVAL KORLAP] - Logic OK, siap di-approve";
           
           if (dataObj.photoBase64) {
-              var decoded = Utilities.base64Decode(dataObj.photoBase64);
-              var blob = Utilities.newBlob(decoded, dataObj.photoMimeType, dataObj.photoName);
-              var folderId = "1Nrot1WJolVqbgfAlDmxoqHbo7Hu2pl49";
-              var folder = DriveApp.getFolderById(folderId);
-              var file = folder.createFile(blob);
-              file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-              sumText += " | Foto: " + file.getUrl();
+              try {
+                  var cleanB64 = dataObj.photoBase64.replace(/^data:image\/[a-z]+;base64,/, '').trim();
+                  var decoded = Utilities.base64Decode(cleanB64);
+                  var blob = Utilities.newBlob(decoded, dataObj.photoMimeType || 'image/jpeg', dataObj.photoName || 'evidence.jpg');
+                  var folderId = "1Nrot1WJolVqbgfAlDmxoqHbo7Hu2pl49";
+                  var folder = null;
+                  try { folder = DriveApp.getFolderById(folderId); } catch(e) {}
+                  
+                  var file = folder ? folder.createFile(blob) : DriveApp.createFile(blob);
+                  sumText += " | Foto: " + file.getUrl();
+              } catch(imgErr) {
+                  // Jangan biarkan error upload foto menggagalkan pengiriman evidence
+                  sumText += " | [Foto Gagal Upload: " + imgErr.message + "]";
+              }
           }
 
           var successMsg = submitEvidenceDariWeb(dataObj.ticketId, sumText, "", "EVIDENCE LOGIC");
+          
+          // === NOTIFIKASI KE TEKNISI ===
+          var rawSummary = dataObj.summaryText || "";
+          rawSummary = rawSummary.replace("[WAITING APPROVAL KORLAP] - Eksekusi Logic: ", "");
+          var notifyBody = "<b>Telah selesai di-eksekusi oleh GCU LOGIC (Helpdesk)</b> 💻\n\n";
+          notifyBody += "Detail pekerjaan yang dilakukan:\n" + escapeHTML(rawSummary) + "\n\n";
+          notifyBody += "Saat ini tiket sedang diteruskan ke Korlap untuk proses Approval.";
+          notifyTeknisi(dataObj.ticketId, "INFO GCU LOGIC SELESAI", notifyBody);
+
           return ContentService.createTextOutput(successMsg).setMimeType(ContentService.MimeType.TEXT);
       } catch (err) {
           try {
-              var errorSheetId = "1-Tf-jE-V34c_w-W4bU56JzE2V6y92m8E-i4n_Yk9eB8";
-              var ss = SpreadsheetApp.openById(errorSheetId);
+              var ss = SpreadsheetApp.getActiveSpreadsheet();
               var errSheet = ss.getSheetByName("DEBUG_LOG") || ss.insertSheet("DEBUG_LOG");
               errSheet.appendRow([new Date(), "request_approval_error", err.toString(), "URL: " + (err.fileName||"")]);
           } catch(e) {}
@@ -1192,11 +1223,18 @@ function doPost(e) {
           var sumTextFisik = dataObj.summaryText || "[GCU LOGIC] - EVIDENCE FISIK SUBMITTED";
           
           if (dataObj.photoBase64) {
-              var decoded = Utilities.base64Decode(dataObj.photoBase64);
-              var blob = Utilities.newBlob(decoded, dataObj.photoMimeType, dataObj.photoName);
-              var file = DriveApp.createFile(blob);
-              file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-              sumTextFisik += " | Foto: " + file.getUrl();
+              try {
+                  var cleanB64 = dataObj.photoBase64.replace(/^data:image\/[a-z]+;base64,/, '').trim();
+                  var decoded = Utilities.base64Decode(cleanB64);
+                  var blob = Utilities.newBlob(decoded, dataObj.photoMimeType || 'image/jpeg', dataObj.photoName || 'evidence.jpg');
+                  var folderId = "1Nrot1WJolVqbgfAlDmxoqHbo7Hu2pl49";
+                  var folder = null;
+                  try { folder = DriveApp.getFolderById(folderId); } catch(e) {}
+                  var file = folder ? folder.createFile(blob) : DriveApp.createFile(blob);
+                  sumTextFisik += " | Foto: " + file.getUrl();
+              } catch(imgErr) {
+                  sumTextFisik += " | [Foto Gagal Upload: " + imgErr.message + "]";
+              }
           }
           
           var successMsgFisik = submitEvidenceDariWeb(dataObj.ticketId, sumTextFisik, "", "EVIDENCE FISIK");
@@ -1212,11 +1250,18 @@ function doPost(e) {
           var sumTextRework = dataObj.summaryText || ("[REWORK - DIKEMBALIKAN KE " + dataObj.targetCategory + "]");
           
           if (dataObj.photoBase64) {
-              var decoded = Utilities.base64Decode(dataObj.photoBase64);
-              var blob = Utilities.newBlob(decoded, dataObj.photoMimeType, dataObj.photoName);
-              var file = DriveApp.createFile(blob);
-              file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-              sumTextRework += " | Foto: " + file.getUrl();
+              try {
+                  var cleanB64 = dataObj.photoBase64.replace(/^data:image\/[a-z]+;base64,/, '').trim();
+                  var decoded = Utilities.base64Decode(cleanB64);
+                  var blob = Utilities.newBlob(decoded, dataObj.photoMimeType || 'image/jpeg', dataObj.photoName || 'evidence_rework.jpg');
+                  var folderId = "1Nrot1WJolVqbgfAlDmxoqHbo7Hu2pl49";
+                  var folder = null;
+                  try { folder = DriveApp.getFolderById(folderId); } catch(e) {}
+                  var file = folder ? folder.createFile(blob) : DriveApp.createFile(blob);
+                  sumTextRework += " | Foto: " + file.getUrl();
+              } catch(imgErr) {
+                  sumTextRework += " | [Foto Gagal Upload: " + imgErr.message + "]";
+              }
           }
 
           var colName = dataObj.targetCategory === "GCU FISIK" ? "EVIDENCE FISIK" : "EVIDENCE LOGIC";
@@ -1676,6 +1721,10 @@ function doPost(e) {
   var scrapeSnumIdx = -1;
   var scrapeStoIdx = -1;
   var scrapeCustNameIdx = -1;
+  var scrapeServiceIdx = -1;
+  var scrapeStatusIdx = -1;
+  var scrapeRxIdx = -1;
+  var scrapeTxIdx = -1;
   
   // Baca map TEKNISI untuk Auto-Assign
   var teknisiMap = {};
@@ -1709,6 +1758,10 @@ function doPost(e) {
                 if (h.includes("SERVICE NUMBER") || h.includes("NO INET") || h.includes("NO SPEEDY") || h.includes("ND")) scrapeSnumIdx = c;
                 if (h.includes("STO") || h.includes("WORKZONE") || h.includes("LOKASI")) scrapeStoIdx = c;
                 if (h.includes("CUSTOMER NAME") || h.includes("NAMA PELANGGAN")) scrapeCustNameIdx = c;
+                if (h.includes("SERVICE TYPE") || h.includes("SERVICE")) scrapeServiceIdx = c;
+                if (h.includes("STATUS INFO") || h.includes("STATUS TIKET") || (h.includes("STATUS") && !h.includes("ALARM"))) scrapeStatusIdx = c;
+                if (h.includes("RX POWER") || h.includes("RX")) scrapeRxIdx = c;
+                if (h.includes("TX POWER") || h.includes("TX") || h.includes("STATUS / ALARM")) scrapeTxIdx = c;
             }
             return; 
         }
@@ -1758,6 +1811,7 @@ function doPost(e) {
       sheetScrape.getRange(2, 1, rowsToInsert.length, rowsToInsert[0].length).setValues(rowsToInsert);
   }
 
+  try {
   // 2. UPDATE DATABASE & CEK DUPLIKASI
   var dbLastRow = sheetDB.getLastRow();
   
@@ -1856,6 +1910,10 @@ function doPost(e) {
            var sNum = (scrapeSnumIdx !== -1 && ticketData[scrapeSnumIdx]) ? ticketData[scrapeSnumIdx] : "-";
            var sto = (scrapeStoIdx !== -1 && ticketData[scrapeStoIdx]) ? ticketData[scrapeStoIdx] : "-";
            var custName = (scrapeCustNameIdx !== -1 && ticketData[scrapeCustNameIdx]) ? ticketData[scrapeCustNameIdx] : "-";
+           var serviceType = (scrapeServiceIdx !== -1 && ticketData[scrapeServiceIdx]) ? ticketData[scrapeServiceIdx] : "-";
+           var statusInfo = (scrapeStatusIdx !== -1 && ticketData[scrapeStatusIdx]) ? ticketData[scrapeStatusIdx] : "-";
+           var rxPower = (scrapeRxIdx !== -1 && ticketData[scrapeRxIdx]) ? ticketData[scrapeRxIdx] : "-";
+           var txPower = (scrapeTxIdx !== -1 && ticketData[scrapeTxIdx]) ? ticketData[scrapeTxIdx] : "-";
            
            // Cari fallback jika gagal dapat sNum (Regex di summary)
            if (sNum === "-" || !sNum) {
@@ -1863,7 +1921,7 @@ function doPost(e) {
                if (matchInet) sNum = matchInet[0];
            }
            
-           autoAssignTicket(tInfo.idTele, tInfo.nama, ticketId, sNum, custName, sto);
+           autoAssignTicket(tInfo.idTele, tInfo.nama, ticketId, sNum, custName, sto, serviceType, statusInfo, rxPower, txPower);
        }
     }
   });
@@ -1886,6 +1944,11 @@ function doPost(e) {
     }
     sheetDB.getRange(dbLast + 1, 1, newTicketsForDB.length, newTicketsForDB[0].length).setValues(newTicketsForDB);
   }
+  
+  } catch(dbErr) {
+      var errSheet = ss.getSheetByName("DEBUG_LOG") || ss.insertSheet("DEBUG_LOG");
+      errSheet.appendRow([new Date(), "doPost_db_update_error", dbErr.toString(), dbErr.stack || ""]);
+  }
 
   return ContentService.createTextOutput("Success").setMimeType(ContentService.MimeType.TEXT);
   } finally {
@@ -1903,13 +1966,27 @@ function onOpen() {
 
 function syncInseraToDatabase() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheetScrape = ss.getSheetByName("SCRAPING INSERA");
-  var sheetDB = ss.getSheetByName("DATABASE");
   
-  if (!sheetScrape || !sheetDB) {
-    SpreadsheetApp.getUi().alert("Tab SCRAPING INSERA atau DATABASE tidak ditemukan!");
-    return;
-  }
+  // Lakukan sync untuk kedua pasang sheet
+  var pairs = [
+      { scrape: "SCRAPING INSERA", db: "DATABASE" },
+      { scrape: "ALL TICKET INSERA", db: "DATABASE ALL TICKET" }
+  ];
+  
+  var totalNew = 0;
+  var summaryMsg = "";
+  
+  for (var p = 0; p < pairs.length; p++) {
+      var sheetScrapeName = pairs[p].scrape;
+      var sheetDBName = pairs[p].db;
+      
+      var sheetScrape = ss.getSheetByName(sheetScrapeName);
+      var sheetDB = ss.getSheetByName(sheetDBName);
+      
+      if (!sheetScrape || !sheetDB) {
+          summaryMsg += "⚠️ " + sheetScrapeName + " atau " + sheetDBName + " tidak ditemukan.\n";
+          continue;
+      }
   
   checkAndCreateHeaders(sheetScrape, sheetDB);
   
@@ -1956,30 +2033,31 @@ function syncInseraToDatabase() {
      }
   }
   
-  if (newRows.length > 0) {
-      sheetDB.getRange(dbLastRow + 1, 1, newRows.length, newRows[0].length).setValues(newRows);
+      if (newRows.length > 0) {
+          sheetDB.getRange(dbLastRow + 1, 1, newRows.length, newRows[0].length).setValues(newRows);
+          totalNew += newRows.length;
+          summaryMsg += "✅ " + newRows.length + " tiket baru disinkron ke " + sheetDBName + ".\n";
+      } else {
+          summaryMsg += "ℹ️ Tidak ada tiket baru untuk " + sheetDBName + ".\n";
+      }
+
+      // --- LOGGING SYNC ACTIVITY ---
+      var sheetLog = ss.getSheetByName("SYNC LOG");
+      if (!sheetLog) {
+          sheetLog = ss.insertSheet("SYNC LOG");
+          sheetLog.appendRow(["Tanggal Sync", "Sheet Target", "Total Tiket Sebelumnya", "Jumlah Tiket Baru Masuk", "Total Tiket Setelahnya"]);
+          sheetLog.getRange("A1:E1").setFontWeight("bold").setBackground("#e2e8f0");
+      }
+      var prevCount = dbLastRow > 0 ? dbLastRow - 1 : 0;
+      var newCount = newRows.length;
+      var newTotal = prevCount + newCount;
+      var dateNow = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
+      
+      sheetLog.appendRow([dateNow, sheetDBName, prevCount, newCount, newTotal]);
+      // -----------------------------
   }
 
-  // --- LOGGING SYNC ACTIVITY ---
-  var sheetLog = ss.getSheetByName("SYNC LOG");
-  if (!sheetLog) {
-      sheetLog = ss.insertSheet("SYNC LOG");
-      sheetLog.appendRow(["Tanggal Sync", "Total Tiket Sebelumnya", "Jumlah Tiket Baru Masuk", "Total Tiket Setelahnya"]);
-      sheetLog.getRange("A1:D1").setFontWeight("bold").setBackground("#e2e8f0");
-  }
-  var prevCount = dbLastRow > 0 ? dbLastRow - 1 : 0;
-  var newCount = newRows.length;
-  var newTotal = prevCount + newCount;
-  var dateNow = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
-  
-  sheetLog.appendRow([dateNow, prevCount, newCount, newTotal]);
-  // -----------------------------
-
-  if (newRows.length > 0) {
-      SpreadsheetApp.getUi().alert("✅ Berhasil memindahkan " + newRows.length + " tiket baru ke DATABASE.");
-  } else {
-      SpreadsheetApp.getUi().alert("ℹ️ Semua tiket sudah ada di DATABASE (Tidak ada data baru).");
-  }
+  SpreadsheetApp.getUi().alert("Hasil Sinkronisasi:\n\n" + summaryMsg);
 }
 
 function escapeHTML(str) {
@@ -2314,23 +2392,27 @@ function setWebhookTelegram() {
   }
 }
 
-function autoAssignTicket(chatIdTg, teknisiName, ticketId, sNum, custName, sto) {
+function autoAssignTicket(chatIdTg, teknisiName, ticketId, sNum, custName, sto, serviceType, statusInfo, rxPower, txPower) {
     var botTokenTg = "8050598199:AAHpPcFNUaLmox5Y6J2Ea0IvDkkPawLsZd8";
     if (botTokenTg.includes("MASUKKAN_TOKEN")) return;
     
     var webAppUrl = ScriptApp.getService().getUrl();
-    var rx = "-";
-    var tx = "-";
+    var rx = rxPower || "-";
+    var tx = txPower || "-";
     
     var evidenceLink = webAppUrl + "?action=form_evidence&ticket=" + encodeURIComponent(ticketId) + "&inet=" + encodeURIComponent(sNum) + "&rx=" + encodeURIComponent(rx) + "&tx=" + encodeURIComponent(tx);
     var logicLink = webAppUrl + "?action=mark_gcu_logic&ticket=" + encodeURIComponent(ticketId);
     
-    var textMsg = "👨‍🔧 <b>AUTO ASSIGNMENT TICKET!</b>\n\n";
-    textMsg += "Halo <b>" + escapeHTML(teknisiName) + "</b>, Anda otomatis ditugaskan untuk tiket berikut:\n\n";
+    var textMsg = "👨‍🔧 <b>NEW ASSIGNMENT TICKET!</b>\n\n";
+    textMsg += "Halo <b>" + escapeHTML(teknisiName) + "</b>, Anda ditugaskan untuk tiket berikut:\n\n";
     textMsg += "🎫 <b>INCIDENT:</b> <code>" + escapeHTML(ticketId) + "</code>\n";
     textMsg += "🔌 <b>NO INET:</b> <code>" + escapeHTML(sNum) + "</code>\n";
     textMsg += "👤 <b>CUSTOMER:</b> <code>" + escapeHTML(custName) + "</code>\n";
-    textMsg += "🏢 <b>STO:</b> <code>" + escapeHTML(sto) + "</code>\n\n";
+    textMsg += "🏷️ <b>SERVICE:</b> <code>" + escapeHTML(serviceType || "-") + "</code>\n";
+    textMsg += "📊 <b>STATUS:</b> <code>" + escapeHTML(statusInfo || "-") + "</code>\n";
+    textMsg += "🏢 <b>STO:</b> <code>" + escapeHTML(sto) + "</code>\n";
+    textMsg += "🔴 <b>RX POWER:</b> <code>" + escapeHTML(rx) + "</code>\n";
+    textMsg += "🟢 <b>TX POWER:</b> <code>" + escapeHTML(tx) + "</code>\n\n";
     
     textMsg += "Silakan klik salah satu tombol di bawah sesuai dengan penanganan yang dilakukan!";
     
@@ -2355,4 +2437,92 @@ function autoAssignTicket(chatIdTg, teknisiName, ticketId, sNum, custName, sto) 
             "payload": JSON.stringify(payloadTg)
         });
     } catch(e) {}
+}
+
+function notifyTeknisi(ticketId, title, bodyText) {
+    try {
+        var teknisiNIK = "-";
+        var ss = SpreadsheetApp.getActiveSpreadsheet();
+        var sheetDB = ss.getSheetByName("DATABASE ALL TICKET") || ss.getSheetByName("DATABASE");
+        if (sheetDB) {
+            var dbData = sheetDB.getDataRange().getValues();
+            var incCol = -1, actCol = -1, tekCol = -1;
+            for (var c = 0; c < dbData[0].length; c++) {
+                var h = dbData[0][c].toString().toUpperCase().trim();
+                if (h.includes("INCIDENT") || h === "TICKET") incCol = c;
+                if (h === "ACTION") actCol = c;
+                if (h.includes("TEKNISI") || h.includes("ASSIGNEE") || h.includes("NIK") || h.includes("ENGINEER")) tekCol = c;
+            }
+            if (incCol !== -1) {
+                for (var r = 1; r < dbData.length; r++) {
+                    if (dbData[r][incCol].toString().trim() === ticketId.toString().trim()) {
+                        
+                        // 1. Coba baca dari kolom TEKNISI langsung
+                        if (tekCol !== -1 && dbData[r][tekCol]) {
+                            var potentialNik = dbData[r][tekCol].toString().trim();
+                            var matchNik = potentialNik.match(/\b\d{6,8}\b/);
+                            if (matchNik) {
+                                teknisiNIK = matchNik[0];
+                            } else {
+                                teknisiNIK = potentialNik; // Fallback ambil semua text
+                            }
+                        }
+                        
+                        // 2. Jika masih gagal, coba fallback regex dari kolom ACTION
+                        if ((!teknisiNIK || teknisiNIK === "-") && actCol !== -1) {
+                            var actText = dbData[r][actCol].toString();
+                            var assignMatch = actText.match(/\[ASSIGNED\] TEKNISI:\s*([A-Z0-9_]+)/i);
+                            if (assignMatch && assignMatch[1]) {
+                                teknisiNIK = assignMatch[1];
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (teknisiNIK !== "-") {
+            var botTokenTg = "8050598199:AAHpPcFNUaLmox5Y6J2Ea0IvDkkPawLsZd8"; 
+            var sheetTeknisi = ss.getSheetByName("TEKNISI");
+            var chatIdTg = "";
+            if (sheetTeknisi) {
+                var tekData = sheetTeknisi.getDataRange().getValues();
+                for (var i = 1; i < tekData.length; i++) {
+                    if (tekData[i][0].toString().trim() === teknisiNIK.toString().trim()) {
+                        chatIdTg = tekData[i][2] ? tekData[i][2].toString().trim() : "";
+                        break;
+                    }
+                }
+            }
+            var chatIdMissing = false;
+            if (!chatIdTg) {
+                chatIdTg = "6874834483"; // Admin fallback
+                chatIdMissing = true;
+            }
+            
+            if (chatIdTg) {
+                var message = "🔔 <b>" + title + "</b>\n\n";
+                message += "Tiket <code>" + escapeHTML(ticketId) + "</code> yang Anda kerjakan memiliki update baru:\n\n";
+                message += bodyText + "\n\n";
+                message += "Terima kasih atas kerja samanya! 🫡";
+                if (chatIdMissing) {
+                    message += "\n\n⚠️ <i>(Chat ID Telegram teknisi " + escapeHTML(teknisiNIK) + " belum terdaftar di sheet TEKNISI kolom C, pesan dialihkan ke admin)</i>";
+                }
+
+                var options = {
+                    "method": "post",
+                    "contentType": "application/json",
+                    "payload": JSON.stringify({
+                        "chat_id": chatIdTg,
+                        "text": message,
+                        "parse_mode": "HTML"
+                    })
+                };
+                UrlFetchApp.fetch("https://api.telegram.org/bot" + botTokenTg + "/sendMessage", options);
+            }
+        }
+    } catch (e) {
+        // Abaikan error agar tidak menghentikan flow utama
+    }
 }

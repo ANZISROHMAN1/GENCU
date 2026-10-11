@@ -55,7 +55,7 @@ const workflowPageTitle = document.getElementById('workflowPageTitle');
 const workflowSubtitle = document.getElementById('workflowSubtitle');
 const dispActiveTicketId = document.getElementById('activeTicketId');
 const dashboardTitle = document.getElementById('dashboardTitle');
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxKLJIBEWtPV2JiVpdA_IwIZECduOVaQY6GCR83MyCHH2W1pv7kgqzQOcNAIRSk1WdD/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwgkZAduwo1EKvp-MZgE9c0Auhfpz7aiNEi5TSer0gqHJDMjUvTcxJL3FpFfKWece2Z/exec';
 
 function showRegister() {
     document.getElementById('loginCard').style.display = 'none';
@@ -506,7 +506,7 @@ function processData(rows) {
             evFisik = row[evFisikIdx].toString().trim();
         }
         
-        let activeEvidenceForParsing = evLogic || evFisik || actionHistory;
+        let activeEvidenceForParsing = actionHistory || evLogic || evFisik;
 
         // Coba ekstrak teknisi dari ACTION history jika sudah di-assign manual lewat Web
         let assignMatch = rowText.match(/\[ASSIGNED\] TEKNISI:\s*([A-Z0-9_]+)/i);
@@ -573,7 +573,7 @@ function processData(rows) {
             let photos = {};
             for (let pKey in photoColumns) {
                 let pVal = row[photoColumns[pKey]];
-                if (pVal && pVal.toString().trim() !== "") {
+                if (pVal && pVal.toString().trim().startsWith("http")) {
                     photos[pKey] = pVal.toString().trim();
                 }
             }
@@ -1249,7 +1249,10 @@ function renderKorlapFlow() {
         let allFisikPhotos = [];
         if (ticket.photos && Object.keys(ticket.photos).length > 0) {
             for (let pName in ticket.photos) {
-                allFisikPhotos.push({ name: pName.replace('FOTO ', ''), url: ticket.photos[pName] });
+                let pUrl = ticket.photos[pName];
+                if (pUrl && pUrl.startsWith('http')) {
+                    allFisikPhotos.push({ name: pName.replace('FOTO ', ''), url: pUrl });
+                }
             }
         }
         fisikPhotosText.forEach((url, i) => {
