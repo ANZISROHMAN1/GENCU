@@ -1378,8 +1378,8 @@ window.getParsedEvidence = function(ticket) {
                             { id: "Cek Isolir", label: "Cek Status Isolir" },
                             { id: "Cek STB", label: "Cek Adv STB Information" }
                         ],
-                        "📞 Layanan Voice": [
-                            { id: "Cek Voice", label: "Executive Summary ACS" }
+                        "📊 Summary ACS": [
+                            { id: "Layanan ACS Voice", aliases: ["Cek Voice", "Executive Summary ACS"], label: "Layanan ACS Voice" }
                         ]
                     };
 
@@ -1390,7 +1390,7 @@ window.getParsedEvidence = function(ticket) {
                             html += `<div style="background: #f8fafc; padding: 10px 15px; font-size: 12px; font-weight: bold; color: var(--text-secondary); border-bottom: 1px solid var(--border);">${category}</div>`;
                             
                             allLogicTasks[category].forEach(task => {
-                                let isExecuted = logicItems.includes(task.id);
+                                let isExecuted = logicItems.includes(task.id) || (task.aliases && task.aliases.some(a => logicItems.includes(a)));
                                 let statusText = isExecuted ? `<span style="color: var(--success); font-weight: 600;">Executed ✅</span>` : `<span style="color: var(--text-secondary); font-weight: 500;">Dilewati ➖</span>`;
                                 
                                 html += `
@@ -1450,7 +1450,7 @@ window.getParsedEvidence = function(ticket) {
         let bUpper = b.toUpperCase();
         
         let isFisik = bUpper.match(/EVIDENCE FISIK|GCU FISIK|ASSIGNED|PENYEBAB\s*:|PERBAIKAN\s*:|SEGMEN\s*:|GCU JALUR|GCU ONT|GCU DC|SCC\/TSC|REDAMAN ODP/i);
-        let isLogic = bUpper.match(/WAITING APPROVAL KORLAP|EKSEKUSI LOGIC|PINDAH CHANNEL|CHECKLIST NAT|ENABLE IPV6|FIREWALL MEDIUM|CEK ONT|CEK FPP|CEK ACS|CEK CHANNEL|CEK ISOLIR|CEK STB|CEK VOICE/i);
+        let isLogic = bUpper.match(/WAITING APPROVAL KORLAP|EKSEKUSI LOGIC|PINDAH CHANNEL|CHECKLIST NAT|ENABLE IPV6|FIREWALL MEDIUM|CEK ONT|CEK FPP|CEK ACS|CEK CHANNEL|CEK ISOLIR|CEK STB|CEK VOICE|LAYANAN ACS VOICE|SUMMARY ACS/i);
         
         if (!isLogic && !isFisik) {
             if (bUpper.includes("LOGIC") || bUpper.includes("HELPDESK")) isLogic = true;
@@ -2081,9 +2081,9 @@ function renderHelpdeskFlow() {
         </div>
 
         <div style="background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 15px;">
-            <h4 style="font-size: 14px; font-weight: bold; color: #1e293b; margin-bottom: 10px;">📞 Layanan Voice</h4>
+            <h4 style="font-size: 14px; font-weight: bold; color: #1e293b; margin-bottom: 10px;">📊 Summary ACS</h4>
             <div style="display: flex; flex-direction: column; gap: 8px; margin-left: 5px;">
-                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" id="chk_voice1" ${state.workflowState.chk_voice1 ? 'checked' : ''} onchange="updateState('chk_voice1', this.checked)"> Executive Summary ACS</label>
+                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" id="chk_voice1" ${state.workflowState.chk_voice1 ? 'checked' : ''} onchange="updateState('chk_voice1', this.checked)"> Layanan ACS Voice</label>
             </div>
         </div>
 
@@ -2164,7 +2164,7 @@ window.requestApprovalBackend = async function (event) {
     if(state.workflowState.chk_iptv2) checkedItems.push("Cek Channel");
     if(state.workflowState.chk_iptv3) checkedItems.push("Cek Isolir");
     if(state.workflowState.chk_iptv4) checkedItems.push("Cek STB");
-    if(state.workflowState.chk_voice1) checkedItems.push("Cek Voice");
+    if(state.workflowState.chk_voice1) checkedItems.push("Layanan ACS Voice");
     
     let notes = document.getElementById('hdNotes') ? document.getElementById('hdNotes').value : "";
     let summaryText = "[WAITING APPROVAL KORLAP] - Eksekusi Logic: " + (checkedItems.length > 0 ? checkedItems.join(", ") : "OK") + (notes ? " | Catatan: " + notes : "");
@@ -2302,7 +2302,7 @@ window.returnToFisikFromHelpdesk = async function () {
     if(state.workflowState.chk_iptv2) checkedItems.push("Cek Channel");
     if(state.workflowState.chk_iptv3) checkedItems.push("Cek Isolir");
     if(state.workflowState.chk_iptv4) checkedItems.push("Cek STB");
-    if(state.workflowState.chk_voice1) checkedItems.push("Cek Voice");
+    if(state.workflowState.chk_voice1) checkedItems.push("Layanan ACS Voice");
 
     let hdNotes = document.getElementById('hdNotes') ? document.getElementById('hdNotes').value : "";
     let notes = (checkedItems.length > 0 ? "Sudah dicoba Helpdesk: " + checkedItems.join(", ") : "Logic tidak mempan");
@@ -2451,7 +2451,7 @@ window.assignAndReturnToFisik = async function (btn) {
     if(state.workflowState.chk_iptv2) checkedItems.push("Cek Channel");
     if(state.workflowState.chk_iptv3) checkedItems.push("Cek Isolir");
     if(state.workflowState.chk_iptv4) checkedItems.push("Cek STB");
-    if(state.workflowState.chk_voice1) checkedItems.push("Cek Voice");
+    if(state.workflowState.chk_voice1) checkedItems.push("Layanan ACS Voice");
 
     let hdNotes = document.getElementById('hdNotes') ? document.getElementById('hdNotes').value : '';
     let notes = (checkedItems.length > 0 ? "Sudah dicoba Helpdesk: " + checkedItems.join(", ") : "Logic tidak mempan");
