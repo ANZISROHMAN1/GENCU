@@ -979,6 +979,15 @@ function submitFisikToGAS(formObject) {
         if (res.indexOf("berhasil") === -1 && res.indexOf("Sukses") === -1 && res !== "OK") {
             throw new Error(res);
         }
+
+        // Notifikasi ke Grup Monitoring bahwa evidence fisik sudah masuk & lanjut ke GCU Logic
+        try {
+            var notifFisikText = "Teknisi telah menyelesaikan perbaikan fisik di lapangan dan submit form evidence! 🛠️\n\n" +
+                                 "👉 <b>Status Tiket:</b> <code>GCU LOGIC</code> 💻\n" +
+                                 "Mohon rekan Helpdesk segera melakukan pengecekan logic / unbind / create voucher!";
+            notifyTeknisi(ticketId, "GCU FISIK SUBMITTED ➔ BUTUH GCU LOGIC", notifFisikText);
+        } catch(eNotif) {}
+
         return res;
     } catch(e) {
         throw new Error(e.toString());
@@ -1113,6 +1122,87 @@ function submitEvidenceDariWeb(ticketId, summary, unused, dedicatedColName, newS
   throw "Tiket " + ticketId + " tidak ditemukan di Database manapun";
 }
 
+// === HELPER SISTEM HYBRID TELEGRAM (GRUP MONITORING & JAPRI TEKNISI) ===
+function getMonitoringGroupId() {
+  try {
+    var savedId = PropertiesService.getScriptProperties().getProperty("MONITORING_GROUP_ID");
+    if (savedId) return savedId.toString().trim();
+  } catch(e) {}
+  return "6874834483"; // Default Admin/Monitoring ID
+}
+
+function setMonitoringGroupId(newChatId) {
+  try {
+    PropertiesService.getScriptProperties().setProperty("MONITORING_GROUP_ID", newChatId.toString().trim());
+    return true;
+  } catch(e) {
+    return false;
+  }
+}
+
+function sendTelegramRaw(destChatId, textHtml, replyMarkup) {
+  if (!destChatId) return;
+  var botTokenTg = "8050598199:AAHpPcFNUaLmox5Y6J2Ea0IvDkkPawLsZd8";
+  var payload = {
+    "chat_id": destChatId,
+    "text": textHtml,
+    "parse_mode": "HTML",
+    "disable_web_page_preview": true
+  };
+  if (replyMarkup) {
+    payload["reply_markup"] = replyMarkup;
+  }
+  var options = {
+    "method": "post",
+    "contentType": "application/json",
+    "payload": JSON.stringify(payload),
+    "muteHttpExceptions": true
+  };
+  try {
+    UrlFetchApp.fetch("https://api.telegram.org/bot" + botTokenTg + "/sendMessage", options);
+  } catch(e) {
+    console.log("Send Tg Error: " + e.message);
+  }
+}
+
+function registerTeknisiTg(nik, senderName, chatId, username) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheetTeknisi = ss.getSheetByName("TEKNISI");
+    if (!sheetTeknisi) {
+      sheetTeknisi = ss.insertSheet("TEKNISI");
+      sheetTeknisi.appendRow(["NIK", "NAMA", "TELEGRAM CHAT ID", "USERNAME", "TANGGAL REGISTRASI"]);
+    }
+    var tekRows = sheetTeknisi.getLastRow();
+    var foundRow = -1;
+    var existingName = "";
+    if (tekRows > 1) {
+      var data = sheetTeknisi.getRange(2, 1, tekRows - 1, 3).getValues();
+      for (var k = 0; k < data.length; k++) {
+        var rowNikClean = data[k][0] ? data[k][0].toString().replace(/[^0-9]/g, '') : "";
+        var targetNikClean = nik.toString().replace(/[^0-9]/g, '');
+        if (rowNikClean && rowNikClean === targetNikClean) {
+          foundRow = k + 2;
+          existingName = data[k][1] ? data[k][1].toString().trim() : "";
+          break;
+        }
+      }
+    }
+    var finalName = existingName || senderName || nik;
+    if (foundRow !== -1) {
+      sheetTeknisi.getRange(foundRow, 3).setValue(chatId.toString());
+      if (sheetTeknisi.getLastColumn() >= 4) {
+        sheetTeknisi.getRange(foundRow, 4).setValue(username || "-");
+      }
+    } else {
+      sheetTeknisi.appendRow([nik.toString(), finalName, chatId.toString(), username || "-", new Date()]);
+    }
+    return { success: true, name: finalName };
+  } catch(e) {
+    return { success: false, error: e.message };
+  }
+}
+
 function doPost(e) {
   var lock = LockService.getScriptLock();
   try {
@@ -1135,26 +1225,80 @@ function doPost(e) {
     return ContentService.createTextOutput("Error parsing data: " + err.message).setMimeType(ContentService.MimeType.TEXT);
   }
   
-  // --- NEW: Handle Telegram Webhook untuk /start ---
+  // --- HANDLE TELEGRAM WEBHOOK (/start, /daftar, /setgroup, /id) ---
   if (dataObj && dataObj.message) {
       try {
-          var msgText = dataObj.message.text || "";
+          var msgText = (dataObj.message.text || "").trim();
           var chatId = dataObj.message.chat.id;
-          
-          if (msgText.startsWith("/start")) {
-              var botTokenTg = "8050598199:AAHpPcFNUaLmox5Y6J2Ea0IvDkkPawLsZd8";
-              var welcomeMsg = "Halo! Selamat, Anda sudah berhasil terhubung dengan bot ini. 🎉\n\nNotifikasi tiket dan tugas akan dikirimkan ke sini.";
-              var payloadTg = {
-                  "chat_id": chatId,
-                  "text": welcomeMsg
-              };
-              UrlFetchApp.fetch("https://api.telegram.org/bot" + botTokenTg + "/sendMessage", {
-                  "method": "post",
-                  "contentType": "application/json",
-                  "payload": JSON.stringify(payloadTg)
-              });
+          var chatType = dataObj.message.chat.type || "private";
+          var senderName = (dataObj.message.from.first_name || "") + (dataObj.message.from.last_name ? " " + dataObj.message.from.last_name : "");
+          senderName = senderName.trim() || "Rekan";
+          var username = dataObj.message.from.username ? "@" + dataObj.message.from.username : "-";
+
+          // 1. Command /setgroup atau /connect (Dijalankan di Grup Monitoring)
+          if (msgText.startsWith("/setgroup") || msgText.startsWith("/connect")) {
+              setMonitoringGroupId(chatId);
+              var groupTitle = dataObj.message.chat.title || "Grup Monitoring";
+              var groupConfirm = "✅ <b>Grup Monitoring Berhasil Didaftarkan!</b>\n\n" +
+                                 "🏢 <b>Grup:</b> " + escapeHTML(groupTitle) + "\n" +
+                                 "🆔 <b>Chat ID:</b> <code>" + chatId + "</code>\n\n" +
+                                 "Mulai sekarang, bot akan mengirimkan update pergerakan tiket ke grup ini:\n" +
+                                 "• 📢 Penugasan Tiket Baru\n" +
+                                 "• 🛠️ Teknisi Selesai Fisik (GCU Logic)\n" +
+                                 "• 💻 Helpdesk Selesai Logic (Menunggu Approval)\n" +
+                                 "• ⏸️ Tiket Pending / Rework\n" +
+                                 "• 📩 Laporan Close Tiket GENCU Resmi";
+              sendTelegramRaw(chatId, groupConfirm);
+              return ContentService.createTextOutput("OK").setMimeType(ContentService.MimeType.TEXT);
           }
-          // Kembalikan OK ke Telegram agar webhook tidak retrying
+
+          // 2. Command /getgroupid atau /id
+          if (msgText.startsWith("/getgroupid") || msgText === "/id") {
+              var idReply = "🆔 <b>Chat ID:</b> <code>" + chatId + "</code>\n" +
+                            "📋 <b>Tipe Chat:</b> " + chatType + "\n\n" +
+                            (chatType.includes("group") ? "Ketik <code>/setgroup</code> di grup ini untuk mengaktifkan notifikasi monitoring pergerakan tiket." : "");
+              sendTelegramRaw(chatId, idReply);
+              return ContentService.createTextOutput("OK").setMimeType(ContentService.MimeType.TEXT);
+          }
+
+          // 3. Command /start atau /daftar
+          if (msgText.startsWith("/start") || msgText.startsWith("/daftar")) {
+              var parts = msgText.split(/\s+/);
+              var nikCandidate = (parts.length > 1) ? parts[1].replace(/[^0-9]/g, '') : "";
+
+              if (nikCandidate && nikCandidate.length >= 6) {
+                  var regRes = registerTeknisiTg(nikCandidate, senderName, chatId, username);
+                  var tekName = regRes.name || senderName;
+                  var regSuccessMsg = "✅ <b>REGISTRASI BERHASIL!</b>\n\n" +
+                                      "Halo <b>" + escapeHTML(tekName) + "</b>,\n" +
+                                      "🆔 <b>NIK:</b> <code>" + nikCandidate + "</code>\n" +
+                                      "📱 <b>Telegram ID:</b> <code>" + chatId + "</code>\n\n" +
+                                      "Akun Anda telah terhubung dengan <b>GENCU BOT</b>. Setiap tiket tugas yang di-assign ke NIK Anda akan otomatis dikirimkan ke chat ini lengkap dengan tombol evidence fisik & logic. Semangat bertugas! 🫡";
+                  sendTelegramRaw(chatId, regSuccessMsg);
+              } else {
+                  var welcomeHelp = "👋 Halo <b>" + escapeHTML(senderName) + "</b>!\n\n" +
+                                    "Selamat datang di <b>GENCU BOT</b> (General Control & Update).\n\n" +
+                                    "Agar tiket tugas Anda otomatis terkirim ke chat ini, silakan daftarkan NIK Anda dengan format:\n" +
+                                    "👉 <code>/start [NIK_ANDA]</code>\n" +
+                                    "Contoh: <code>/start 18860070</code>\n\n" +
+                                    "<i>Atau ketik: <code>/daftar [NIK_ANDA]</code></i>";
+                  sendTelegramRaw(chatId, welcomeHelp);
+              }
+              return ContentService.createTextOutput("OK").setMimeType(ContentService.MimeType.TEXT);
+          }
+
+          // 4. Fallback jika teknisi hanya mengetik 6-8 digit angka NIK secara langsung di private chat
+          if (/^\d{6,8}$/.test(msgText) && chatType === "private") {
+              var directNik = msgText;
+              var regDirect = registerTeknisiTg(directNik, senderName, chatId, username);
+              var tekNameDirect = regDirect.name || senderName;
+              var msgDirect = "✅ <b>NIK TERDAFTAR!</b>\n\n" +
+                              "Halo <b>" + escapeHTML(tekNameDirect) + "</b>,\n" +
+                              "NIK <code>" + directNik + "</code> berhasil ditautkan ke Telegram Anda. Tiket tugas Anda akan langsung dikirimkan ke chat ini. 🫡";
+              sendTelegramRaw(chatId, msgDirect);
+              return ContentService.createTextOutput("OK").setMimeType(ContentService.MimeType.TEXT);
+          }
+
           return ContentService.createTextOutput("OK").setMimeType(ContentService.MimeType.TEXT);
       } catch (err) {
           return ContentService.createTextOutput("Telegram Error: " + err.message).setMimeType(ContentService.MimeType.TEXT);
@@ -1267,6 +1411,15 @@ function doPost(e) {
           }
           
           var successMsgFisik = submitEvidenceDariWeb(dataObj.ticketId, sumTextFisik, "", "EVIDENCE FISIK");
+          
+          // Notifikasi ke Grup Monitoring & Teknisi
+          try {
+              var notifFisikBody = "Teknisi telah menyelesaikan perbaikan fisik di lapangan. 🛠️\n\n" +
+                                   "👉 <b>Status Tiket:</b> <code>GCU LOGIC</code> 💻\n" +
+                                   "Mohon rekan Helpdesk segera melakukan pengecekan logic / unbind / create voucher!";
+              notifyTeknisi(dataObj.ticketId, "GCU FISIK SUBMITTED ➔ BUTUH GCU LOGIC", notifFisikBody);
+          } catch(eNotif) {}
+
           return ContentService.createTextOutput(successMsgFisik).setMimeType(ContentService.MimeType.TEXT);
       } catch (err) {
           return ContentService.createTextOutput("Error: " + err).setMimeType(ContentService.MimeType.TEXT);
@@ -1615,6 +1768,24 @@ function doPost(e) {
             });
         } catch(e) {}
         
+        // Broadcast penugasan ke Grup Monitoring Helpdesk & Korlap
+        try {
+            var groupChatId = getMonitoringGroupId();
+            if (groupChatId && groupChatId.toString() !== chatIdTg.toString()) {
+                var groupAssignMsg = "📢 <b>UPDATE PENUGASAN TIKET!</b>\n\n";
+                groupAssignMsg += "🎫 <b>INCIDENT:</b> <code>" + escapeHTML(ticketId) + "</code>\n";
+                groupAssignMsg += "🔌 <b>NO INET:</b> <code>" + escapeHTML(sNum) + "</code>\n";
+                groupAssignMsg += "👤 <b>CUSTOMER:</b> <code>" + escapeHTML(custName) + "</code>\n";
+                groupAssignMsg += "🏷️ <b>SERVICE:</b> <code>" + escapeHTML(svcType) + "</code>\n";
+                groupAssignMsg += "🏢 <b>STO:</b> <code>" + escapeHTML(sto) + "</code>\n";
+                groupAssignMsg += "👷 <b>TEKNISI:</b> <b>" + escapeHTML(teknisiName) + "</b> (NIK: <code>" + escapeHTML(teknisiNIK) + "</code>)\n";
+                groupAssignMsg += "📊 <b>STATUS:</b> <code>Ditugaskan ke GCU FISIK</code>\n";
+                groupAssignMsg += "🔴 <b>RX POWER:</b> <code>" + escapeHTML(rx) + "</code>\n\n";
+                groupAssignMsg += "<i>Tiket tugas telah dikirimkan ke Telegram pribadi teknisi.</i> 🫡";
+                sendTelegramRaw(groupChatId, groupAssignMsg);
+            }
+        } catch(eGrp) {}
+
         return ContentService.createTextOutput("Assigned").setMimeType(ContentService.MimeType.TEXT);
     }
     
@@ -2573,8 +2744,8 @@ function authorizeGoogleDrive() {
 
 function setWebhookTelegram() {
   var botToken = "8050598199:AAHpPcFNUaLmox5Y6J2Ea0IvDkkPawLsZd8"; 
-  var webAppUrl = ScriptApp.getService().getUrl(); 
-  var url = "https://api.telegram.org/bot" + botToken + "/setWebhook?url=" + webAppUrl;
+  var webAppUrl = "https://script.google.com/macros/s/AKfycbwgkZAduwo1EKvp-MZgE9c0Auhfpz7aiNEi5TSer0gqHJDMjUvTcxJL3FpFfKWece2Z/exec"; 
+  var url = "https://api.telegram.org/bot" + botToken + "/setWebhook?url=" + encodeURIComponent(webAppUrl);
   
   try {
     var response = UrlFetchApp.fetch(url);
@@ -2650,6 +2821,23 @@ function autoAssignTicket(chatIdTg, teknisiName, ticketId, sNum, custName, sto, 
             "payload": JSON.stringify(payloadTg)
         });
     } catch(e) {}
+
+    // Broadcast penugasan ke Grup Monitoring Helpdesk & Korlap
+    try {
+        var groupChatId = getMonitoringGroupId();
+        if (groupChatId && groupChatId.toString() !== chatIdTg.toString()) {
+            var groupAssignMsg = "📢 <b>AUTO ASSIGN TIKET BARU!</b>\n\n";
+            groupAssignMsg += "🎫 <b>INCIDENT:</b> <code>" + escapeHTML(ticketId) + "</code>\n";
+            groupAssignMsg += "🔌 <b>NO INET:</b> <code>" + escapeHTML(sNum) + "</code>\n";
+            groupAssignMsg += "👤 <b>CUSTOMER:</b> <code>" + escapeHTML(custName) + "</code>\n";
+            groupAssignMsg += "🏢 <b>STO:</b> <code>" + escapeHTML(sto) + "</code>\n";
+            groupAssignMsg += "👷 <b>TEKNISI:</b> <b>" + escapeHTML(teknisiName) + "</b>\n";
+            groupAssignMsg += "📊 <b>STATUS:</b> <code>Ditugaskan ke GCU FISIK</code>\n";
+            groupAssignMsg += "🔴 <b>RX POWER:</b> <code>" + escapeHTML(rx) + "</code>\n\n";
+            groupAssignMsg += "<i>Tiket tugas telah dikirimkan ke Telegram pribadi teknisi.</i> 🫡";
+            sendTelegramRaw(groupChatId, groupAssignMsg);
+        }
+    } catch(eGrp) {}
 }
 
 function notifyTeknisi(ticketId, title, bodyText) {
@@ -2717,7 +2905,11 @@ function notifyTeknisi(ticketId, title, bodyText) {
 
         var botTokenTg = "8050598199:AAHpPcFNUaLmox5Y6J2Ea0IvDkkPawLsZd8"; 
         var adminChatId = "6874834483"; 
-        var targetChatIds = [adminChatId]; // Selalu kirim ke Bot Admin/Monitoring
+        var groupChatId = getMonitoringGroupId();
+        var targetChatIds = [adminChatId]; // Selalu kirim ke Bot Admin & Grup Monitoring
+        if (groupChatId && targetChatIds.indexOf(groupChatId) === -1) {
+            targetChatIds.push(groupChatId);
+        }
         
         var chatIdTg = "";
         var chatIdMissing = false;
@@ -2993,8 +3185,11 @@ function sendLaporanCloseTiket(ticketId, korlapNote, extraData) {
 
         var botTokenTg = "8050598199:AAHpPcFNUaLmox5Y6J2Ea0IvDkkPawLsZd8"; 
         var adminChatId = "6874834483"; 
+        var groupChatId = getMonitoringGroupId();
         var targetChatIds = [adminChatId];
-        
+        if (groupChatId && targetChatIds.indexOf(groupChatId) === -1) {
+            targetChatIds.push(groupChatId);
+        }
         if (chatIdTg && targetChatIds.indexOf(chatIdTg) === -1) {
             targetChatIds.push(chatIdTg);
         }
