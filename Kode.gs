@@ -980,14 +980,6 @@ function submitFisikToGAS(formObject) {
             throw new Error(res);
         }
 
-        // Notifikasi ke Grup Monitoring bahwa evidence fisik sudah masuk & lanjut ke GCU Logic
-        try {
-            var notifFisikText = "Teknisi telah menyelesaikan perbaikan fisik di lapangan dan submit form evidence! 🛠️\n\n" +
-                                 "👉 <b>Status Tiket:</b> <code>GCU LOGIC</code> 💻\n" +
-                                 "Mohon rekan Helpdesk segera melakukan pengecekan logic / unbind / create voucher!";
-            notifyTeknisi(ticketId, "GCU FISIK SUBMITTED ➔ BUTUH GCU LOGIC", notifFisikText);
-        } catch(eNotif) {}
-
         return res;
     } catch(e) {
         throw new Error(e.toString());
@@ -1242,12 +1234,10 @@ function doPost(e) {
               var groupConfirm = "✅ <b>Grup Monitoring Berhasil Didaftarkan!</b>\n\n" +
                                  "🏢 <b>Grup:</b> " + escapeHTML(groupTitle) + "\n" +
                                  "🆔 <b>Chat ID:</b> <code>" + chatId + "</code>\n\n" +
-                                 "Mulai sekarang, bot akan mengirimkan update pergerakan tiket ke grup ini:\n" +
-                                 "• 📢 Penugasan Tiket Baru\n" +
-                                 "• 🛠️ Teknisi Selesai Fisik (GCU Logic)\n" +
-                                 "• 💻 Helpdesk Selesai Logic (Menunggu Approval)\n" +
-                                 "• ⏸️ Tiket Pending / Rework\n" +
-                                 "• 📩 Laporan Close Tiket GENCU Resmi";
+                                 "Mulai sekarang, bot hanya akan mengirimkan 2 jenis notifikasi ke grup ini:\n" +
+                                 "1️⃣ 💻 <b>Tiket Selesai Dikerjakan Helpdesk</b> (Menunggu Approval Korlap)\n" +
+                                 "2️⃣ 📩 <b>Laporan Close Tiket Resmi</b> (Setelah di-Approve Korlap)\n\n" +
+                                 "<i>Penugasan teknisi tetap dikirimkan ke chat pribadi teknisi masing-masing.</i> 👍";
               sendTelegramRaw(chatId, groupConfirm);
               return ContentService.createTextOutput("OK").setMimeType(ContentService.MimeType.TEXT);
           }
@@ -1369,14 +1359,25 @@ function doPost(e) {
               }
           }
 
-          var successMsg = submitEvidenceDariWeb(dataObj.ticketId, sumText, "", "EVIDENCE LOGIC");
+          var successMsg = submitEvidenceDariWeb(dataObj.ticketId, sumText, "", "EVIDENCE LOGIC", "MENUNGGU APPROVAL KORLAP");
           
-          // === NOTIFIKASI KE TEKNISI ===
+          // === NOTIFIKASI KE TEKNISI & GRUP MONITORING (HELPDESK SELESAI) ===
           var rawSummary = dataObj.summaryText || "";
           rawSummary = rawSummary.replace("[WAITING APPROVAL KORLAP] - Eksekusi Logic: ", "");
-          var notifyBody = "<b>Telah selesai di-eksekusi oleh GCU LOGIC (Helpdesk)</b> 💻\n\n";
-          notifyBody += "Detail pekerjaan yang dilakukan:\n" + escapeHTML(rawSummary) + "\n\n";
-          notifyBody += "Saat ini tiket sedang diteruskan ke Korlap untuk proses Approval.";
+          // Bersihkan escaped newlines dari rawSummary
+          rawSummary = rawSummary.replace(/\\r\\n/g, ", ").replace(/\\n/g, ", ").replace(/\\r/g, ", ").replace(/\n/g, ", ").replace(/\r/g, ", ");
+          // Pisahkan catatan jika ada
+          var detailParts = rawSummary.split(" | Catatan: ");
+          var detailPekerjaan = detailParts[0].trim();
+          var catatanHD = detailParts.length > 1 ? detailParts[1].trim() : "";
+          
+          var notifyBody = "Telah selesai di-eksekusi oleh <b>GCU LOGIC (Helpdesk)</b> 💻\n\n";
+          notifyBody += "<b>Detail pekerjaan yang dilakukan:</b>\n";
+          notifyBody += escapeHTML(detailPekerjaan);
+          if (catatanHD) notifyBody += " | Catatan: " + escapeHTML(catatanHD);
+          notifyBody += "\n\n";
+          notifyBody += "Saat ini tiket sedang diteruskan ke Korlap untuk proses Approval.\n\n";
+          notifyBody += "Terima kasih atas kerja samanya! 🫡";
           notifyTeknisi(dataObj.ticketId, "INFO GCU LOGIC SELESAI", notifyBody);
 
           return ContentService.createTextOutput(successMsg).setMimeType(ContentService.MimeType.TEXT);
@@ -1412,14 +1413,6 @@ function doPost(e) {
           
           var successMsgFisik = submitEvidenceDariWeb(dataObj.ticketId, sumTextFisik, "", "EVIDENCE FISIK");
           
-          // Notifikasi ke Grup Monitoring & Teknisi
-          try {
-              var notifFisikBody = "Teknisi telah menyelesaikan perbaikan fisik di lapangan. 🛠️\n\n" +
-                                   "👉 <b>Status Tiket:</b> <code>GCU LOGIC</code> 💻\n" +
-                                   "Mohon rekan Helpdesk segera melakukan pengecekan logic / unbind / create voucher!";
-              notifyTeknisi(dataObj.ticketId, "GCU FISIK SUBMITTED ➔ BUTUH GCU LOGIC", notifFisikBody);
-          } catch(eNotif) {}
-
           return ContentService.createTextOutput(successMsgFisik).setMimeType(ContentService.MimeType.TEXT);
       } catch (err) {
           return ContentService.createTextOutput("Error: " + err).setMimeType(ContentService.MimeType.TEXT);
@@ -2905,10 +2898,13 @@ function notifyTeknisi(ticketId, title, bodyText) {
 
         var botTokenTg = "8050598199:AAHpPcFNUaLmox5Y6J2Ea0IvDkkPawLsZd8"; 
         var adminChatId = "6874834483"; 
+        var targetChatIds = [adminChatId]; // Selalu kirim ke Bot Admin
+        // HANYA kirim ke Grup Monitoring jika tiket sudah selesai dikerjakan Helpdesk (siap di-approve Korlap)
         var groupChatId = getMonitoringGroupId();
-        var targetChatIds = [adminChatId]; // Selalu kirim ke Bot Admin & Grup Monitoring
-        if (groupChatId && targetChatIds.indexOf(groupChatId) === -1) {
-            targetChatIds.push(groupChatId);
+        if (title.includes("GCU LOGIC SELESAI") || title.includes("WAITING APPROVAL") || title.includes("SIAP APPROVE")) {
+            if (groupChatId && targetChatIds.indexOf(groupChatId) === -1) {
+                targetChatIds.push(groupChatId);
+            }
         }
         
         var chatIdTg = "";
@@ -2932,13 +2928,8 @@ function notifyTeknisi(ticketId, title, bodyText) {
         }
 
         var message = "🔔 <b>" + title + "</b>\n\n";
-        message += "🎫 <b>Tiket:</b> <code>" + escapeHTML(ticketId) + "</code>\n";
-        if (sto && sto !== "-") message += "🏢 <b>STO:</b> <code>" + escapeHTML(sto) + "</code>\n";
-        if (snum && snum !== "-") message += "📞 <b>No. Layanan:</b> <code>" + escapeHTML(snum) + "</code>\n";
-        if (custName && custName !== "-") message += "👤 <b>Pelanggan:</b> <code>" + escapeHTML(custName) + "</code>\n";
-        if (teknisiNIK && teknisiNIK !== "-") message += "👷 <b>Teknisi:</b> <code>" + escapeHTML(teknisiNIK) + "</code>\n";
-        message += "\n" + bodyText + "\n\n";
-        message += "Terima kasih atas kerja samanya! 🫡";
+        message += "🎫🎊 <b>Tiket:</b> <code>" + escapeHTML(ticketId) + "</code>\n\n";
+        message += bodyText;
         
         if (chatIdMissing && teknisiNIK && teknisiNIK !== "-") {
             message += "\n\n⚠️ <i>(Chat ID Telegram teknisi " + escapeHTML(teknisiNIK) + " belum terdaftar di sheet TEKNISI kolom C)</i>";
@@ -3125,7 +3116,12 @@ function sendLaporanCloseTiket(ticketId, korlapNote, extraData) {
         function extractEvidenceField(regex) {
             var m = normText.match(regex);
             if (!m) return "-";
-            var v = m[1].replace(/\\+n/g, "").replace(/[\r\n]+/g, " ").trim();
+            var v = m[1]
+                .replace(/\\r\\n/g, " ")
+                .replace(/\\n/g, " ")
+                .replace(/\\r/g, " ")
+                .replace(/[\r\n]+/g, " ")
+                .trim();
             var cut = v.search(/\s*-\s*(?:Perbaikan|Segmen|GCU|SCC|Redaman|Note|Kendala|RFO):/i);
             if (cut !== -1) v = v.substring(0, cut).trim();
             return v || "-";
@@ -3164,11 +3160,39 @@ function sendLaporanCloseTiket(ticketId, korlapNote, extraData) {
         }
 
         // Susun Pesan Telegram Persis Seperti Permintaan User
+        // Bersihkan literal \n dari field-field evidence
+        function cleanField(val) {
+            if (!val || val === "-") return val;
+            return val.replace(/\\r\\n/g, "\n").replace(/\\n/g, "\n").replace(/\\r/g, "\n");
+        }
+        var penyebabClean = cleanField(penyebab || "-");
+        var rfoClean = cleanField(rfo || perbaikan || "-");
+        var kendalaClean = cleanField(kendala || "-");
+
+        // Susun RFO detail: gabungkan semua evidence detail fields dari normText
+        var rfoDetailLines = "";
+        var rfoFields = ["Segmen", "GCU Jalur", "GCU ONT", "GCU DC", "SCC/TSC", "Redaman ODP", "Note Kendala"];
+        for (var fi = 0; fi < rfoFields.length; fi++) {
+            var fieldRegex = new RegExp("(?:^|\\n)\\s*(?:-\\s*)?" + rfoFields[fi].replace("/", "\\/") + "\\s*:\\s*([^\\n\\r]+)", "i");
+            var fieldMatch = normText.match(fieldRegex);
+            if (fieldMatch && fieldMatch[1]) {
+                var fv = fieldMatch[1].replace(/\\r\\n/g, " ").replace(/\\n/g, " ").replace(/\\r/g, " ").trim();
+                // Cek apakah ada field lain setelahnya
+                var fvCut = fv.search(/\s*-\s*(?:Perbaikan|Segmen|GCU|SCC|Redaman|Note|Kendala|RFO):/i);
+                if (fvCut !== -1) fv = fv.substring(0, fvCut).trim();
+                if (fv) rfoDetailLines += "\n- " + rfoFields[fi] + ": " + fv;
+            }
+        }
+
+        var perbaikanVal = extractEvidenceField(/(?:^|\n)\s*(?:-\s*)?Perbaikan\s*:\s*([^\n\r]+)/i);
+        var rfoFull = cleanField(perbaikanVal !== "-" ? perbaikanVal : (rfo !== "-" ? rfo : "-"));
+        if (rfoDetailLines) rfoFull += rfoDetailLines;
+
         var message = "📩 <b>LAPORAN CLOSE TIKET GENCU</b>\n\n";
         message += "<b>IDENTITAS LAPORAN</b>\n";
         message += "🏢 <b>WITEL:</b> " + escapeHTML(witel || "-") + "\n";
         message += "📍 <b>STO:</b> " + escapeHTML(sto || "-") + "\n";
-        message += "👤 <b>Petugas:</b> " + escapeHTML(petugas || "-") + "\n\n";
+        message += "👤 <b>Petugas:</b> " + escapeHTML(petugas || teknisiNIK || "-") + "\n\n";
 
         message += "<b>DETAIL TIKET & PELANGGAN</b>\n";
         message += "🛠 <b>Pekerjaan:</b> " + escapeHTML(pekerjaan) + "\n";
@@ -3177,9 +3201,9 @@ function sendLaporanCloseTiket(ticketId, korlapNote, extraData) {
         message += "👥 <b>Pelanggan:</b> " + escapeHTML(custName || "-") + "\n\n";
 
         message += "<b>ANALISA & PERBAIKAN</b>\n";
-        message += "⚠️ <b>Penyebab:</b> " + escapeHTML(penyebab || "-") + "\n";
-        message += "🔧 <b>RFO:</b> " + escapeHTML(rfo || perbaikan || "-") + "\n";
-        message += "🚫 <b>Kendala:</b> " + escapeHTML(kendala || "-") + "\n\n";
+        message += "⚠️ <b>Penyebab:</b> " + escapeHTML(penyebabClean) + "\n";
+        message += "🔧 <b>RFO:</b> " + escapeHTML(rfoFull) + "\n";
+        message += "🚫 <b>Kendala:</b> " + escapeHTML(kendalaClean) + "\n\n";
 
         message += "📝 <b>Catatan Korlap:</b> " + escapeHTML(noteKorlapText);
 

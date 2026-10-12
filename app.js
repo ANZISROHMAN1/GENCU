@@ -436,7 +436,27 @@ function processData(rows) {
             break;
         }
     }
-    let headers = rows[headerRowIdx].map(h => (h || "").toString().toUpperCase().trim());
+    // Gabungkan header dari baris 0 sampai headerRowIdx agar kolom tambahan (ACTION, EVIDENCE FISIK, FOTO, dll) tidak hilang
+    let maxCols = 0;
+    for (let r = 0; r <= headerRowIdx; r++) {
+        if (rows[r] && rows[r].length > maxCols) maxCols = rows[r].length;
+    }
+    let headers = [];
+    for (let c = 0; c < maxCols; c++) {
+        let hName = "";
+        if (rows[headerRowIdx] && rows[headerRowIdx][c]) {
+            hName = rows[headerRowIdx][c].toString().trim();
+        }
+        if (!hName) {
+            for (let r = 0; r < headerRowIdx; r++) {
+                if (rows[r] && rows[r][c]) {
+                    hName = rows[r][c].toString().trim();
+                    break;
+                }
+            }
+        }
+        headers.push(hName.toUpperCase());
+    }
 
     let incIdx = -1;
     // Scan headers to find INCIDENT column
@@ -464,9 +484,9 @@ function processData(rows) {
     let workzoneIdx = headers.findIndex(h => h === "WORKZONE" || h === "WORK ZONE" || h === "STO" || (h.includes("STO") && !h.includes("CUSTOMER")));
     let witelIdx = headers.indexOf("WITEL");
     let technicianIdx = headers.findIndex(h => h === "TECHNICIAN" || h === "NAMA TEKNISI" || h.includes("TEKNISI") || h.includes("ASSIGNEE"));
-    let actionIdx = headers.indexOf("ACTION");
-    let evLogicIdx = headers.indexOf("EVIDENCE LOGIC");
-    let evFisikIdx = headers.indexOf("EVIDENCE FISIK");
+    let actionIdx = headers.findIndex(h => h === "ACTION" || h === "ACTION HISTORY" || h.includes("ACTION"));
+    let evLogicIdx = headers.findIndex(h => h === "EVIDENCE LOGIC" || h === "EVIDENCE_LOGIC" || h === "EV LOGIC" || (h.includes("EVIDENCE") && h.includes("LOGIC")));
+    let evFisikIdx = headers.findIndex(h => h === "EVIDENCE FISIK" || h === "EVIDENCE_FISIK" || h === "EV FISIK" || (h.includes("EVIDENCE") && h.includes("FISIK")));
     let customerNameIdx = headers.findIndex(h => h === "CUSTOMER NAME" || h === "NAMA PELANGGAN" || h === "CUSTOMER");
     if (customerNameIdx === -1) customerNameIdx = headers.findIndex(h => h === "CONTACT NAME" || h.includes("CUSTOMER NAM"));
     let statusDateIdx = headers.findIndex(h => h === "STATUS DATE" || h === "REPORTED DATE");
@@ -483,7 +503,7 @@ function processData(rows) {
 
     let photoColumns = {};
     headers.forEach((h, idx) => {
-        if (h.startsWith("FOTO ")) {
+        if (h.startsWith("FOTO ") || h.startsWith("FOTO_") || (h.includes("FOTO") && !h.includes("KODE"))) {
             photoColumns[h] = idx;
         }
     });
@@ -675,7 +695,7 @@ function processData(rows) {
             evFisik = row[evFisikIdx].toString().trim();
         }
         
-        let activeEvidenceForParsing = actionHistory || evLogic || evFisik;
+        let activeEvidenceForParsing = [actionHistory, evLogic, evFisik].filter(Boolean).join("\n\n=== SEBELUMNYA ===\n");
 
         // Coba ekstrak teknisi dari ACTION history jika sudah di-assign manual lewat Web
         let assignMatch = rowText.match(/\[ASSIGNED\] TEKNISI:\s*([A-Z0-9_]+)/i);
@@ -1162,162 +1182,188 @@ window.updateState = function (key, value) {
     renderWorkflow();
 };
 
-// 1. KORLAP FLOW
-function renderKorlapFlow() {
-    const ticket = state.tickets.find(t => t.incident === state.activeTicketId);
-    if (!ticket) return;
-
-    if (ticket.category === 'COMPLETED') {
-        workflowContainer.innerHTML = `<div style="padding: 20px; background: rgba(16, 185, 129, 0.1); border: 1px solid #10b981; border-radius: 8px;"><p style="color: #10b981; font-weight: bold; margin:0;"><ion-icon name="checkmark-circle" style="vertical-align: middle; font-size: 20px; margin-right: 5px;"></ion-icon> Tiket ini sudah Selesai (COMPLETED).</p></div>`;
-        return;
+// --- COMPREHENSIVE EVIDENCE PARSER & FORMATTER ---
+window.getParsedEvidence = function(ticket) {
+    if (!ticket) return { evidenceFisik: '', evidenceLogic: '', hasFisik: false, hasLogic: false };
+    
+    let allSources = [];
+    if (ticket.evLogic) allSources.push(ticket.evLogic);
+    if (ticket.evFisik) allSources.push(ticket.evFisik);
+    if (ticket.actionHistory) allSources.push(ticket.actionHistory);
+    let actionText = allSources.join("\n\n=== SEBELUMNYA ===\n");
+    if (!actionText) actionText = '';
+    
+    // Pisahkan history block berdasarkan separator baru atau lama
+    let blocks = actionText.split(/\n*=== SEBELUMNYA ===\n*/);
+    if (blocks.length === 1 && !actionText.includes("===")) {
+        blocks = actionText.split(/\n\n(?=\[)/); // Fallback format lama
     }
+    
+    // Deduplikasi block yang sama
+    let seenBlocks = new Set();
+    blocks = blocks.filter(b => {
+        let trimmed = b.trim();
+        if (!trimmed || seenBlocks.has(trimmed)) return false;
+        seenBlocks.add(trimmed);
+        return true;
+    });
 
-    if (ticket.category === 'APPROVAL KORLAP' || ticket.category === 'PENDING') {
-        // Parse evidence dari ACTION history
-        let actionText = ticket.evLogic || ticket.evFisik || ticket.actionHistory || '';
+    function renderFisikFormGroups(props) {
+        let propKeys = Object.keys(props);
+        if (propKeys.length === 0) return '';
         
-        // Pisahkan history block berdasarkan separator baru atau lama
-        let blocks = actionText.split(/\n\n(?:=== SEBELUMNYA ===\n)/);
-        if (blocks.length === 1 && !actionText.includes("===")) {
-            blocks = actionText.split(/\n\n(?=\[)/); // Fallback format lama
-        }
+        let html = '<div style="margin-bottom: 12px;">';
         
-        function renderFisikFormGroups(props) {
-            if (Object.keys(props).length === 0) return '';
-            
-            let html = '<div style="margin-bottom: 15px;">';
-            
-            let groups = [
-                {
-                    title: "🛠️ Laporan Kerusakan",
-                    keys: ["Penyebab", "Perbaikan", "Segmen", "Material"]
-                },
-                {
-                    title: "🔍 Validasi GCU",
-                    keys: ["GCU Jalur", "GCU ONT", "GCU DC (1)", "Layanan IPTV", "Voice", "Perangkat Tambahan"]
-                },
-                {
-                    title: "🚀 Pengetesan Akhir",
-                    keys: ["SCC/TSC", "Redaman ODP", "Keterangan"]
-                }
-            ];
-            
-            let unmappedKeys = Object.keys(props);
-            
-            groups.forEach(g => {
+        let groups = [
+            {
+                title: "🛠️ Laporan Kerusakan",
+                pattern: /^(Penyebab|Perbaikan|Segmen|Material|Kerusakan)/i
+            },
+            {
+                title: "🔍 Validasi GCU",
+                pattern: /^(GCU|Voice|IPTV|Perangkat|Layanan)/i
+            },
+            {
+                title: "🚀 Pengetesan Akhir",
+                pattern: /^(SCC|TSC|Redaman|Keterangan|Note|Catatan)/i
+            }
+        ];
+        
+        let handledKeys = new Set();
+        
+        groups.forEach(g => {
+            let matchingKeys = propKeys.filter(k => !handledKeys.has(k) && g.pattern.test(k));
+            if (matchingKeys.length > 0) {
                 let itemsHtml = '';
-                g.keys.forEach(k => {
-                    if (props[k]) {
-                        itemsHtml += `
-                            <div style="display: flex; justify-content: space-between; padding: 10px 15px; border-bottom: 1px solid var(--border); font-size: 13px;">
-                                <span style="color: var(--text-secondary); font-weight: 500;">${k}</span>
-                                <span style="color: var(--text-primary); font-weight: 600; text-align: right; max-width: 60%;">${props[k]}</span>
-                            </div>
-                        `;
-                        // Remove from unmapped
-                        let idx = unmappedKeys.indexOf(k);
-                        if (idx > -1) unmappedKeys.splice(idx, 1);
-                    }
-                });
-                
-                if (itemsHtml) {
-                    html += `<div style="background: white; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 10px;">`;
-                    html += `<div style="background: #f8fafc; padding: 10px 15px; font-size: 12px; font-weight: bold; color: var(--text-secondary); border-bottom: 1px solid var(--border);">${g.title}</div>`;
-                    html += itemsHtml;
-                    html += `</div>`;
-                }
-            });
-            
-            if (unmappedKeys.length > 0) {
-                html += `<div style="background: white; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 10px;">`;
-                html += `<div style="background: #f8fafc; padding: 10px 15px; font-size: 12px; font-weight: bold; color: var(--text-secondary); border-bottom: 1px solid var(--border);">📝 Data Lainnya</div>`;
-                unmappedKeys.forEach(k => {
-                    html += `
-                        <div style="display: flex; justify-content: space-between; padding: 10px 15px; border-bottom: 1px solid var(--border); font-size: 13px;">
+                matchingKeys.forEach(k => {
+                    handledKeys.add(k);
+                    itemsHtml += `
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 9px 14px; border-bottom: 1px solid var(--border); font-size: 13px;">
                             <span style="color: var(--text-secondary); font-weight: 500;">${k}</span>
-                            <span style="color: var(--text-primary); font-weight: 600; text-align: right; max-width: 60%;">${props[k]}</span>
+                            <span style="color: var(--text-primary); font-weight: 600; text-align: right; max-width: 65%;">${props[k]}</span>
                         </div>
                     `;
                 });
-                html += `</div>`;
+                html += `
+                    <div style="background: white; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 10px;">
+                        <div style="background: #f8fafc; padding: 9px 14px; font-size: 12px; font-weight: bold; color: var(--text-secondary); border-bottom: 1px solid var(--border);">${g.title}</div>
+                        ${itemsHtml}
+                    </div>
+                `;
+            }
+        });
+        
+        let unmappedKeys = propKeys.filter(k => !handledKeys.has(k));
+        if (unmappedKeys.length > 0) {
+            let itemsHtml = '';
+            unmappedKeys.forEach(k => {
+                itemsHtml += `
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 9px 14px; border-bottom: 1px solid var(--border); font-size: 13px;">
+                        <span style="color: var(--text-secondary); font-weight: 500;">${k}</span>
+                        <span style="color: var(--text-primary); font-weight: 600; text-align: right; max-width: 65%;">${props[k]}</span>
+                    </div>
+                `;
+            });
+            html += `
+                <div style="background: white; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 10px;">
+                    <div style="background: #f8fafc; padding: 9px 14px; font-size: 12px; font-weight: bold; color: var(--text-secondary); border-bottom: 1px solid var(--border);">📝 Data Lainnya</div>
+                    ${itemsHtml}
+                </div>
+            `;
+        }
+        
+        html += '</div>';
+        return html;
+    }
+
+    function formatEvidenceBlock(text) {
+        if (!text) return '';
+        let lines = text.replace(/\\r\\n/g, '\n').replace(/\\n/g, '\n').replace(/\\r/g, '\n').replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+        let html = '';
+        let fisikProps = {};
+        let isParsingFisik = false;
+
+        lines.forEach(line => {
+            let trimmed = line.trim();
+            if (!trimmed) return;
+            
+            let bulletMatch = trimmed.match(/^[-•*]\s*(.+)$/);
+            let contentLine = bulletMatch ? bulletMatch[1].trim() : trimmed;
+            
+            let isFisikField = false;
+            let key = "";
+            let val = "";
+            
+            if (contentLine.includes(':')) {
+                let colonIdx = contentLine.indexOf(':');
+                let candidateKey = contentLine.substring(0, colonIdx).trim();
+                let candidateVal = contentLine.substring(colonIdx + 1).trim();
+                let isFormKey = /^(Penyebab|Perbaikan|Segmen|Material|GCU\s+Jalur|GCU\s+ONT|GCU\s+DC.*|SCC\/TSC|Redaman\s+ODP|Note\s+Kendala|Catatan|VOICE.*|IPTV.*|PERANGKAT.*|Layanan.*|Keterangan)/i.test(candidateKey);
+                
+                if (bulletMatch || isFormKey) {
+                    isFisikField = true;
+                    key = candidateKey;
+                    val = candidateVal;
+                }
+            } else if (/^GCU\s+DC(\s*\(\d+\))?/i.test(contentLine)) {
+                isFisikField = true;
+                key = contentLine;
+                val = "Selesai";
             }
             
-            html += '</div>';
-            return html;
-        }
-
-        // Format string helper to simulate form view
-        function formatEvidenceBlock(text) {
-            let lines = text.replace(/\\n/g, '\n').split('\n');
-            let html = '';
-            
-            let fisikProps = {};
-            let isParsingFisik = false;
-
-            lines.forEach(line => {
-                let trimmed = line.trim();
+            if (isFisikField) {
+                isParsingFisik = true;
+                let valUpper = val.toUpperCase();
+                if (valUpper === 'AMAN' || valUpper === 'SUKSES' || valUpper === 'OK' || valUpper === 'NORMAL' || valUpper === 'SELESAI') {
+                    val = `<span style="color: var(--success); font-weight: 600;">${val} ✅</span>`;
+                } else if (valUpper === 'TIDAK AMAN' || valUpper === 'GAGAL' || valUpper === 'TIDAK NORMAL' || valUpper === 'RUSAK') {
+                    val = `<span style="color: var(--danger); font-weight: 600;">${val} ❌</span>`;
+                }
+                fisikProps[key] = val || '<span style="color: var(--success); font-weight: 600;">OK ✅</span>';
+            } else {
+                if (isParsingFisik) {
+                    isParsingFisik = false;
+                    html += renderFisikFormGroups(fisikProps);
+                    fisikProps = {};
+                }
                 
-                // Collect key-value pairs (GCU FISIK style)
-                if (trimmed.startsWith('- ')) {
-                    isParsingFisik = true;
-                    let parts = trimmed.substring(2).split(':');
-                    let key = parts[0].trim();
-                    let val = parts.slice(1).join(':').trim();
+                if (trimmed.includes('Eksekusi Logic:')) {
+                    let parts = trimmed.split('Eksekusi Logic:');
+                    let prefix = parts[0].trim();
+                    let logicStr = parts[1].trim();
                     
-                    if (val === 'Aman' || val === 'Sukses' || val === 'OK' || val === 'Normal') {
-                        val = `<span style="color: var(--success); font-weight: 600;">${val} ✅</span>`;
-                    } else if (val === 'Tidak Aman' || val === 'Gagal' || val === 'Tidak Normal') {
-                        val = `<span style="color: var(--danger); font-weight: 600;">${val} ❌</span>`;
+                    if (prefix) {
+                        html += `<div style="font-weight: 600; color: var(--text-primary); margin-bottom: 10px;">${prefix}</div>`;
                     }
-                    fisikProps[key] = val;
-                } 
-                else {
-                    // Jika baru selesai nge-parse baris fisik beruntun, render grup form-nya
-                    if (isParsingFisik) {
-                        isParsingFisik = false;
-                        html += renderFisikFormGroups(fisikProps);
-                        fisikProps = {}; // reset
+                    
+                    let logicPhoto = null;
+                    if (logicStr.includes('| Foto:')) {
+                        let photoParts = logicStr.split('| Foto:');
+                        logicStr = photoParts[0].trim();
+                        logicPhoto = photoParts[1].trim();
+                    }
+                    
+                    let logicNotes = null;
+                    if (logicStr.includes('| Catatan:')) {
+                        let logicParts = logicStr.split('| Catatan:');
+                        logicStr = logicParts[0].trim();
+                        logicNotes = logicParts[1].trim();
+                    }
+                    
+                    if (logicNotes || logicPhoto) {
+                        html += `<div style="margin-bottom: 10px; padding: 12px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; font-size: 13px; color: #b45309;">`;
+                        if (logicNotes) {
+                            html += `<div style="margin-bottom: ${logicPhoto ? '8px' : '0'};"><strong>📝 Catatan Logic:</strong> ${logicNotes}</div>`;
+                        }
+                        if (logicPhoto) {
+                            let photoLink = logicPhoto.replace(/(https:\/\/[^\s\\]]+)/g, '<a href="$1" target="_blank" style="color: #0284c7; font-weight: bold; text-decoration: underline; word-break: break-all;">📎 Buka Evidence Foto Logic</a>');
+                            html += `<div><strong>📸 Evidence:</strong> ${photoLink}</div>`;
+                        }
+                        html += `</div>`;
                     }
 
-                    // Parse Logic Checklist (GCU LOGIC style)
-                    if (trimmed.includes('Eksekusi Logic:')) {
-                        let parts = trimmed.split('Eksekusi Logic:');
-                        let prefix = parts[0].trim();
-                        let logicStr = parts[1].trim();
-                        
-                        if (prefix) {
-                            html += `<div style="font-weight: 600; color: var(--text-primary); margin-bottom: 10px;">${prefix}</div>`;
-                        }
-                        
-                        let logicPhoto = null;
-                        if (logicStr.includes('| Foto:')) {
-                            let photoParts = logicStr.split('| Foto:');
-                            logicStr = photoParts[0].trim();
-                            logicPhoto = photoParts[1].trim();
-                        }
-                        
-                        let logicNotes = null;
-                        if (logicStr.includes('| Catatan:')) {
-                            let logicParts = logicStr.split('| Catatan:');
-                            logicStr = logicParts[0].trim();
-                            logicNotes = logicParts[1].trim();
-                        }
-                        
-                        if (logicNotes || logicPhoto) {
-                            html += `<div style="margin-bottom: 10px; padding: 12px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; font-size: 13px; color: #b45309;">`;
-                            if (logicNotes) {
-                                html += `<div style="margin-bottom: ${logicPhoto ? '8px' : '0'};"><strong>📝 Catatan Logic:</strong> ${logicNotes}</div>`;
-                            }
-                            if (logicPhoto) {
-                                let photoLink = logicPhoto.replace(/(https:\/\/[^\s\\]]+)/g, '<a href="$1" target="_blank" style="color: #0284c7; font-weight: bold; text-decoration: underline; word-break: break-all;">📎 Buka Evidence Foto Logic</a>');
-                                html += `<div><strong>📸 Evidence:</strong> ${photoLink}</div>`;
-                            }
-                            html += `</div>`;
-                        }
-
-                        let logicItems = logicStr.split(',').map(item => item.trim()).filter(i => i);
-
-                        let allLogicTasks = {
+                    let logicItems = logicStr.split(',').map(item => item.trim()).filter(i => i);
+                    let allLogicTasks = {
                         "🌐 Layanan Internet": [
                             { id: "Pindah Channel", label: "Cek Interferensi / Pindah Channel" },
                             { id: "Checklist NAT", label: "Checklist NAT" },
@@ -1339,7 +1385,6 @@ function renderKorlapFlow() {
 
                     if (logicItems.length > 0) {
                         html += `<div style="margin-bottom: 15px;">`;
-                        
                         for (let category in allLogicTasks) {
                             html += `<div style="background: white; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 10px;">`;
                             html += `<div style="background: #f8fafc; padding: 10px 15px; font-size: 12px; font-weight: bold; color: var(--text-secondary); border-bottom: 1px solid var(--border);">${category}</div>`;
@@ -1359,12 +1404,26 @@ function renderKorlapFlow() {
                         }
                         html += `</div>`;
                     }
-                }
-                // Regular Text
-                else {
-                    // Format URLs
+                } else if (trimmed.includes('EVIDENCE FISIK SUBMITTED:')) {
+                    let parts = trimmed.split('EVIDENCE FISIK SUBMITTED:');
+                    let prefix = parts[0].trim();
+                    let rest = parts[1].trim();
+                    let notes = "";
+                    if (rest.includes('| Catatan:')) {
+                        let rParts = rest.split('| Catatan:');
+                        rest = rParts[0].trim();
+                        notes = rParts[1].trim();
+                    }
+                    html += `
+                        <div style="padding: 12px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; margin-bottom: 10px;">
+                            ${prefix ? `<div style="font-weight: 600; font-size: 11px; color: #166534; margin-bottom: 4px;">${prefix}</div>` : ''}
+                            <div style="font-weight: 700; color: #15803d; font-size: 13px; margin-bottom: 4px;">🛠️ Evidence Fisik Lapangan</div>
+                            <div style="font-size: 13px; color: #166534;"><strong>Item Dikerjakan:</strong> ${rest || 'Selesai'}</div>
+                            ${notes ? `<div style="font-size: 12px; color: #374151; margin-top: 5px;"><strong>📝 Catatan:</strong> ${notes}</div>` : ''}
+                        </div>
+                    `;
+                } else {
                     let processedLine = trimmed.replace(/(https:\/\/[^\s\\]]+)/g, '<a href="$1" target="_blank" style="color: var(--primary); font-weight: bold; text-decoration: underline; word-break: break-all;">📎 Buka Evidence Foto</a>');
-                    
                     if (processedLine) {
                         if (processedLine.includes('EVIDENCE FISIK SUBMITTED') || processedLine.includes('DIKEMBALIKAN KE')) {
                             html += `<div style="font-weight: 600; color: var(--primary); margin-bottom: 5px; font-size: 14px;">${processedLine}</div>`;
@@ -1373,170 +1432,219 @@ function renderKorlapFlow() {
                         }
                     }
                 }
-            } // Close the outer else block
-        });
-            
-            if (isParsingFisik) {
-                html += renderFisikFormGroups(fisikProps);
-            }
-            
-            return html;
-        }
-
-        let arrFisik = [];
-        let arrLogic = [];
-        
-        blocks.forEach(block => {
-            let b = block.trim();
-            if (!b) return;
-            
-            let isLogic = b.match(/WAITING APPROVAL KORLAP|LOGIC|HELPDESK/i);
-            let isFisik = b.match(/EVIDENCE FISIK|GCU FISIK|TEKNISI|ASSIGNED/i);
-            
-            let htmlBlock = `<div style="margin-bottom: 15px; padding-bottom: 15px; border-bottom: 1px dashed #ccc;">${formatEvidenceBlock(b)}</div>`;
-            
-            if (isLogic && !isFisik) {
-                arrLogic.push(htmlBlock);
-            } else if (isFisik && !isLogic) {
-                arrFisik.push(htmlBlock);
-            } else {
-                // Masukkan ke keduanya jika mengandung dua keyword atau tidak satupun
-                arrFisik.push(htmlBlock);
-                arrLogic.push(htmlBlock);
             }
         });
         
-        let evidenceFisikText = arrFisik.join('\n');
-        let evidenceLogicText = arrLogic.join('\n');
-        
-        let evidenceFisik = arrFisik.length > 0 ? evidenceFisikText : '<span style="color: var(--text-secondary); font-style: italic;">Belum ada data history GCU Fisik</span>';
-        let evidenceLogic = arrLogic.length > 0 ? evidenceLogicText : '<span style="color: var(--text-secondary); font-style: italic;">Belum ada data history GCU Logic</span>';
-
-        let driveRegex = /https:\/\/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/g;
-        
-        // Ekstrak URL Google Drive dari teks GCU Fisik (untuk tiket lama)
-        let fisikPhotosText = [];
-        let matchFisik;
-        while ((matchFisik = driveRegex.exec(evidenceFisikText)) !== null) {
-            if (!fisikPhotosText.includes(matchFisik[0])) fisikPhotosText.push(matchFisik[0]);
+        if (isParsingFisik) {
+            html += renderFisikFormGroups(fisikProps);
         }
+        return html;
+    }
 
-        // Ekstrak URL Google Drive dari teks GCU Logic
-        let logicPhotosText = [];
-        let matchLogic;
-        while ((matchLogic = driveRegex.exec(evidenceLogicText)) !== null) {
-            if (!logicPhotosText.includes(matchLogic[0])) logicPhotosText.push(matchLogic[0]);
+    let arrFisik = [];
+    let arrLogic = [];
+    
+    blocks.forEach(block => {
+        let b = block.trim();
+        if (!b) return;
+        let bUpper = b.toUpperCase();
+        
+        let isFisik = bUpper.match(/EVIDENCE FISIK|GCU FISIK|ASSIGNED|PENYEBAB\s*:|PERBAIKAN\s*:|SEGMEN\s*:|GCU JALUR|GCU ONT|GCU DC|SCC\/TSC|REDAMAN ODP/i);
+        let isLogic = bUpper.match(/WAITING APPROVAL KORLAP|EKSEKUSI LOGIC|PINDAH CHANNEL|CHECKLIST NAT|ENABLE IPV6|FIREWALL MEDIUM|CEK ONT|CEK FPP|CEK ACS|CEK CHANNEL|CEK ISOLIR|CEK STB|CEK VOICE/i);
+        
+        if (!isLogic && !isFisik) {
+            if (bUpper.includes("LOGIC") || bUpper.includes("HELPDESK")) isLogic = true;
+            if (bUpper.includes("TEKNISI") || bUpper.includes("FISIK")) isFisik = true;
         }
+        
+        if (bUpper.includes("EVIDENCE FISIK SUBMITTED")) {
+            isFisik = true;
+            isLogic = false;
+        }
+        
+        let htmlBlock = `<div style="margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px dashed #e2e8f0;">${formatEvidenceBlock(b)}</div>`;
+        
+        if (isLogic && !isFisik) {
+            arrLogic.push(htmlBlock);
+        } else if (isFisik && !isLogic) {
+            arrFisik.push(htmlBlock);
+        } else {
+            arrFisik.push(htmlBlock);
+            arrLogic.push(htmlBlock);
+        }
+    });
 
-        // Gabungkan foto dari kolom Spreadsheet (tiket baru) dengan foto dari teks (tiket lama)
-        let allFisikPhotos = [];
-        if (ticket.photos && Object.keys(ticket.photos).length > 0) {
-            for (let pName in ticket.photos) {
-                let pUrl = ticket.photos[pName];
-                if (pUrl && pUrl.startsWith('http')) {
-                    allFisikPhotos.push({ name: pName.replace('FOTO ', ''), url: pUrl });
-                }
+    let evidenceFisikText = arrFisik.join('\n');
+    let evidenceLogicText = arrLogic.join('\n');
+    
+    let driveRegex = /https:\/\/(?:drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?id=)|lh3\.googleusercontent\.com\/d\/)([a-zA-Z0-9_-]+)/g;
+    
+    let fisikPhotosText = [];
+    let matchFisik;
+    while ((matchFisik = driveRegex.exec(evidenceFisikText)) !== null) {
+        if (!fisikPhotosText.includes(matchFisik[0])) fisikPhotosText.push(matchFisik[0]);
+    }
+    
+    let logicPhotosText = [];
+    let matchLogic;
+    while ((matchLogic = driveRegex.exec(evidenceLogicText)) !== null) {
+        if (!logicPhotosText.includes(matchLogic[0])) logicPhotosText.push(matchLogic[0]);
+    }
+
+    let allFisikPhotos = [];
+    if (ticket.photos && Object.keys(ticket.photos).length > 0) {
+        for (let pName in ticket.photos) {
+            let pUrl = ticket.photos[pName];
+            if (pUrl && pUrl.startsWith('http')) {
+                allFisikPhotos.push({ name: pName.replace('FOTO ', ''), url: pUrl });
             }
         }
-        fisikPhotosText.forEach((url, i) => {
-            // Jangan masukkan duplikat jika sudah ada di ticket.photos
-            if (!allFisikPhotos.find(p => p.url === url)) {
-                allFisikPhotos.push({ name: 'EVIDENCE ' + (i+1), url: url });
-            }
+    }
+    fisikPhotosText.forEach((url, i) => {
+        if (!allFisikPhotos.find(p => p.url === url)) {
+            allFisikPhotos.push({ name: 'EVIDENCE ' + (i+1), url: url });
+        }
+    });
+
+    function getThumbUrl(url) {
+        let matchId = url.match(/\/d\/([a-zA-Z0-9_-]+)/) || url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+        if (matchId && matchId[1]) return `https://drive.google.com/thumbnail?id=${matchId[1]}&sz=w1000`;
+        return url;
+    }
+
+    let evidenceFisik = arrFisik.length > 0 ? evidenceFisikText : '<span style="color: var(--text-secondary); font-style: italic;">Belum ada data riwayat teks GCU Fisik</span>';
+    let evidenceLogic = arrLogic.length > 0 ? evidenceLogicText : '<span style="color: var(--text-secondary); font-style: italic;">Belum ada data riwayat teks GCU Logic</span>';
+
+    if (allFisikPhotos.length > 0) {
+        let photoHtmlFisik = `<div style="margin-top: 15px; padding-top: 12px; border-top: 2px solid var(--border);">
+            <h4 style="margin-bottom: 12px; color: var(--text-primary); font-size: 13px; font-weight: bold;">📸 Lampiran Foto (GCU FISIK - ${allFisikPhotos.length} Foto):</h4>
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px;">`;
+        
+        allFisikPhotos.forEach(photo => {
+            let imgSrc = getThumbUrl(photo.url);
+            photoHtmlFisik += `
+                <a href="${photo.url}" target="_blank" style="display: flex; flex-direction: column; align-items: center; background: #f8fafc; padding: 6px; border-radius: 8px; text-decoration: none; border: 1px solid #e2e8f0; transition: transform 0.2s ease;">
+                    <img src="${imgSrc}" alt="${photo.name}" onerror="this.onerror=null; this.src='https://placehold.co/200x150?text=Foto+Evidence';" style="width: 100%; height: 95px; object-fit: cover; border-radius: 6px; margin-bottom: 6px; border: 1px solid #cbd5e1; background: #e2e8f0;">
+                    <span style="font-size: 10px; font-weight: 600; color: #334155; text-align: center; word-break: break-all;">${photo.name}</span>
+                </a>
+            `;
         });
+        photoHtmlFisik += `</div></div>`;
+        evidenceFisik += photoHtmlFisik;
+    }
 
-        // Render Foto untuk GCU FISIK
-        if (allFisikPhotos.length > 0) {
-            let photoHtmlFisik = `<div style="margin-top: 20px; padding-top: 15px; border-top: 2px solid var(--border);">
-                <h4 style="margin-bottom: 15px; color: var(--text-primary); font-size: 14px;">📸 Lampiran Foto (GCU FISIK):</h4>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">`;
-            
-            allFisikPhotos.forEach(photo => {
-                let imgSrc = photo.url;
-                let matchId = photo.url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-                if (matchId && matchId[1]) imgSrc = `https://drive.google.com/thumbnail?id=${matchId[1]}&sz=w1000`;
+    if (logicPhotosText.length > 0) {
+        let photoHtmlLogic = `<div style="margin-top: 15px; padding-top: 12px; border-top: 2px solid var(--border);">
+            <h4 style="margin-bottom: 12px; color: var(--text-primary); font-size: 13px; font-weight: bold;">📸 Lampiran Foto (GCU LOGIC - ${logicPhotosText.length} Foto):</h4>
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px;">`;
+        
+        logicPhotosText.forEach((url, i) => {
+            let imgSrc = getThumbUrl(url);
+            photoHtmlLogic += `
+                <a href="${url}" target="_blank" style="display: flex; flex-direction: column; align-items: center; background: #f8fafc; padding: 6px; border-radius: 8px; text-decoration: none; border: 1px solid #e2e8f0; transition: transform 0.2s ease;">
+                    <img src="${imgSrc}" alt="Foto Logic" onerror="this.onerror=null; this.src='https://placehold.co/200x150?text=Foto+Logic';" style="width: 100%; height: 95px; object-fit: cover; border-radius: 6px; margin-bottom: 6px; border: 1px solid #cbd5e1; background: #e2e8f0;">
+                    <span style="font-size: 10px; font-weight: 600; color: #334155; text-align: center;">FOTO LOGIC ${i+1}</span>
+                </a>
+            `;
+        });
+        photoHtmlLogic += `</div></div>`;
+        evidenceLogic += photoHtmlLogic;
+    }
 
-                photoHtmlFisik += `
-                    <a href="${photo.url}" target="_blank" style="display: flex; flex-direction: column; align-items: center; justify-content: center; background: #f8fafc; padding: 8px; border-radius: 8px; text-decoration: none; border: 1px solid #e2e8f0; transition: transform 0.2s ease;">
-                        <img src="${imgSrc}" alt="Evidence" style="width: 100%; height: 120px; object-fit: cover; border-radius: 6px; margin-bottom: 8px; border: 1px solid #cbd5e1; background: #e2e8f0;">
-                        <span style="font-size: 11px; font-weight: 600; color: #334155; text-align: center;">${photo.name}</span>
-                    </a>
-                `;
-            });
-            photoHtmlFisik += `</div></div>`;
-            evidenceFisik += photoHtmlFisik;
-        }
+    return {
+        evidenceFisik,
+        evidenceLogic,
+        hasFisik: arrFisik.length > 0 || allFisikPhotos.length > 0,
+        hasLogic: arrLogic.length > 0 || logicPhotosText.length > 0
+    };
+};
 
-        // Render Foto untuk GCU LOGIC
-        if (logicPhotosText.length > 0) {
-            let photoHtmlLogic = `<div style="margin-top: 20px; padding-top: 15px; border-top: 2px solid var(--border);">
-                <h4 style="margin-bottom: 15px; color: var(--text-primary); font-size: 14px;">📸 Lampiran Foto (GCU LOGIC):</h4>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">`;
-            
-            logicPhotosText.forEach((url, i) => {
-                let imgSrc = url;
-                let matchId = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-                if (matchId && matchId[1]) imgSrc = `https://drive.google.com/thumbnail?id=${matchId[1]}&sz=w1000`;
-                
-                photoHtmlLogic += `
-                    <a href="${url}" target="_blank" style="display: flex; flex-direction: column; align-items: center; justify-content: center; background: #f8fafc; padding: 8px; border-radius: 8px; text-decoration: none; border: 1px solid #e2e8f0; transition: transform 0.2s ease;">
-                        <img src="${imgSrc}" alt="Evidence" style="width: 100%; height: 120px; object-fit: cover; border-radius: 6px; margin-bottom: 8px; border: 1px solid #cbd5e1; background: #e2e8f0;">
-                        <span style="font-size: 11px; font-weight: 600; color: #334155; text-align: center;">FOTO LOGIC ${i+1}</span>
-                    </a>
-                `;
-            });
-            photoHtmlLogic += `</div></div>`;
-            evidenceLogic += photoHtmlLogic;
-        }
+// 1. KORLAP FLOW
+function renderKorlapFlow() {
+    const ticket = state.tickets.find(t => t.incident === state.activeTicketId);
+    if (!ticket) return;
 
-        window.tempEvidenceFisik = evidenceFisik;
-        window.tempEvidenceLogic = evidenceLogic;
+    // Parse evidence menggunakan helper komprehensif
+    const parsedEv = window.getParsedEvidence(ticket);
+    window.tempEvidenceFisik = parsedEv.evidenceFisik;
+    window.tempEvidenceLogic = parsedEv.evidenceLogic;
 
-        window.showEvidenceModal = function(type) {
-            let title = type === 'fisik' ? '🛠️ Pekerjaan GCU FISIK (Teknisi)' : '💻 Pekerjaan GCU LOGIC (Helpdesk)';
-            let content = type === 'fisik' ? window.tempEvidenceFisik : window.tempEvidenceLogic;
-            
-            let ticketInfoHtml = `
-                <div style="background: rgba(59, 130, 246, 0.05); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 8px; padding: 15px; margin-bottom: 20px;">
-                    <h4 style="margin-top: 0; margin-bottom: 12px; font-size: 14px; color: var(--primary); border-bottom: 1px dashed rgba(59, 130, 246, 0.3); padding-bottom: 8px;">Informasi Tiket</h4>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 13px;">
-                        <div><span style="color: var(--text-secondary);">No. Internet:</span><br><strong class="copy-badge" onclick="copyToClipboard('${ticket.serviceNumber}', 'Nomor Layanan', event)" style="cursor:pointer;" title="Klik untuk copy">${ticket.serviceNumber} <ion-icon name="copy-outline"></ion-icon></strong></div>
-                        <div><span style="color: var(--text-secondary);">Pelanggan:</span><br><strong>${ticket.customerName || '-'}</strong></div>
-                        <div><span style="color: var(--text-secondary);">STO:</span><br><strong>${ticket.sto}</strong></div>
-                        <div><span style="color: var(--text-secondary);">Teknisi:</span><br><strong>${ticket.technician}</strong></div>
-                        <div><span style="color: var(--text-secondary);">Status Alarm:</span><br><strong>${ticket.status}</strong></div>
-                        <div><span style="color: var(--text-secondary);">Redaman:</span><br><strong>RX: ${ticket.rx} | TX: ${ticket.tx}</strong></div>
+    if (ticket.category === 'COMPLETED') {
+        let completedContent = `
+            <div style="padding: 16px; background: rgba(16, 185, 129, 0.1); border: 1px solid #10b981; border-radius: 8px; margin-bottom: 15px;">
+                <p style="color: #10b981; font-weight: bold; margin:0;"><ion-icon name="checkmark-circle" style="vertical-align: middle; font-size: 20px; margin-right: 5px;"></ion-icon> Tiket ini sudah Selesai (COMPLETED / CLOSED).</p>
+            </div>
+        `;
+        if (parsedEv.hasFisik || parsedEv.hasLogic) {
+            completedContent += `
+                <div style="background: var(--bg-surface); padding: 18px; border-radius: 10px; border: 1px solid var(--border);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <h4 style="font-size: 14px; font-weight: bold; color: var(--text-primary); margin: 0;">📋 Detail Evidence Tiket Selesai</h4>
+                        <div style="display: flex; gap: 8px;">
+                            ${parsedEv.hasFisik ? `<button class="btn btn-outline" style="font-size: 11px; padding: 4px 8px; cursor: pointer;" onclick="window.showEvidenceModal('fisik')">🔍 Layar Penuh (Fisik)</button>` : ''}
+                            ${parsedEv.hasLogic ? `<button class="btn btn-outline" style="font-size: 11px; padding: 4px 8px; cursor: pointer;" onclick="window.showEvidenceModal('logic')">🔍 Layar Penuh (Logic)</button>` : ''}
+                        </div>
                     </div>
+                    ${parsedEv.hasFisik ? `<div style="margin-bottom: 15px;"><strong style="font-size: 13px; color: var(--text-primary);">🛠️ Pekerjaan GCU Fisik:</strong><div style="margin-top: 6px; font-size: 13px; max-height: 350px; overflow-y: auto; background: rgba(0,0,0,0.02); padding: 12px; border-radius: 8px; border: 1px solid var(--border);">${parsedEv.evidenceFisik}</div></div>` : ''}
+                    ${parsedEv.hasLogic ? `<div><strong style="font-size: 13px; color: var(--text-primary);">💻 Pekerjaan GCU Logic:</strong><div style="margin-top: 6px; font-size: 13px; max-height: 350px; overflow-y: auto; background: rgba(0,0,0,0.02); padding: 12px; border-radius: 8px; border: 1px solid var(--border);">${parsedEv.evidenceLogic}</div></div>` : ''}
                 </div>
             `;
-            
-            let modalHtml = `
-                <div id="evidenceModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 9999; backdrop-filter: blur(4px);">
-                    <div style="background: var(--bg-surface); width: 90%; max-width: 550px; border-radius: 12px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); max-height: 90vh; overflow-y: auto; position: relative;">
-                        <button onclick="document.getElementById('evidenceModal').remove()" style="position: absolute; top: 15px; right: 15px; background: transparent; border: none; font-size: 24px; font-weight: bold; cursor: pointer; color: var(--text-secondary);">&times;</button>
-                        <h3 style="margin-top: 0; margin-bottom: 15px; font-size: 16px; color: var(--text-primary); border-bottom: 1px solid var(--border); padding-bottom: 10px;">${title}</h3>
-                        
-                        ${ticketInfoHtml}
-                        
-                        <h4 style="margin-top: 0; margin-bottom: 10px; font-size: 14px; color: var(--text-primary);">Riwayat Pekerjaan:</h4>
-                        <div style="font-size: 13px; line-height: 1.6; color: var(--text-primary); background: rgba(0,0,0,0.02); padding: 15px; border-radius: 8px; border: 1px solid var(--border);">
-                            ${content}
-                        </div>
-                        <div style="margin-top: 20px; text-align: right;">
-                            <button class="btn btn-primary" onclick="document.getElementById('evidenceModal').remove()">Tutup</button>
-                        </div>
+        }
+        workflowContainer.appendChild(createStep('step-k-comp', 'Status Tiket Selesai', completedContent));
+        return;
+    }
+
+    window.showEvidenceModal = function(type) {
+        let title = type === 'fisik' ? '🛠️ Pekerjaan GCU FISIK (Teknisi)' : '💻 Pekerjaan GCU LOGIC (Helpdesk)';
+        let content = type === 'fisik' ? window.tempEvidenceFisik : window.tempEvidenceLogic;
+        
+        let ticketInfoHtml = `
+            <div style="background: rgba(59, 130, 246, 0.05); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 8px; padding: 15px; margin-bottom: 20px;">
+                <h4 style="margin-top: 0; margin-bottom: 12px; font-size: 14px; color: var(--primary); border-bottom: 1px dashed rgba(59, 130, 246, 0.3); padding-bottom: 8px;">Informasi Tiket</h4>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 13px;">
+                    <div><span style="color: var(--text-secondary);">No. Internet:</span><br><strong class="copy-badge" onclick="copyToClipboard('${ticket.serviceNumber}', 'Nomor Layanan', event)" style="cursor:pointer;" title="Klik untuk copy">${ticket.serviceNumber} <ion-icon name="copy-outline"></ion-icon></strong></div>
+                    <div><span style="color: var(--text-secondary);">Pelanggan:</span><br><strong>${ticket.customerName || '-'}</strong></div>
+                    <div><span style="color: var(--text-secondary);">STO:</span><br><strong>${ticket.sto}</strong></div>
+                    <div><span style="color: var(--text-secondary);">Teknisi:</span><br><strong>${ticket.technician}</strong></div>
+                    <div><span style="color: var(--text-secondary);">Status Alarm:</span><br><strong>${ticket.status}</strong></div>
+                    <div><span style="color: var(--text-secondary);">Redaman:</span><br><strong>RX: ${ticket.rx} | TX: ${ticket.tx}</strong></div>
+                </div>
+            </div>
+        `;
+        
+        let modalHtml = `
+            <div id="evidenceModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 9999; backdrop-filter: blur(4px);">
+                <div style="background: var(--bg-surface); width: 92%; max-width: 650px; border-radius: 12px; padding: 22px; box-shadow: 0 10px 30px rgba(0,0,0,0.25); max-height: 90vh; overflow-y: auto; position: relative;">
+                    <button onclick="document.getElementById('evidenceModal').remove()" style="position: absolute; top: 15px; right: 15px; background: transparent; border: none; font-size: 24px; font-weight: bold; cursor: pointer; color: var(--text-secondary);">&times;</button>
+                    <h3 style="margin-top: 0; margin-bottom: 15px; font-size: 16px; color: var(--text-primary); border-bottom: 1px solid var(--border); padding-bottom: 10px;">${title}</h3>
+                    
+                    ${ticketInfoHtml}
+                    
+                    <h4 style="margin-top: 0; margin-bottom: 10px; font-size: 14px; color: var(--text-primary);">Riwayat Pekerjaan:</h4>
+                    <div style="font-size: 13px; line-height: 1.6; color: var(--text-primary); background: rgba(0,0,0,0.02); padding: 15px; border-radius: 8px; border: 1px solid var(--border);">
+                        ${content}
+                    </div>
+                    <div style="margin-top: 20px; text-align: right;">
+                        <button class="btn btn-primary" onclick="document.getElementById('evidenceModal').remove()">Tutup</button>
                     </div>
                 </div>
-            `;
-            document.body.insertAdjacentHTML('beforeend', modalHtml);
-        };
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+    };
 
+    if (ticket.category === 'APPROVAL KORLAP' || ticket.category === 'PENDING') {
         let contentApprove = `
             <p class="info-text" style="margin-bottom: 15px;">Validasi pekerjaan GCU Fisik dan Logic. Pastikan sesuai SOP perusahaan sebelum approve.</p>
             
             <!-- SECTION 1: Evidence GCU FISIK -->
             <div style="background: var(--bg-surface); padding: 18px; border-radius: 10px; border: 1px solid var(--border); margin-bottom: 15px;">
-                <h4 style="font-size: 14px; font-weight: bold; color: var(--text-primary); margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">🛠️ Validasi GCU FISIK (Teknisi)</h4>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <h4 style="font-size: 14px; font-weight: bold; color: var(--text-primary); margin: 0; display: flex; align-items: center; gap: 8px;">🛠️ Validasi GCU FISIK (Teknisi)</h4>
+                    <button class="btn btn-outline" style="font-size: 11px; padding: 4px 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;" onclick="window.showEvidenceModal('fisik')">
+                        <ion-icon name="scan-outline"></ion-icon> Layar Penuh
+                    </button>
+                </div>
                 
                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 15px;">
                     <span style="font-size: 12px; color: var(--text-secondary);">Teknisi: <strong style="color: var(--text-primary);">${ticket.technician}</strong></span>
@@ -1555,7 +1663,12 @@ function renderKorlapFlow() {
 
             <!-- SECTION 2: Evidence GCU LOGIC -->
             <div style="background: var(--bg-surface); padding: 18px; border-radius: 10px; border: 1px solid var(--border); margin-bottom: 15px;">
-                <h4 style="font-size: 14px; font-weight: bold; color: var(--text-primary); margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">💻 Validasi GCU LOGIC (Helpdesk)</h4>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <h4 style="font-size: 14px; font-weight: bold; color: var(--text-primary); margin: 0; display: flex; align-items: center; gap: 8px;">💻 Validasi GCU LOGIC (Helpdesk)</h4>
+                    <button class="btn btn-outline" style="font-size: 11px; padding: 4px 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;" onclick="window.showEvidenceModal('logic')">
+                        <ion-icon name="scan-outline"></ion-icon> Layar Penuh
+                    </button>
+                </div>
                 
                 <div style="font-size: 13px; line-height: 1.6; color: var(--text-primary); background: rgba(0,0,0,0.02); padding: 15px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 15px; max-height: 400px; overflow-y: auto;">
                     ${window.tempEvidenceLogic}
@@ -1642,6 +1755,23 @@ function renderKorlapFlow() {
     }
 
     workflowContainer.appendChild(createStep('step-k1', 'Assign Tiket ke Teknisi', contentAssign));
+
+    if (parsedEv.hasFisik || parsedEv.hasLogic) {
+        let historyPreviewHtml = `
+            <div style="background: var(--bg-surface); padding: 18px; border-radius: 10px; border: 1px solid var(--border);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <h4 style="font-size: 14px; font-weight: bold; color: var(--text-primary); margin: 0;">🛠️ Riwayat Evidence Lapangan</h4>
+                    <div style="display: flex; gap: 8px;">
+                        ${parsedEv.hasFisik ? `<button class="btn btn-outline" style="font-size: 11px; padding: 4px 8px; cursor: pointer;" onclick="window.showEvidenceModal('fisik')">🔍 Layar Penuh (Fisik)</button>` : ''}
+                        ${parsedEv.hasLogic ? `<button class="btn btn-outline" style="font-size: 11px; padding: 4px 8px; cursor: pointer;" onclick="window.showEvidenceModal('logic')">🔍 Layar Penuh (Logic)</button>` : ''}
+                    </div>
+                </div>
+                ${parsedEv.hasFisik ? `<div style="margin-bottom: 15px;"><strong style="font-size: 13px; color: var(--text-primary);">GCU Fisik:</strong><div style="margin-top: 6px; font-size: 13px; max-height: 300px; overflow-y: auto; background: rgba(0,0,0,0.02); padding: 12px; border-radius: 8px; border: 1px solid var(--border);">${parsedEv.evidenceFisik}</div></div>` : ''}
+                ${parsedEv.hasLogic ? `<div><strong style="font-size: 13px; color: var(--text-primary);">GCU Logic:</strong><div style="margin-top: 6px; font-size: 13px; max-height: 300px; overflow-y: auto; background: rgba(0,0,0,0.02); padding: 12px; border-radius: 8px; border: 1px solid var(--border);">${parsedEv.evidenceLogic}</div></div>` : ''}
+            </div>
+        `;
+        workflowContainer.appendChild(createStep('step-k-hist', 'Riwayat Evidence Lapangan & Logic', historyPreviewHtml));
+    }
 }
 
 window.onKorlapPendingChange = function () {
@@ -1907,6 +2037,23 @@ function renderHelpdeskFlow() {
         return;
     }
 
+    if (ticket) {
+        const parsedEv = window.getParsedEvidence(ticket);
+        if (parsedEv && parsedEv.hasFisik) {
+            let previewFisikHtml = `
+                <div style="background: rgba(59, 130, 246, 0.04); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 8px; padding: 15px; margin-bottom: 15px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <strong style="font-size: 13px; color: var(--primary);">🛠️ Evidence GCU Fisik dari Teknisi (NIK: ${ticket.technician || '-'})</strong>
+                        <button class="btn btn-outline" style="font-size: 11px; padding: 4px 8px; cursor: pointer;" onclick="window.showEvidenceModal('fisik')">🔍 Layar Penuh</button>
+                    </div>
+                    <div style="font-size: 13px; max-height: 250px; overflow-y: auto;">
+                        ${parsedEv.evidenceFisik}
+                    </div>
+                </div>
+            `;
+            workflowContainer.appendChild(createStep('step-h0', 'Evidence Pekerjaan Fisik Lapangan', previewFisikHtml));
+        }
+    }
 
     let contentLogic = `
         <p class="info-text" style="margin-bottom:15px;">Silakan jalankan eksekusi pengecekan Logic sesuai flowchart berikut. Centang langkah yang sudah dilakukan:</p>
