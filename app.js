@@ -265,7 +265,7 @@ function initAfterLogin() {
     }, 60000);
 }
 
-// === DRAG TO SCROLL TABLE FEATURE ===
+// === DRAG TO SCROLL TABLE FEATURE & COPY UTILITIES ===
 function initTableDragScroll() {
     const slider = document.getElementById('ticketTableContainer');
     if (!slider || slider.dataset.dragInit) return;
@@ -276,8 +276,11 @@ function initTableDragScroll() {
     let scrollLeft = 0;
 
     slider.addEventListener('mousedown', (e) => {
-        // Jangan aktifkan drag jika user mengklik tombol, link, input, atau select
-        if (e.target.closest('button') || e.target.closest('a') || e.target.closest('input') || e.target.closest('select')) return;
+        // Jangan aktifkan drag jika user mengklik pada cell tabel (td/th) atau elemen interaktif
+        // Ini memastikan teks tabel bisa diseleksi/diblok secara normal untuk di-copas
+        if (e.target.closest('td') || e.target.closest('th') || e.target.closest('button') || e.target.closest('a') || e.target.closest('input') || e.target.closest('select') || e.target.closest('.copy-badge')) {
+            return;
+        }
         isDown = true;
         slider.classList.add('is-dragging');
         startX = e.pageX - slider.offsetLeft;
@@ -296,11 +299,84 @@ function initTableDragScroll() {
 
     slider.addEventListener('mousemove', (e) => {
         if (!isDown) return;
-        e.preventDefault();
         const x = e.pageX - slider.offsetLeft;
-        const walk = (x - startX) * 1.5; // Multiplier kecepatan geser
-        slider.scrollLeft = scrollLeft - walk;
+        const walk = (x - startX) * 1.5;
+        if (Math.abs(walk) > 4) {
+            e.preventDefault();
+            slider.scrollLeft = scrollLeft - walk;
+        }
     });
+}
+
+// Global Copy to Clipboard & Toast Helper
+window.showToast = function(msg, isSuccess = true) {
+    let oldToast = document.getElementById('app-global-toast');
+    if (oldToast) oldToast.remove();
+
+    let toast = document.createElement('div');
+    toast.id = 'app-global-toast';
+    toast.innerHTML = msg;
+    toast.style.cssText = `
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        background: ${isSuccess ? 'linear-gradient(135deg, #10b981, #059669)' : 'linear-gradient(135deg, #ef4444, #dc2626)'};
+        color: white;
+        padding: 12px 20px;
+        border-radius: 10px;
+        z-index: 99999;
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.35);
+        font-weight: 600;
+        font-size: 13px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        animation: toastIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        pointer-events: none;
+    `;
+    document.body.appendChild(toast);
+    setTimeout(() => {
+        if (toast && toast.parentNode) {
+            toast.style.animation = 'toastOut 0.3s forwards';
+            setTimeout(() => toast.remove(), 300);
+        }
+    }, 2500);
+};
+
+window.copyToClipboard = function(text, label = "Teks", event = null) {
+    if (event) {
+        event.stopPropagation();
+    }
+    if (!text || text === "-" || text === "Unknown") {
+        return;
+    }
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(() => {
+            showToast(`📋 ${label} disalin: <strong>${text}</strong>`);
+        }).catch(() => {
+            fallbackCopyText(text, label);
+        });
+    } else {
+        fallbackCopyText(text, label);
+    }
+};
+
+function fallbackCopyText(text, label) {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    textarea.style.top = '-9999px';
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    try {
+        document.execCommand('copy');
+        showToast(`📋 ${label} disalin: <strong>${text}</strong>`);
+    } catch (e) {
+        console.error('Gagal menyalin:', e);
+    }
+    document.body.removeChild(textarea);
 }
 
 function fetchTickets(isBackground = false) {
@@ -350,35 +426,60 @@ function processData(rows) {
     }
 
     let parsedTickets = [];
-    let headers = rows[0].map(h => (h || "").toString().toUpperCase().trim());
+    
+    // Cari baris mana yang merupakan header asli (mengandung INCIDENT)
+    let headerRowIdx = 0;
+    for (let r = 0; r < Math.min(5, rows.length); r++) {
+        let rStr = rows[r].join(" ").toUpperCase();
+        if (rStr.includes("INCIDENT") && (rStr.includes("STATUS") || rStr.includes("DATE") || rStr.includes("CUSTOMER") || rStr.includes("SUMMARY") || rStr.includes("TTR"))) {
+            headerRowIdx = r;
+            break;
+        }
+    }
+    let headers = rows[headerRowIdx].map(h => (h || "").toString().toUpperCase().trim());
 
     let incIdx = -1;
     // Scan headers to find INCIDENT column
     for (let c = 0; c < headers.length; c++) {
-        for (let r = 1; r < Math.min(10, rows.length); r++) {
-            if (rows[r][c] && rows[r][c].toString().match(/^(INC\d{5,}|1-SV\d{5,})/)) {
-                incIdx = c;
-                break;
-            }
+        if (headers[c] === "INCIDENT" || headers[c] === "TICKET" || (headers[c].includes("INCIDENT") && !headers[c].includes("PARENT"))) {
+            incIdx = c;
+            break;
         }
-        if (incIdx !== -1) break;
+    }
+    if (incIdx === -1) {
+        for (let c = 0; c < headers.length; c++) {
+            for (let r = headerRowIdx + 1; r < Math.min(headerRowIdx + 10, rows.length); r++) {
+                if (rows[r][c] && rows[r][c].toString().match(/^(INC\d{5,}|1-SV\d{5,})/)) {
+                    incIdx = c;
+                    break;
+                }
+            }
+            if (incIdx !== -1) break;
+        }
     }
 
     if (incIdx === -1) incIdx = 1; // absolute fallback
 
     let statusAlarmIdx = headers.findIndex(h => h === "STATUS ALARM" || h === "ONU LINK STATUS");
-    let workzoneIdx = headers.indexOf("WORKZONE");
+    let workzoneIdx = headers.findIndex(h => h === "WORKZONE" || h === "WORK ZONE" || h === "STO" || (h.includes("STO") && !h.includes("CUSTOMER")));
     let witelIdx = headers.indexOf("WITEL");
-    let technicianIdx = headers.findIndex(h => h === "TECHNICIAN" || h === "NAMA TEKNISI");
+    let technicianIdx = headers.findIndex(h => h === "TECHNICIAN" || h === "NAMA TEKNISI" || h.includes("TEKNISI") || h.includes("ASSIGNEE"));
     let actionIdx = headers.indexOf("ACTION");
     let evLogicIdx = headers.indexOf("EVIDENCE LOGIC");
     let evFisikIdx = headers.indexOf("EVIDENCE FISIK");
-    let customerNameIdx = headers.indexOf("CUSTOMER NAME");
+    let customerNameIdx = headers.findIndex(h => h === "CUSTOMER NAME" || h === "NAMA PELANGGAN" || h === "CUSTOMER");
+    if (customerNameIdx === -1) customerNameIdx = headers.findIndex(h => h === "CONTACT NAME" || h.includes("CUSTOMER NAM"));
     let statusDateIdx = headers.findIndex(h => h === "STATUS DATE" || h === "REPORTED DATE");
-    let onuRxIdx = headers.indexOf("ONU RX");
-    let serviceTypeIdx = headers.indexOf("SERVICE TYPE");
-    let ticketStatusIdx = headers.indexOf("STATUS");
-    if (customerNameIdx === -1) customerNameIdx = headers.findIndex(h => h.includes("CUSTOMER NAM"));
+    let onuRxIdx = headers.findIndex(h => h === "ONU RX" || h === "RX POWER" || (h.includes("RX") && !h.includes("DESCRIPTION")));
+    let serviceNoIdx = headers.findIndex(h => {
+        let clean = (h || "").toUpperCase().replace(/[^A-Z0-9]/g, '');
+        return clean === "SERVICENO" || clean === "SERVICENUMBER" || clean === "SERVICEID" || 
+               clean === "NOINET" || clean === "NOINTERNET" || clean === "NOLAYANAN" || 
+               clean === "NOSPEEDY" || clean === "ND" || clean === "NDSPEEDY" || clean === "NDTELEPON" ||
+               clean === "CIRCUITID" || (clean.includes("SERVICE") && (clean.includes("NO") || clean.includes("NUM")));
+    });
+    let serviceTypeIdx = headers.findIndex(h => h === "SERVICE TYPE" || h === "KODE PRODUK" || (h.includes("SERVICE") && !h.includes("NO") && !h.includes("NUMBER") && !h.includes("ID")));
+    let ticketStatusIdx = headers.findIndex(h => h === "STATUS" || h === "TICKET STATUS" || (h.includes("STATUS") && !h.includes("ALARM") && !h.includes("GUARANTE") && !h.includes("DATE") && !h.includes("LINK") && !h.includes("INFO")));
 
     let photoColumns = {};
     headers.forEach((h, idx) => {
@@ -387,7 +488,7 @@ function processData(rows) {
         }
     });
 
-    for (let i = 1; i < rows.length; i++) {
+    for (let i = headerRowIdx + 1; i < rows.length; i++) {
         let row = rows[i];
         let ticketId = row[incIdx] ? row[incIdx].toString().trim() : "-";
         if (ticketId === "-" || ticketId === "" || ticketId.toUpperCase() === "INCIDENT") continue;
@@ -443,7 +544,14 @@ function processData(rows) {
             }
         }
 
-        // 2. Ekstrak STO (Paling akurat dari ODC-XXX / ODP-XXX)
+        // 2. Ekstrak STO (Paling akurat dari ODC-XXX / ODP-XXX atau WORKZONE)
+        if (workzoneIdx !== -1 && row[workzoneIdx]) {
+            let wz = row[workzoneIdx].toString().toUpperCase().trim();
+            if (wz.length === 3 && !["INC", "REG", "LOS", "ONU", "OLT", "FBB", "DBS", "RBS"].includes(wz) && !wz.includes("BISNIS")) {
+                sto = wz;
+            }
+        }
+        
         for (let c = 0; c < row.length; c++) {
             let val = (row[c] || "").toString().trim();
             let rkMatch = val.match(/OD[CP]-([A-Z]{3})-/i);
@@ -453,13 +561,12 @@ function processData(rows) {
             }
         }
         
-        // Fallback jika tidak ada ODC/ODP, gunakan WORKZONE jika panjangnya persis 3 huruf
-        if (sto === "-" && workzoneIdx !== -1 && row[workzoneIdx]) {
-            let wz = row[workzoneIdx].toString().toUpperCase().trim();
-            if (wz.length === 3) sto = wz;
+        // Safeguard STO tidak boleh berisi kategori pelanggan
+        if (sto && (sto.includes("Bisnis") || sto.includes("Residensial") || sto.includes("CUSTOMER") || sto.length > 5)) {
+            sto = "-";
         }
 
-        // Fallback terakhir: cari 3 huruf kapital
+        // Fallback terakhir: cari 3 huruf kapital jika STO masih '-'
         if (sto === "-") {
             for (let c = 0; c < row.length; c++) {
                 let val = (row[c] || "").toString().trim();
@@ -470,25 +577,38 @@ function processData(rows) {
             }
         }
 
-        // 3. Ekstrak INET Number (12-13 digit angka berawalan 1)
-        for (let c = 0; c < row.length; c++) {
-            let val = (row[c] || "").toString().trim();
-            let match = val.match(/\b1[1-9]\d{10,11}\b/);
-            if (match) {
-                sNum = match[0];
-                break; // prioritas pertama: jika nemu langsung break
+        // 3. Ekstrak INET Number / Service No (12-13 digit angka berawalan 1)
+        if (serviceNoIdx !== -1 && row[serviceNoIdx]) {
+            let val = row[serviceNoIdx].toString().trim();
+            if (val && val !== "-" && val !== "Unknown") {
+                sNum = val;
+            }
+        }
+        if (sNum === "-" || sNum === "Unknown") {
+            for (let c = 0; c < row.length; c++) {
+                if (c === incIdx) continue;
+                let val = (row[c] || "").toString().trim();
+                let match = val.match(/\b(1\d{11,12}|2\d{9,11}|0\d{9,11}|3\d{8,11}-\d+)\b/);
+                if (match) {
+                    sNum = match[0];
+                    break; // jika nemu langsung break
+                }
             }
         }
 
         // 4. Ekstrak RX
         if (onuRxIdx !== -1 && row[onuRxIdx]) {
             let val = row[onuRxIdx].toString().trim();
-            let nums = val.match(/-?\d+(\.\d+)?/g);
-            if (nums) {
-                for (let n of nums) {
-                    let num = parseFloat(n);
-                    if (num < -5 && num > -45) {
-                        rx = num.toString();
+            if (val.toUpperCase().includes("LOS") || val.includes("-503") || val.includes("-504")) {
+                rx = "LOS";
+            } else {
+                let nums = val.match(/-?\d+(\.\d+)?/g);
+                if (nums) {
+                    for (let n of nums) {
+                        let num = parseFloat(n);
+                        if (num <= -8 && num >= -45) {
+                            rx = num.toString() + " dBm";
+                        }
                     }
                 }
             }
@@ -512,9 +632,18 @@ function processData(rows) {
             if (val) serviceType = val;
         }
 
+        // Normalisasi: jika serviceType berisi nomor layanan/internet 10-14 digit
+        if (serviceType && serviceType.match(/^\d{10,14}$/)) {
+            if (sNum === "-" || sNum === "Unknown") sNum = serviceType;
+            serviceType = "INTERNET";
+        }
+        if (sNum !== "-" && sNum !== "Unknown" && (serviceType === "-" || !serviceType)) {
+            serviceType = "INTERNET";
+        }
+
         if (ticketStatusIdx !== -1 && row[ticketStatusIdx]) {
             let val = row[ticketStatusIdx].toString().trim();
-            if (val) ticketStatus = val;
+            if (val && !val.toUpperCase().includes("GUARANTE")) ticketStatus = val;
         }
 
         let isGangguan = true; // SEMUA tiket masuk GENCU, apapun redamannya
@@ -926,10 +1055,19 @@ function renderTable() {
         }
         tr.innerHTML = `
             <td style="white-space: nowrap; font-size: 13px; color: var(--text-secondary);">${ticket.statusDate || "-"}</td>
-            <td>${ticket.incident}</td>
+            <td>
+                <span class="copy-badge" onclick="copyToClipboard('${ticket.incident}', 'Nomor Tiket', event)" title="Klik untuk copy nomor tiket">
+                    <strong>${ticket.incident}</strong>
+                    <ion-icon name="copy-outline"></ion-icon>
+                </span>
+            </td>
             <td>
                 <div class="ticket-info">
-                    <span class="ticket-title">${ticket.serviceNumber || "Unknown"}</span>
+                    <span class="ticket-title ${ticket.serviceNumber && ticket.serviceNumber !== 'Unknown' ? 'copy-badge' : ''}" 
+                          ${ticket.serviceNumber && ticket.serviceNumber !== 'Unknown' ? `onclick="copyToClipboard('${ticket.serviceNumber}', 'Nomor Layanan', event)" title="Klik untuk copy nomor layanan"` : ''}>
+                        ${ticket.serviceNumber || "Unknown"}
+                        ${ticket.serviceNumber && ticket.serviceNumber !== 'Unknown' ? '<ion-icon name="copy-outline"></ion-icon>' : ''}
+                    </span>
                     <span class="ticket-sub">${ticket.customerName || "-"}</span>
                 </div>
             </td>
@@ -1362,7 +1500,7 @@ function renderKorlapFlow() {
                 <div style="background: rgba(59, 130, 246, 0.05); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 8px; padding: 15px; margin-bottom: 20px;">
                     <h4 style="margin-top: 0; margin-bottom: 12px; font-size: 14px; color: var(--primary); border-bottom: 1px dashed rgba(59, 130, 246, 0.3); padding-bottom: 8px;">Informasi Tiket</h4>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 13px;">
-                        <div><span style="color: var(--text-secondary);">No. Internet:</span><br><strong>${ticket.serviceNumber}</strong></div>
+                        <div><span style="color: var(--text-secondary);">No. Internet:</span><br><strong class="copy-badge" onclick="copyToClipboard('${ticket.serviceNumber}', 'Nomor Layanan', event)" style="cursor:pointer;" title="Klik untuk copy">${ticket.serviceNumber} <ion-icon name="copy-outline"></ion-icon></strong></div>
                         <div><span style="color: var(--text-secondary);">Pelanggan:</span><br><strong>${ticket.customerName || '-'}</strong></div>
                         <div><span style="color: var(--text-secondary);">STO:</span><br><strong>${ticket.sto}</strong></div>
                         <div><span style="color: var(--text-secondary);">Teknisi:</span><br><strong>${ticket.technician}</strong></div>
@@ -1563,10 +1701,18 @@ window.approveTicketFinal = function () {
     btn.innerText = "Processing...";
     btn.disabled = true;
 
+    const ticket = state.tickets.find(t => t.incident === state.activeTicketId) || {};
     const payload = {
         action: 'approve_completed',
         ticketId: state.activeTicketId,
-        korlapNote: window.getKorlapNoteText()
+        korlapNote: window.getKorlapNoteText(),
+        sto: ticket.sto,
+        witel: ticket.witel,
+        technician: ticket.technician,
+        serviceNumber: ticket.serviceNumber,
+        serviceType: ticket.serviceType,
+        customerName: ticket.customerName,
+        photos: ticket.photos
     };
 
     fetch(SCRIPT_URL, {

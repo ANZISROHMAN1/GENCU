@@ -11,7 +11,7 @@
 (function() {
     'use strict';
 
-    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx1UEN5rD39Hw5W4xNYTJaBZCafdP-bmlJgNHqFkfpWPF7_wYotc3-MFqyeAkdCjuLI/exec';
+    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwgkZAduwo1EKvp-MZgE9c0Auhfpz7aiNEi5TSer0gqHJDMjUvTcxJL3FpFfKWece2Z/exec';
     
     // ==========================================
     // DAFTAR URL BOOKMARK UNTUK ROTASI OTOMATIS
@@ -113,8 +113,8 @@
         });
 
         if (!targetTable) {
-            let delayMs = (currentBmkIdx === 1) ? 10000 : 600000;
-            let delayStr = (currentBmkIdx === 1) ? "10 detik" : "10 menit";
+            let delayMs = (currentBmkIdx === 1) ? 10000 : 120000;
+            let delayStr = (currentBmkIdx === 1) ? "10 detik" : "2 menit";
             setStatus(`⚠️ Data kosong atau tabel tiket tidak ditemukan.<br>Melanjutkan ke bookmark berikutnya dalam ${delayStr}...`);
             isRunning = false;
             
@@ -151,8 +151,8 @@
         }
 
         if(reportedDateIdx === -1) {
-            let delayMs = (currentBmkIdx === 1) ? 10000 : 600000;
-            let delayStr = (currentBmkIdx === 1) ? "10 detik" : "10 menit";
+            let delayMs = (currentBmkIdx === 1) ? 10000 : 120000;
+            let delayStr = (currentBmkIdx === 1) ? "10 detik" : "2 menit";
             setStatus(`⚠️ Kolom Date tidak ditemukan di header!<br>Melanjutkan ke bookmark berikutnya dalam ${delayStr}...`);
             isRunning = false;
             
@@ -166,11 +166,7 @@
         }
 
         scrapedData.push(headers); 
-        let hasOlderOnFirstPage = extractAndFilterRows(targetTable);
-        if(hasOlderOnFirstPage) {
-            sendToGoogleSheet();
-            return;
-        }
+        extractAndFilterRows(targetTable); // Selalu lanjut untuk mengecek/mengambil halaman 2
         
         let pagelinks = document.querySelector('.pagelinks a') || document.querySelector('a[href*="d-"]');
         let paramPrefix = "";
@@ -192,9 +188,9 @@
             }
         }
 
-        let baseUrl = window.location.origin + window.location.pathname; 
+        let baseUrl = window.location.href; 
         let currentPageNum = 2; 
-        let totalHalaman = 264; // Default aman jika gagal baca info
+        let totalHalaman = 2; // BATASI MAKSIMAL 2 HALAMAN SECARA OTOMATIS
 
         // Baca jumlah info (Contoh: "26,220 items found")
         try {
@@ -202,10 +198,13 @@
             let totalItemsMatch = infoDiv.match(/([\d,]+)\s+items found/);
             if(totalItemsMatch) {
                 let total = parseInt(totalItemsMatch[1].replace(/,/g, ''));
-                totalHalaman = Math.ceil(total / 100);
+                let realTotalHalaman = Math.ceil(total / 100);
+                if (realTotalHalaman < 2) {
+                    totalHalaman = realTotalHalaman; // Jika cuma 1 halaman, ya 1 halaman saja
+                }
             }
         } catch(e) {
-            console.log("Gagal membaca total halaman, menggunakan default", e);
+            console.log("Gagal membaca total halaman, menggunakan default 2 halaman", e);
         }
 
         while (currentPageNum <= totalHalaman) {
@@ -233,10 +232,10 @@
                     break; 
                 }
 
-                let hasOlder = extractAndFilterRows(shadowTarget);
+                let isEmpty = extractAndFilterRows(shadowTarget);
                 
-                if (hasOlder) {
-                    setStatus(`⚠️ Menemukan tiket dari hari sebelumnya. Menghentikan pencarian halaman.`);
+                if (isEmpty) {
+                    setStatus(`⚠️ Tabel kosong ditemukan. Menghentikan pencarian halaman.`);
                     break;
                 }
 
@@ -253,7 +252,6 @@
 
     function extractAndFilterRows(tableElem) {
         let rows = tableElem.querySelectorAll('tr');
-        let foundOlderDate = false;
         
         for (let i = 1; i < rows.length; i++) {
             let cells = rows[i].querySelectorAll('td');
@@ -264,39 +262,12 @@
                 if(rowData.length === 1 && (rowData[0].includes('Nothing found') || rowData[0].includes('No items found'))) {
                     return true; 
                 }
-
-                let dateStr = "";
-                if (reportedDateIdx > -1 && rowData[reportedDateIdx]) {
-                    dateStr = rowData[reportedDateIdx].replace(/\s+/g, '');
-                }
                 
-                // Jika kolom header kosong (sering terjadi), cari cell manapun yang mengandung format tanggal YYYY-MM-DD
-                if (!dateStr || !dateStr.match(/\d{4}-\d{2}-\d{2}/)) {
-                    let fallbackCell = rowData.find(c => c.match(/\d{4}-\d{2}-\d{2}/));
-                    if (fallbackCell) {
-                        dateStr = fallbackCell.replace(/\s+/g, '');
-                    }
-                }
-                
-                let targetStr = CURRENT_DATE.replace(/\s+/g, ''); // "2026-09-27"
-                
-                // AMBIL SEMUA ROW YANG ADA DI TABEL!
-                // Jangan terlalu ketat pada filter tanggal karena OSS sering return tiket kemarin sore karena beda zona waktu!
+                // Ambil semua row tanpa filter tanggal (berdasarkan permintaan user karena database/spreadsheet yang filter)
                 scrapedData.push(rowData);
-                
-                if (dateStr) {
-                    // Cek apakah tanggal di baris ini bukan hari ini, jika ya, hentikan pencarian halaman berikutnya
-                    let rowDateMatch = dateStr.match(/(\d{4}-\d{2}-\d{2})/);
-                    if (rowDateMatch) {
-                        let rowDateStr = rowDateMatch[1];
-                        if (rowDateStr !== targetStr) {
-                            foundOlderDate = true;
-                        }
-                    }
-                }
             }
         }
-        return foundOlderDate;
+        return false;
     }
 
     function sendToGoogleSheet() {
@@ -325,7 +296,7 @@
             headers: { 'Content-Type': 'text/plain' },
             body: JSON.stringify(payload)
         }).then(() => {
-            let waitTime = (currentBmkIdx === 1) ? 10 : 600; // 10s if All Ticket, 600s (10m) if Closed Ticket
+            let waitTime = (currentBmkIdx === 1) ? 10 : 120; // 10s if All Ticket, 120s (2m) if Closed Ticket
             let timerInterval = setInterval(() => {
                 let m = Math.floor(waitTime / 60);
                 let s = waitTime % 60;
@@ -341,8 +312,8 @@
                 }
             }, 1000);
         }).catch(err => {
-            let delayMs = (currentBmkIdx === 1) ? 10000 : 600000;
-            let delayStr = (currentBmkIdx === 1) ? "10 detik" : "10 menit";
+            let delayMs = (currentBmkIdx === 1) ? 10000 : 120000;
+            let delayStr = (currentBmkIdx === 1) ? "10 detik" : "2 menit";
             setStatus(`❌ Gagal mengirim data ke Google Sheet.<br>Lanjut ke bookmark berikutnya dalam ${delayStr}...`);
             setTimeout(() => {
                 currentBmkIdx++;
