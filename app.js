@@ -1095,9 +1095,9 @@ function renderTable() {
         tr.innerHTML = `
             <td style="white-space: nowrap; font-size: 13px; color: var(--text-secondary);">${ticket.statusDate || "-"}</td>
             <td>
-                <span class="copy-badge" onclick="copyToClipboard('${ticket.incident}', 'Nomor Tiket', event)" title="Klik untuk copy nomor tiket">
+                <span class="copy-badge" onclick="copyToClipboard('${ticket.incident}', 'Nomor Tiket', event)" title="Klik untuk copy nomor tiket" style="font-size: 13.5px; font-weight: 800; color: #0284c7; background: #f0f9ff; padding: 4px 8px; border-radius: 6px; border: 1px solid #bae6fd; display: inline-flex; align-items: center; gap: 5px;">
                     <strong>${ticket.incident}</strong>
-                    <ion-icon name="copy-outline"></ion-icon>
+                    <ion-icon name="copy-outline" style="font-size: 13px; color: #0284c7;"></ion-icon>
                 </span>
             </td>
             <td>
@@ -1174,8 +1174,24 @@ function renderWorkflow() {
         return;
     }
 
+    const activeTicketObj = state.tickets.find(t => t.incident === state.activeTicketId);
+    let svcBadge = '';
+    if (activeTicketObj && activeTicketObj.serviceType && activeTicketObj.serviceType !== '-') {
+        svcBadge = `<span style="font-size: 13px; font-weight: 700; color: #4338ca; background: #e0e7ff; padding: 3px 10px; border-radius: 5px; border: 1px solid #c7d2fe;">${activeTicketObj.serviceType}</span>`;
+    }
+
     workflowPageTitle.innerText = `Panel ${state.role.charAt(0).toUpperCase() + state.role.slice(1)}`;
-    workflowSubtitle.innerText = `Mengelola Tiket: ${state.activeTicketId} | STO: ${state.activeSto}`;
+    workflowSubtitle.innerHTML = `
+        <span style="font-size: 14px; font-weight: 600; color: var(--text-secondary);">Mengelola Tiket:</span>
+        <span class="copy-badge" onclick="copyToClipboard('${state.activeTicketId}', 'Nomor Tiket', event)" title="Klik untuk copy nomor tiket" style="font-size: 16.5px; font-weight: 800; color: #0284c7; background: #e0f2fe; padding: 4px 12px; border-radius: 6px; border: 1.5px solid #7dd3fc; letter-spacing: 0.5px; box-shadow: 0 1px 3px rgba(14, 165, 233, 0.15); display: inline-flex; align-items: center; gap: 6px; cursor: pointer;">
+            🎫 <strong>${state.activeTicketId}</strong>
+            <ion-icon name="copy-outline" style="font-size: 15px; color: #0284c7;"></ion-icon>
+        </span>
+        <span style="color: #cbd5e1; margin: 0 4px; font-size: 15px; font-weight: bold;">|</span>
+        <span style="font-size: 14px; font-weight: 600; color: var(--text-secondary);">STO:</span>
+        <span style="font-size: 15px; font-weight: 700; color: #1e293b; background: #f1f5f9; padding: 3px 10px; border-radius: 5px; border: 1px solid #cbd5e1;">${state.activeSto || '-'}</span>
+        ${svcBadge}
+    `;
     workflowContainer.innerHTML = '';
 
     if (state.role === 'korlap') renderKorlapFlow();
