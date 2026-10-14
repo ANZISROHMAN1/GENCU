@@ -491,13 +491,26 @@ function processData(rows) {
     if (customerNameIdx === -1) customerNameIdx = headers.findIndex(h => h === "CONTACT NAME" || h.includes("CUSTOMER NAM"));
     let statusDateIdx = headers.findIndex(h => h === "STATUS DATE" || h === "REPORTED DATE");
     let onuRxIdx = headers.findIndex(h => h === "ONU RX" || h === "RX POWER" || (h.includes("RX") && !h.includes("DESCRIPTION")));
+    // Prioritaskan kolom AH "SERVICE NO" secara presisi (hindari mengambil "SERVICE ID" di kolom AG)
     let serviceNoIdx = headers.findIndex(h => {
         let clean = (h || "").toUpperCase().replace(/[^A-Z0-9]/g, '');
-        return clean === "SERVICENO" || clean === "SERVICENUMBER" || clean === "SERVICEID" || 
-               clean === "NOINET" || clean === "NOINTERNET" || clean === "NOLAYANAN" || 
-               clean === "NOSPEEDY" || clean === "ND" || clean === "NDSPEEDY" || clean === "NDTELEPON" ||
-               clean === "CIRCUITID" || (clean.includes("SERVICE") && (clean.includes("NO") || clean.includes("NUM")));
+        return clean === "SERVICENO" || clean === "NOINET" || clean === "NOINTERNET" || clean === "NOLAYANAN";
     });
+    // Fallback jika tidak ditemukan nama kolom persis SERVICENO
+    if (serviceNoIdx === -1) {
+        serviceNoIdx = headers.findIndex(h => {
+            let clean = (h || "").toUpperCase().replace(/[^A-Z0-9]/g, '');
+            return (clean === "SERVICENUMBER" || clean === "ND" || clean === "NOSPEEDY" || clean === "NDSPEEDY" || clean === "NDTELEPON" ||
+                   (clean.includes("SERVICE") && (clean.includes("NO") || clean.includes("NUM")))) && !clean.includes("ID");
+        });
+    }
+    // Fallback terakhir jika hanya ada SERVICEID
+    if (serviceNoIdx === -1) {
+        serviceNoIdx = headers.findIndex(h => {
+            let clean = (h || "").toUpperCase().replace(/[^A-Z0-9]/g, '');
+            return clean === "SERVICEID" || clean === "CIRCUITID";
+        });
+    }
     let serviceTypeIdx = headers.findIndex(h => h === "SERVICE TYPE" || h === "KODE PRODUK" || (h.includes("SERVICE") && !h.includes("NO") && !h.includes("NUMBER") && !h.includes("ID")));
     let ticketStatusIdx = headers.findIndex(h => h === "STATUS" || h === "TICKET STATUS" || (h.includes("STATUS") && !h.includes("ALARM") && !h.includes("GUARANTE") && !h.includes("DATE") && !h.includes("LINK") && !h.includes("INFO")));
 
@@ -597,12 +610,18 @@ function processData(rows) {
             }
         }
 
-        // 3. Ekstrak INET Number / Service No (12-13 digit angka berawalan 1)
+        // 3. Ekstrak INET Number / Service No (nomor murni dari kolom AH SERVICE NO)
         if (serviceNoIdx !== -1 && row[serviceNoIdx]) {
             let val = row[serviceNoIdx].toString().trim();
             if (val && val !== "-" && val !== "Unknown") {
                 sNum = val;
             }
+        }
+        // Jika sNum masih berupa gabungan/composite (misal 68927522_131626183833_INTERNET), ekstrak nomor layanan murninya
+        if (sNum && sNum.includes("_")) {
+            let parts = sNum.split("_");
+            let inetPart = parts.find(p => /^\d{9,13}$/.test(p));
+            if (inetPart) sNum = inetPart;
         }
         if (sNum === "-" || sNum === "Unknown") {
             for (let c = 0; c < row.length; c++) {

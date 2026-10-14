@@ -14,19 +14,37 @@
     const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwgkZAduwo1EKvp-MZgE9c0Auhfpz7aiNEi5TSer0gqHJDMjUvTcxJL3FpFfKWece2Z/exec';
     
     // ==========================================
-    // DAFTAR URL BOOKMARK UNTUK ROTASI OTOMATIS
+    // DAFTAR URL BOOKMARK FALLBACK
     // ==========================================
-    // PENTING: Masukkan URL *PANJANG* yang muncul di browser SETELAH Anda mengklik bookmark tersebut!
     const BOOKMARK_URLS = [
-        "https://oss-incident.telkom.co.id/jw/web/userview/ticketIncidentService/ticketIncidentService/_/allTicketList?d-5564009-fn_C_RELATED_TO_GAMAS=&d-5564009-fn_C_PERANGKAT=&d-5564009-fn_C_CUSTOMER_SEGMENT=RBS%2CDGS%2CDDS%2CDES%2CDBS%2CDSS%2CREG%2CDPS%2CDWS%2CFTTH_OLO&d-5564009-fn_reported_date_filter=&d-5564009-fn_reported_date_filter=&d-5564009-fn_C_CONTACT_NAME=&d-5564009-fn_C_TICKET_ID_GAMAS=&d-5564009-fn_C_PIPE_NAME=&d-5564009-fn_C_GUARANTE_STATUS=&d-5564009-fn_C_CLASSIFICATION_CATEGORY=&d-5564009-fn_C_CLASSIFICATION_PATH=&d-5564009-fn_C_EXTERNAL_TICKETID=&d-5564009-s=13&d-5564009-fn_C_CHANNEL=&d-5564009-fn_C_SLG=&d-5564009-p=1&d-5564009-o=1&d-5564009-fn_C_WORK_ZONE=BOO%2CPAG%2CCPS%2CCWI%2CCSR%2CCRI%2CCJU%2CTJH%2CCBI%2CBJD%2CJGL%2CCLS%2CCAU%2CPCM%2CCNE%2CDEP%2CLWL%2CLBI%2CJSA%2CDMG%2CCGD%2CGPI%2CCSN%2CKHL%2CSPL%2CPAR%2CCSE%2CSTL%2CPMU%2CCTR%2CSKJ%2CCSL%2CPLR%2CKLU%2CJPK%2CCKB%2CCCR%2CCBD%2CBGL%2CSKB%2CSGN%2CNLD%2CCMO&d-5564009-ps=100&d-5564009-fn_status_date_filter=&d-5564009-fn_status_date_filter=&d-5564009-fn_C_TICKET_STATUS=CLOSED%2CFINALCHECK%2CMEDIACARE%2CSALAMSIM%2CRESOLVED&d-5564009-fn_C_ACTUAL_SOLUTION=&d-5564009-fn_C_REGION=&d-5564009-fn_C_CUSTOMER_ID=&d-5564009-fn_C_ID_TICKET=&d-5564009-fn_C_REPORTED_PRIORITY=&d-5564009-fn_DATEMODIFIED=&d-5564009-fn_C_SERVICE_TYPE=&d-5564009-fn_C_CLOSED_BY=&d-5564009-fn_C_SERVICE_ID=&d-5564009-fn_C_INCIDENT_DOMAIN=&d-5564009-fn_C_OWNER_GROUP=&d-5564009-fn_C_SOURCE_TICKET=&d-5564009-fn_C_REALM=&d-5564009-fn_C_SERVICE_NO=&d-5564009-fn_C_DESCRIPTION_ASSIGMENT=&d-5564009-fn_C_DESCRIPTION_CUSTOMERID=&d-5564009-fn_C_OWNER=&d-5564009-fn_C_WITEL=&d-5564009-fn_C_CUSTOMER_TYPE=&d-5564009-fn_C_KODE_PRODUK"
+        "https://oss-incident.telkom.co.id/jw/web/userview/ticketIncidentService/ticketIncidentService/_/allTicketList?d-5564009-fn_C_RELATED_TO_GAMAS=&d-5564009-fn_C_PERANGKAT=&d-5564009-fn_C_CUSTOMER_SEGMENT=RBS%2CDGS%2CDDS%2CDES%2CDBS%2CDSS%2CREG%2CDPS%2CDWS%2CFTTH_OLO&d-5564009-fn_reported_date_filter=&d-5564009-fn_reported_date_filter=&d-5564009-fn_C_CONTACT_NAME=&d-5564009-fn_C_TICKET_ID_GAMAS=&d-5564009-fn_C_PIPE_NAME=&d-5564009-fn_C_GUARANTE_STATUS=&d-5564009-fn_C_CLASSIFICATION_CATEGORY=&d-5564009-fn_C_CLASSIFICATION_PATH=&d-5564009-fn_C_EXTERNAL_TICKETID=&d-5564009-s=13&d-5564009-fn_C_CHANNEL=&d-5564009-fn_C_SLG=&d-5564009-p=1&d-5564009-o=1&d-5564009-fn_C_WORK_ZONE=BOO%2CPAG%2CCPS%2CCWI%2CCSR%2CCRI%2CCJU%2CTJH%2CCBI%2CBJD%2CJGL%2CCLS%2CCAU%2CLWL%2CLBI%2CJSA%2CDMG%2CCGD%2CGPI%2CCSN%2CKHL%2CSPL%2CPAR%2CCSE%2CSTL%2CPMU%2CCTR%2CPLR%2CKLU%2CJPK%2CCKB%2CCCR%2CCBD%2CBGL%2CSKB%2CSGN%2CNLD%2CCMO&d-5564009-ps=100&d-5564009-fn_status_date_filter=&d-5564009-fn_status_date_filter=&d-5564009-fn_C_TICKET_STATUS=&d-5564009-fn_C_ACTUAL_SOLUTION=&d-5564009-fn_C_REGION=&d-5564009-fn_C_CUSTOMER_ID=&d-5564009-fn_C_ID_TICKET=&d-5564009-fn_C_REPORTED_PRIORITY=&d-5564009-fn_DATEMODIFIED=&d-5564009-fn_C_SERVICE_TYPE=&d-5564009-fn_C_CLOSED_BY=&d-5564009-fn_C_SERVICE_ID=&d-5564009-fn_C_INCIDENT_DOMAIN=&d-5564009-fn_C_OWNER_GROUP=&d-5564009-fn_C_SOURCE_TICKET=&d-5564009-fn_C_REALM=&d-5564009-fn_C_SERVICE_NO=&d-5564009-fn_C_DESCRIPTION_ASSIGMENT=&d-5564009-fn_C_DESCRIPTION_CUSTOMERID=&d-5564009-fn_C_OWNER=&d-5564009-fn_C_WITEL=&d-5564009-fn_C_CUSTOMER_TYPE=&d-5564009-fn_C_KODE_PRODUK"
     ];
     
-    let currentBmkIdx = parseInt(localStorage.getItem('oss_scraper_bmk_idx') || '0');
-    if (currentBmkIdx >= BOOKMARK_URLS.length) currentBmkIdx = 0;
+    let currentBmkIdx = 0;
+
+    // Fungsi cerdas untuk mengunci dan mengingat URL filter aktif (misal: GENCU FIX)
+    function getCleanPage1Url() {
+        if (window.location.href.includes('allTicketList')) {
+            try {
+                let u = new URL(window.location.href);
+                for (let k of Array.from(u.searchParams.keys())) {
+                    if (k.endsWith('-p')) {
+                        u.searchParams.set(k, '1');
+                    }
+                }
+                let cleanUrl = u.toString();
+                localStorage.setItem('oss_active_filter_url', cleanUrl);
+                return cleanUrl;
+            } catch(e) {
+                return window.location.href;
+            }
+        }
+        return localStorage.getItem('oss_active_filter_url') || (BOOKMARK_URLS.length > 0 ? BOOKMARK_URLS[0] : window.location.href);
+    }
 
     // Deteksi halaman saat ini berdasarkan URL
-    let currentSource = 'oss_closed_ticket_canggih';
-    let pageName = 'CLOSED TICKET';
+    let currentSource = 'oss_all_ticket_canggih';
+    let pageName = 'ALL TICKET (GENCU FIX)';
     let isTargetPage = false;
     
     if (window.location.href.includes('allTicketListRepo')) {
@@ -35,8 +53,12 @@
         isTargetPage = true;
     } else if (window.location.href.includes('allTicketList')) {
         currentSource = 'oss_all_ticket_canggih';
-        pageName = 'ALL TICKET';
+        pageName = 'ALL TICKET (GENCU FIX)';
         isTargetPage = true;
+        // Simpan URL filter aktif yang sedang dibuka
+        try {
+            getCleanPage1Url();
+        } catch(e) {}
     }
 
     let now = new Date();
@@ -119,10 +141,7 @@
             isRunning = false;
             
             setTimeout(() => {
-                currentBmkIdx++;
-                if(currentBmkIdx >= BOOKMARK_URLS.length) currentBmkIdx = 0;
-                localStorage.setItem('oss_scraper_bmk_idx', currentBmkIdx);
-                window.location.href = BOOKMARK_URLS[currentBmkIdx];
+                window.location.href = getCleanPage1Url();
             }, delayMs);
             return;
         }
@@ -157,10 +176,7 @@
             isRunning = false;
             
             setTimeout(() => {
-                currentBmkIdx++;
-                if(currentBmkIdx >= BOOKMARK_URLS.length) currentBmkIdx = 0;
-                localStorage.setItem('oss_scraper_bmk_idx', currentBmkIdx);
-                window.location.href = BOOKMARK_URLS[currentBmkIdx];
+                window.location.href = getCleanPage1Url();
             }, delayMs);
             return;
         }
@@ -263,7 +279,14 @@
                     return true; 
                 }
                 
-                // Ambil semua row tanpa filter tanggal (berdasarkan permintaan user karena database/spreadsheet yang filter)
+                // Filter STO yang dikecualikan (DEP, SKJ, PCM, CNE, CSL)
+                const EXCLUDED_STO = ["DEP", "SKJ", "PCM", "CNE", "CSL"];
+                let isExcludedSto = rowData.some(val => EXCLUDED_STO.includes(val.trim().toUpperCase()));
+                if (isExcludedSto) {
+                    continue; // Jangan ambil tiket dari STO non-area ini
+                }
+                
+                // Ambil row yang valid
                 scrapedData.push(rowData);
             }
         }
@@ -275,10 +298,7 @@
             setStatus("⚠️ Tidak ada tiket Hari Ini yang ditemukan.<br>Melanjutkan ke bookmark berikutnya...");
             
             setTimeout(() => {
-                currentBmkIdx++;
-                if(currentBmkIdx >= BOOKMARK_URLS.length) currentBmkIdx = 0;
-                localStorage.setItem('oss_scraper_bmk_idx', currentBmkIdx);
-                window.location.href = BOOKMARK_URLS[currentBmkIdx];
+                window.location.href = getCleanPage1Url();
             }, 5000);
             return;
         }
@@ -301,25 +321,19 @@
                 let m = Math.floor(waitTime / 60);
                 let s = waitTime % 60;
                 let timeStr = waitTime >= 60 ? `${m}m ${s}s` : `${s}s`;
-                setStatus(`🎉 <b>SUKSES!</b> Data terkirim.<br>Pindah ke bookmark selanjutnya dalam <b>${timeStr}</b>...`);
+                setStatus(`🎉 <b>SUKSES!</b> Data terkirim.<br>Mengulang scraping filter GENCU FIX dalam <b>${timeStr}</b>...`);
                 waitTime--;
                 if(waitTime < 0) {
                     clearInterval(timerInterval);
-                    currentBmkIdx++;
-                    if(currentBmkIdx >= BOOKMARK_URLS.length) currentBmkIdx = 0;
-                    localStorage.setItem('oss_scraper_bmk_idx', currentBmkIdx);
-                    window.location.href = BOOKMARK_URLS[currentBmkIdx];
+                    window.location.href = getCleanPage1Url();
                 }
             }, 1000);
         }).catch(err => {
             let delayMs = (currentBmkIdx === 1) ? 10000 : 120000;
             let delayStr = (currentBmkIdx === 1) ? "10 detik" : "2 menit";
-            setStatus(`❌ Gagal mengirim data ke Google Sheet.<br>Lanjut ke bookmark berikutnya dalam ${delayStr}...`);
+            setStatus(`❌ Gagal mengirim data ke Google Sheet.<br>Mengulang scraping dalam ${delayStr}...`);
             setTimeout(() => {
-                currentBmkIdx++;
-                if(currentBmkIdx >= BOOKMARK_URLS.length) currentBmkIdx = 0;
-                localStorage.setItem('oss_scraper_bmk_idx', currentBmkIdx);
-                window.location.href = BOOKMARK_URLS[currentBmkIdx];
+                window.location.href = getCleanPage1Url();
             }, delayMs);
         });
     }
@@ -333,7 +347,7 @@
             document.body.appendChild(container);
             
             setTimeout(() => {
-                window.location.href = BOOKMARK_URLS[currentBmkIdx];
+                window.location.href = getCleanPage1Url();
             }, 5000);
             return;
         }
