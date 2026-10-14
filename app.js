@@ -1469,7 +1469,7 @@ window.getParsedEvidence = function(ticket) {
         let bUpper = b.toUpperCase();
         
         let isFisik = bUpper.match(/EVIDENCE FISIK|GCU FISIK|ASSIGNED|PENYEBAB\s*:|PERBAIKAN\s*:|SEGMEN\s*:|GCU JALUR|GCU ONT|GCU DC|SCC\/TSC|REDAMAN ODP/i);
-        let isLogic = bUpper.match(/WAITING APPROVAL KORLAP|EKSEKUSI LOGIC|PINDAH CHANNEL|CHECKLIST NAT|ENABLE IPV6|FIREWALL MEDIUM|CEK ONT|CEK FPP|CEK ACS|CEK CHANNEL|CEK ISOLIR|CEK STB|CEK VOICE|LAYANAN ACS VOICE|SUMMARY ACS/i);
+        let isLogic = bUpper.match(/WAITING APPROVAL KORLAP|EKSEKUSI LOGIC|PINDAH CHANNEL|CHECKLIST NAT|ENABLE IPV6|FIREWALL MEDIUM|CEK ONT|CEK FPP|CEK ACS|CEK CHANNEL|CEK ISOLIR|CEK STB|CEK VOICE|LAYANAN ACS VOICE|SUMMARY ACS|KLIK VRF|VRF|KONEKSI LAN|MAC ADDRESS|STATUS ISOLIR|REDAMAN \(SPEK|DATIN/i);
         
         if (!isLogic && !isFisik) {
             if (bUpper.includes("LOGIC") || bUpper.includes("HELPDESK")) isLogic = true;
@@ -2075,42 +2075,123 @@ function renderHelpdeskFlow() {
         }
     }
 
+    // Deteksi Layanan Otomatis berdasarkan SERVICE TYPE tiket
+    let svc = (ticket && ticket.serviceType ? ticket.serviceType.toString().trim().toUpperCase() : "");
+    let detectedCategory = 'INTERNET';
+    if (svc.includes('DATIN') || svc.includes('ASTINET') || svc.includes('OLO') || svc.includes('METRO') || svc.includes('VPN') || svc.includes('TRANSIT')) {
+        detectedCategory = 'DATIN';
+    } else if (svc.includes('IPTV') || svc.includes('USEETV')) {
+        detectedCategory = 'IPTV';
+    } else if (svc.includes('VOICE') || svc.includes('TELP') || svc.includes('POTS') || svc.includes('TELEPON')) {
+        detectedCategory = 'VOICE';
+    } else {
+        detectedCategory = 'INTERNET';
+    }
+
+    if (!state.workflowState.selectedLogicCategory) {
+        state.workflowState.selectedLogicCategory = detectedCategory;
+    }
+    let currentCat = state.workflowState.selectedLogicCategory;
+
+    // Badge styling & info
+    let categoryBadgeText = "Internet";
+    let categoryBadgeColor = "#059669";
+    let categoryBadgeBg = "rgba(16, 185, 129, 0.15)";
+    if (currentCat === 'DATIN') {
+        categoryBadgeText = "Datin / B2B";
+        categoryBadgeColor = "#2563eb";
+        categoryBadgeBg = "rgba(59, 130, 246, 0.15)";
+    } else if (currentCat === 'IPTV') {
+        categoryBadgeText = "IPTV / UseeTV";
+        categoryBadgeColor = "#d97706";
+        categoryBadgeBg = "rgba(245, 158, 11, 0.15)";
+    } else if (currentCat === 'VOICE') {
+        categoryBadgeText = "Voice / Telepon";
+        categoryBadgeColor = "#9333ea";
+        categoryBadgeBg = "rgba(168, 85, 247, 0.15)";
+    }
+
+    let checklistSectionHtml = '';
+
+    if (currentCat === 'DATIN') {
+        checklistSectionHtml = `
+            <div style="background: #f8fafc; padding: 16px; border-radius: 8px; border: 1.5px solid rgba(59, 130, 246, 0.3); margin-bottom: 15px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px dashed rgba(59, 130, 246, 0.3); padding-bottom: 8px;">
+                    <h4 style="font-size: 14px; font-weight: bold; color: #1e293b; margin: 0;">📊 Checklist Khusus Datin (Astinet / Internet OLO)</h4>
+                    <span style="font-size: 11px; background: ${categoryBadgeBg}; color: ${categoryBadgeColor}; padding: 3px 8px; border-radius: 4px; font-weight: 700;">${categoryBadgeText}</span>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 10px; margin-left: 5px;">
+                    <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; color: #1e293b;"><input type="checkbox" id="chk_datin1" ${state.workflowState.chk_datin1 ? 'checked' : ''} onchange="updateState('chk_datin1', this.checked)"> Redaman (Spek/ unspec)</label>
+                    <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; color: #1e293b;"><input type="checkbox" id="chk_datin2" ${state.workflowState.chk_datin2 ? 'checked' : ''} onchange="updateState('chk_datin2', this.checked)"> Klik VRF (arah ke PE)</label>
+                    <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; color: #1e293b;"><input type="checkbox" id="chk_datin3" ${state.workflowState.chk_datin3 ? 'checked' : ''} onchange="updateState('chk_datin3', this.checked)"> Cek koneksi LAN</label>
+                    <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; color: #1e293b;"><input type="checkbox" id="chk_datin4" ${state.workflowState.chk_datin4 ? 'checked' : ''} onchange="updateState('chk_datin4', this.checked)"> Cek Mac address yg terkonek</label>
+                    <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; color: #1e293b;"><input type="checkbox" id="chk_datin5" ${state.workflowState.chk_datin5 ? 'checked' : ''} onchange="updateState('chk_datin5', this.checked)"> Cek status isolir</label>
+                </div>
+            </div>
+        `;
+    } else if (currentCat === 'IPTV') {
+        checklistSectionHtml = `
+            <div style="background: #f8fafc; padding: 16px; border-radius: 8px; border: 1.5px solid rgba(245, 158, 11, 0.3); margin-bottom: 15px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px dashed rgba(245, 158, 11, 0.3); padding-bottom: 8px;">
+                    <h4 style="font-size: 14px; font-weight: bold; color: #1e293b; margin: 0;">📺 Layanan IPTV</h4>
+                    <span style="font-size: 11px; background: ${categoryBadgeBg}; color: ${categoryBadgeColor}; padding: 3px 8px; border-radius: 4px; font-weight: 700;">${categoryBadgeText}</span>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 10px; margin-left: 5px;">
+                    <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; color: #1e293b;"><input type="checkbox" id="chk_iptv1" ${state.workflowState.chk_iptv1 ? 'checked' : ''} onchange="updateState('chk_iptv1', this.checked)"> Cek ACS Connection</label>
+                    <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; color: #1e293b;"><input type="checkbox" id="chk_iptv2" ${state.workflowState.chk_iptv2 ? 'checked' : ''} onchange="updateState('chk_iptv2', this.checked)"> Cek Last Information & Channel connect</label>
+                    <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; color: #1e293b;"><input type="checkbox" id="chk_iptv3" ${state.workflowState.chk_iptv3 ? 'checked' : ''} onchange="updateState('chk_iptv3', this.checked)"> Cek Status Isolir</label>
+                    <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; color: #1e293b;"><input type="checkbox" id="chk_iptv4" ${state.workflowState.chk_iptv4 ? 'checked' : ''} onchange="updateState('chk_iptv4', this.checked)"> Cek Adv STB Information</label>
+                </div>
+            </div>
+        `;
+    } else if (currentCat === 'VOICE') {
+        checklistSectionHtml = `
+            <div style="background: #f8fafc; padding: 16px; border-radius: 8px; border: 1.5px solid rgba(168, 85, 247, 0.3); margin-bottom: 15px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px dashed rgba(168, 85, 247, 0.3); padding-bottom: 8px;">
+                    <h4 style="font-size: 14px; font-weight: bold; color: #1e293b; margin: 0;">📞 Layanan Voice / Telepon</h4>
+                    <span style="font-size: 11px; background: ${categoryBadgeBg}; color: ${categoryBadgeColor}; padding: 3px 8px; border-radius: 4px; font-weight: 700;">${categoryBadgeText}</span>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 10px; margin-left: 5px;">
+                    <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; color: #1e293b;"><input type="checkbox" id="chk_voice1" ${state.workflowState.chk_voice1 ? 'checked' : ''} onchange="updateState('chk_voice1', this.checked)"> Layanan ACS Voice</label>
+                </div>
+            </div>
+        `;
+    } else {
+        checklistSectionHtml = `
+            <div style="background: #f8fafc; padding: 16px; border-radius: 8px; border: 1.5px solid rgba(16, 185, 129, 0.3); margin-bottom: 15px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px dashed rgba(16, 185, 129, 0.3); padding-bottom: 8px;">
+                    <h4 style="font-size: 14px; font-weight: bold; color: #1e293b; margin: 0;">🌐 Layanan Internet</h4>
+                    <span style="font-size: 11px; background: ${categoryBadgeBg}; color: ${categoryBadgeColor}; padding: 3px 8px; border-radius: 4px; font-weight: 700;">${categoryBadgeText}</span>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 10px; margin-left: 5px;">
+                    <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; color: #1e293b;"><input type="checkbox" id="chk_int1" ${state.workflowState.chk_int1 ? 'checked' : ''} onchange="updateState('chk_int1', this.checked)"> Cek Interferensi Sinyal / Pindah Channel Frekuensi</label>
+                    <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; color: #1e293b;"><input type="checkbox" id="chk_int2" ${state.workflowState.chk_int2 ? 'checked' : ''} onchange="updateState('chk_int2', this.checked)"> Checklist NAT</label>
+                    <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; color: #1e293b;"><input type="checkbox" id="chk_int3" ${state.workflowState.chk_int3 ? 'checked' : ''} onchange="updateState('chk_int3', this.checked)"> Enable IPV6</label>
+                    <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; color: #1e293b;"><input type="checkbox" id="chk_int4" ${state.workflowState.chk_int4 ? 'checked' : ''} onchange="updateState('chk_int4', this.checked)"> Set Firewall ke Medium</label>
+                    <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; color: #1e293b;"><input type="checkbox" id="chk_int5" ${state.workflowState.chk_int5 ? 'checked' : ''} onchange="updateState('chk_int5', this.checked)"> Cek CPU/RAM & Versi ONT (Restart/Ganti jika Obsolete)</label>
+                    <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; color: #1e293b;"><input type="checkbox" id="chk_int6" ${state.workflowState.chk_int6 ? 'checked' : ''} onchange="updateState('chk_int6', this.checked)"> Cek FPP (Client, RSSL, Ping, Traceroute)</label>
+                </div>
+            </div>
+        `;
+    }
+
     let contentLogic = `
-        <p class="info-text" style="margin-bottom:15px;">Silakan jalankan eksekusi pengecekan Logic sesuai flowchart berikut. Centang langkah yang sudah dilakukan:</p>
+        <p class="info-text" style="margin-bottom:12px;">Pengecekan Logic otomatis menyesuaikan Service Type: <strong style="color: var(--primary);">${ticket ? (ticket.serviceType || 'INTERNET') : 'INTERNET'}</strong></p>
         
-        <div style="background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 15px;">
-            <h4 style="font-size: 14px; font-weight: bold; color: #1e293b; margin-bottom: 10px;">🌐 Layanan Internet</h4>
-            <div style="display: flex; flex-direction: column; gap: 8px; margin-left: 5px;">
-                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" id="chk_int1" ${state.workflowState.chk_int1 ? 'checked' : ''} onchange="updateState('chk_int1', this.checked)"> Cek Interferensi Sinyal / Pindah Channel Frekuensi</label>
-                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" id="chk_int2" ${state.workflowState.chk_int2 ? 'checked' : ''} onchange="updateState('chk_int2', this.checked)"> Checklist NAT</label>
-                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" id="chk_int3" ${state.workflowState.chk_int3 ? 'checked' : ''} onchange="updateState('chk_int3', this.checked)"> Enable IPV6</label>
-                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" id="chk_int4" ${state.workflowState.chk_int4 ? 'checked' : ''} onchange="updateState('chk_int4', this.checked)"> Set Firewall ke Medium</label>
-                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" id="chk_int5" ${state.workflowState.chk_int5 ? 'checked' : ''} onchange="updateState('chk_int5', this.checked)"> Cek CPU/RAM & Versi ONT (Restart/Ganti jika Obsolete)</label>
-                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" id="chk_int6" ${state.workflowState.chk_int6 ? 'checked' : ''} onchange="updateState('chk_int6', this.checked)"> Cek FPP (Client, RSSL, Ping, Traceroute)</label>
-            </div>
+        <!-- Category Switcher Tabs -->
+        <div style="display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap;">
+            <button type="button" class="btn ${currentCat === 'DATIN' ? 'btn-primary' : 'btn-outline'}" style="font-size: 12px; padding: 5px 10px; cursor: pointer;" onclick="updateState('selectedLogicCategory', 'DATIN')">📊 Datin / OLO</button>
+            <button type="button" class="btn ${currentCat === 'INTERNET' ? 'btn-primary' : 'btn-outline'}" style="font-size: 12px; padding: 5px 10px; cursor: pointer;" onclick="updateState('selectedLogicCategory', 'INTERNET')">🌐 Internet</button>
+            <button type="button" class="btn ${currentCat === 'IPTV' ? 'btn-primary' : 'btn-outline'}" style="font-size: 12px; padding: 5px 10px; cursor: pointer;" onclick="updateState('selectedLogicCategory', 'IPTV')">📺 IPTV</button>
+            <button type="button" class="btn ${currentCat === 'VOICE' ? 'btn-primary' : 'btn-outline'}" style="font-size: 12px; padding: 5px 10px; cursor: pointer;" onclick="updateState('selectedLogicCategory', 'VOICE')">📞 Voice</button>
         </div>
 
-        <div style="background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 15px;">
-            <h4 style="font-size: 14px; font-weight: bold; color: #1e293b; margin-bottom: 10px;">📺 Layanan IPTV</h4>
-            <div style="display: flex; flex-direction: column; gap: 8px; margin-left: 5px;">
-                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" id="chk_iptv1" ${state.workflowState.chk_iptv1 ? 'checked' : ''} onchange="updateState('chk_iptv1', this.checked)"> Cek ACS Connection</label>
-                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" id="chk_iptv2" ${state.workflowState.chk_iptv2 ? 'checked' : ''} onchange="updateState('chk_iptv2', this.checked)"> Cek Last Information & Channel connect</label>
-                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" id="chk_iptv3" ${state.workflowState.chk_iptv3 ? 'checked' : ''} onchange="updateState('chk_iptv3', this.checked)"> Cek Status Isolir</label>
-                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" id="chk_iptv4" ${state.workflowState.chk_iptv4 ? 'checked' : ''} onchange="updateState('chk_iptv4', this.checked)"> Cek Adv STB Information</label>
-            </div>
-        </div>
-
-        <div style="background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 15px;">
-            <h4 style="font-size: 14px; font-weight: bold; color: #1e293b; margin-bottom: 10px;">📊 Summary ACS</h4>
-            <div style="display: flex; flex-direction: column; gap: 8px; margin-left: 5px;">
-                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" id="chk_voice1" ${state.workflowState.chk_voice1 ? 'checked' : ''} onchange="updateState('chk_voice1', this.checked)"> Layanan ACS Voice</label>
-            </div>
-        </div>
+        ${checklistSectionHtml}
 
         <div style="margin-top: 15px; margin-bottom: 15px;">
-            <label class="block text-sm font-medium text-gray-700 mb-1">Upload Foto Evidence Logic (Opsional)</label>
-            <input type="file" id="hdPhoto" accept="image/*" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 10px; background: white;">
-            <textarea id="hdNotes" placeholder="Tulis catatan logic / link evidence foto tambahan di sini..." rows="2" style="width: 100%; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px;"></textarea>
+            <label class="block text-sm font-medium text-gray-700 mb-1" style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Upload Foto Evidence Logic (Opsional)</label>
+            <input type="file" id="hdPhoto" accept="image/*" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 10px; background: white; box-sizing: border-box;">
+            <textarea id="hdNotes" oninput="state.workflowState.hdNotes = this.value" placeholder="Tulis catatan logic / link evidence foto tambahan di sini..." rows="2" style="width: 100%; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px; box-sizing: border-box;">${state.workflowState.hdNotes || ''}</textarea>
         </div>
 
         <div style="display: flex; gap: 10px; margin-bottom: 15px;">
@@ -2174,19 +2255,32 @@ window.requestApprovalBackend = async function (event) {
 
     // Format summary checklist
     let checkedItems = [];
+    
+    // Checklist Datin / Internet OLO
+    if(state.workflowState.chk_datin1) checkedItems.push("Redaman (Spek/unspec)");
+    if(state.workflowState.chk_datin2) checkedItems.push("Klik VRF (ke PE)");
+    if(state.workflowState.chk_datin3) checkedItems.push("Cek koneksi LAN");
+    if(state.workflowState.chk_datin4) checkedItems.push("Cek Mac address");
+    if(state.workflowState.chk_datin5) checkedItems.push("Cek status isolir");
+
+    // Checklist Internet
     if(state.workflowState.chk_int1) checkedItems.push("Pindah Channel");
     if(state.workflowState.chk_int2) checkedItems.push("Checklist NAT");
     if(state.workflowState.chk_int3) checkedItems.push("Enable IPV6");
     if(state.workflowState.chk_int4) checkedItems.push("Firewall Medium");
     if(state.workflowState.chk_int5) checkedItems.push("Cek ONT");
     if(state.workflowState.chk_int6) checkedItems.push("Cek FPP");
+
+    // Checklist IPTV
     if(state.workflowState.chk_iptv1) checkedItems.push("Cek ACS");
     if(state.workflowState.chk_iptv2) checkedItems.push("Cek Channel");
     if(state.workflowState.chk_iptv3) checkedItems.push("Cek Isolir");
     if(state.workflowState.chk_iptv4) checkedItems.push("Cek STB");
+
+    // Checklist Voice
     if(state.workflowState.chk_voice1) checkedItems.push("Layanan ACS Voice");
     
-    let notes = document.getElementById('hdNotes') ? document.getElementById('hdNotes').value : "";
+    let notes = (document.getElementById('hdNotes') ? document.getElementById('hdNotes').value : "") || state.workflowState.hdNotes || "";
     let summaryText = "[WAITING APPROVAL KORLAP] - Eksekusi Logic: " + (checkedItems.length > 0 ? checkedItems.join(", ") : "OK") + (notes ? " | Catatan: " + notes : "");
 
     const payload = {
