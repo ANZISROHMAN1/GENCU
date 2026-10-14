@@ -3653,8 +3653,16 @@ function sendLaporanCloseTiket(ticketId, korlapNote, extraData) {
 
         kendala = extractEvidenceField(/(?:^|\n)\s*(?:-\s*)?(?:Note Kendala|Kendala)\s*:\s*([^\n\r]+)/i);
 
-        var noteKorlapText = korlapNote ? korlapNote.replace(/^Catatan Korlap:\s*/i, '').trim() : "BISMILLAH AMAN BISA DI CLOSE";
-        if (!noteKorlapText) noteKorlapText = "BISMILLAH AMAN BISA DI CLOSE";
+        var noteKorlapText = "-";
+        if (korlapNote && korlapNote.trim()) {
+            noteKorlapText = korlapNote.replace(/^Catatan Korlap:\s*/i, '').trim();
+        } else {
+            var mCatK = normText.match(/Catatan Korlap\s*:\s*([^|\n\r]+)/i);
+            if (mCatK && mCatK[1].trim()) {
+                noteKorlapText = mCatK[1].trim();
+            }
+        }
+        if (!noteKorlapText || noteKorlapText === "-") noteKorlapText = "-";
 
         if (pekerjaan && pekerjaan !== "-") {
             if (!pekerjaan.toLowerCase().startsWith("tiket")) {
