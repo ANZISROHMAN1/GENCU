@@ -1673,9 +1673,12 @@ function renderKorlapFlow() {
             <p class="info-text" style="margin-bottom: 15px;">Validasi pekerjaan GCU Fisik dan Logic. Pastikan sesuai SOP perusahaan sebelum approve.</p>
             
             <!-- SECTION 1: Evidence GCU FISIK -->
-            <div style="background: var(--bg-surface); padding: 18px; border-radius: 10px; border: 1px solid var(--border); margin-bottom: 15px;">
+            <div style="background: ${state.workflowState.fisikAman ? 'rgba(16, 185, 129, 0.04)' : 'var(--bg-surface)'}; padding: 18px; border-radius: 10px; border: ${state.workflowState.fisikAman ? '1.5px solid #10b981' : '1px solid var(--border)'}; margin-bottom: 15px; transition: all 0.2s ease;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                    <h4 style="font-size: 14px; font-weight: bold; color: var(--text-primary); margin: 0; display: flex; align-items: center; gap: 8px;">🛠️ Validasi GCU FISIK (Teknisi)</h4>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <h4 style="font-size: 14px; font-weight: bold; color: var(--text-primary); margin: 0; display: flex; align-items: center; gap: 8px;">🛠️ Validasi GCU FISIK (Teknisi)</h4>
+                        ${state.workflowState.fisikAman ? '<span style="background: #d1fae5; color: #047857; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; border: 1px solid #6ee7b7;">TERVALIDASI ✅</span>' : ''}
+                    </div>
                     <button class="btn btn-outline" style="font-size: 11px; padding: 4px 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;" onclick="window.showEvidenceModal('fisik')">
                         <ion-icon name="scan-outline"></ion-icon> Layar Penuh
                     </button>
@@ -1691,15 +1694,24 @@ function renderKorlapFlow() {
                 </div>
 
                 <div class="btn-group" style="display: flex; gap: 10px;">
-                    <button class="btn ${state.workflowState.fisikAman ? 'btn-success' : 'btn-outline'}" onclick="updateState('fisikAman', true)">Sesuai SOP ✅</button>
-                    <button class="btn btn-outline" style="border-color: var(--danger); color: var(--danger);" onclick="window.rejectToQueue('GCU FISIK', 'Fisik tidak sesuai SOP')">Reject ke GCU FISIK ❌</button>
+                    <button class="btn ${state.workflowState.fisikAman ? 'btn-success' : 'btn-outline'}" 
+                            style="${state.workflowState.fisikAman ? 'background: linear-gradient(135deg, #10b981, #059669); color: white; border: 1.5px solid #047857; font-weight: 700; box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4);' : ''}" 
+                            onclick="updateState('fisikAman', !state.workflowState.fisikAman)">
+                        ${state.workflowState.fisikAman ? '✅ Sesuai SOP (Sudah Tervalidasi)' : 'Sesuai SOP ✅'}
+                    </button>
+                    <button class="btn btn-outline" style="border: 1.5px solid #fca5a5; color: #dc2626; background: #ffffff;" onmouseover="this.style.background='#fef2f2'" onmouseout="this.style.background='#ffffff'" onclick="window.rejectToQueue('GCU FISIK', 'Fisik tidak sesuai SOP')">
+                        Reject ke GCU FISIK ❌
+                    </button>
                 </div>
             </div>
 
             <!-- SECTION 2: Evidence GCU LOGIC -->
-            <div style="background: var(--bg-surface); padding: 18px; border-radius: 10px; border: 1px solid var(--border); margin-bottom: 15px;">
+            <div style="background: ${state.workflowState.logicAman ? 'rgba(16, 185, 129, 0.04)' : 'var(--bg-surface)'}; padding: 18px; border-radius: 10px; border: ${state.workflowState.logicAman ? '1.5px solid #10b981' : '1px solid var(--border)'}; margin-bottom: 15px; transition: all 0.2s ease;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                    <h4 style="font-size: 14px; font-weight: bold; color: var(--text-primary); margin: 0; display: flex; align-items: center; gap: 8px;">💻 Validasi GCU LOGIC (Helpdesk)</h4>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <h4 style="font-size: 14px; font-weight: bold; color: var(--text-primary); margin: 0; display: flex; align-items: center; gap: 8px;">💻 Validasi GCU LOGIC (Helpdesk)</h4>
+                        ${state.workflowState.logicAman ? '<span style="background: #d1fae5; color: #047857; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; border: 1px solid #6ee7b7;">TERVALIDASI ✅</span>' : ''}
+                    </div>
                     <button class="btn btn-outline" style="font-size: 11px; padding: 4px 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;" onclick="window.showEvidenceModal('logic')">
                         <ion-icon name="scan-outline"></ion-icon> Layar Penuh
                     </button>
@@ -1710,8 +1722,14 @@ function renderKorlapFlow() {
                 </div>
 
                 <div class="btn-group" style="display: flex; gap: 10px;">
-                    <button class="btn ${state.workflowState.logicAman ? 'btn-success' : 'btn-outline'}" onclick="updateState('logicAman', true)">Sesuai SOP ✅</button>
-                    <button class="btn btn-outline" style="border-color: var(--danger); color: var(--danger);" onclick="window.rejectToQueue('GCU LOGIC', 'Logic tidak sesuai SOP')">Reject ke GCU LOGIC ❌</button>
+                    <button class="btn ${state.workflowState.logicAman ? 'btn-success' : 'btn-outline'}" 
+                            style="${state.workflowState.logicAman ? 'background: linear-gradient(135deg, #10b981, #059669); color: white; border: 1.5px solid #047857; font-weight: 700; box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4);' : ''}" 
+                            onclick="updateState('logicAman', !state.workflowState.logicAman)">
+                        ${state.workflowState.logicAman ? '✅ Sesuai SOP (Sudah Tervalidasi)' : 'Sesuai SOP ✅'}
+                    </button>
+                    <button class="btn btn-outline" style="border: 1.5px solid #fca5a5; color: #dc2626; background: #ffffff;" onmouseover="this.style.background='#fef2f2'" onmouseout="this.style.background='#ffffff'" onclick="window.rejectToQueue('GCU LOGIC', 'Logic tidak sesuai SOP')">
+                        Reject ke GCU LOGIC ❌
+                    </button>
                 </div>
             </div>
         `;

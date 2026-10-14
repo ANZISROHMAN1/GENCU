@@ -537,6 +537,70 @@ body:not(.light-mode) .table-container::-webkit-scrollbar-track {
 }
 
 /* Buttons */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 9px 18px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 1.5px solid transparent;
+    text-decoration: none;
+    line-height: 1.2;
+}
+
+.btn:active {
+    transform: scale(0.98);
+}
+
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    filter: grayscale(0.5);
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #0284c7, #0369a1);
+    color: #ffffff !important;
+    border-color: #0284c7 !important;
+    box-shadow: 0 4px 12px rgba(2, 132, 199, 0.3);
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: linear-gradient(135deg, #0369a1, #075985);
+    box-shadow: 0 6px 16px rgba(2, 132, 199, 0.45);
+}
+
+.btn-success {
+    background: linear-gradient(135deg, #10b981, #059669) !important;
+    color: #ffffff !important;
+    border: 1.5px solid #047857 !important;
+    box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35) !important;
+    font-weight: 700 !important;
+}
+
+.btn-success:hover:not(:disabled) {
+    background: linear-gradient(135deg, #059669, #047857) !important;
+    box-shadow: 0 6px 18px rgba(16, 185, 129, 0.45) !important;
+}
+
+.btn-outline {
+    background: #ffffff;
+    color: #334155;
+    border: 1.5px solid #cbd5e1;
+}
+
+.btn-outline:hover:not(:disabled) {
+    background: #f8fafc;
+    border-color: #94a3b8;
+    color: #0f172a;
+}
+
 .btn-action {
     background: transparent;
     color: var(--text-primary);
