@@ -3653,6 +3653,40 @@ function sendLaporanCloseTiket(ticketId, korlapNote, extraData) {
 
         kendala = extractEvidenceField(/(?:^|\n)\s*(?:-\s*)?(?:Note Kendala|Kendala)\s*:\s*([^\n\r]+)/i);
 
+        // === EKSTRAK CATATAN DARI TEKNISI, HELPDESK & KORLAP ===
+        // 1. Catatan Teknisi (dari Note Kendala form / Catatan Teknisi)
+        var catatanTeknisi = "";
+        var mTek = normText.match(/(?:Catatan|Note)\s*Teknisi\s*:\s*([^|\n\r]+)/i);
+        if (mTek && mTek[1].trim() && mTek[1].trim() !== "-") {
+            catatanTeknisi = mTek[1].trim();
+        } else {
+            var mFisikCat = normText.match(/EVIDENCE FISIK SUBMITTED[^\n\r]*\|\s*Catatan\s*:\s*([^|\n\r]+)/i);
+            if (mFisikCat && mFisikCat[1].trim() && mFisikCat[1].trim() !== "-") {
+                catatanTeknisi = mFisikCat[1].trim();
+            } else {
+                var mNoteK = normText.match(/(?:^|\n)\s*(?:-\s*)?Note Kendala\s*:\s*([^\n\r]+)/i);
+                if (mNoteK && mNoteK[1].trim()) {
+                    var valNK = mNoteK[1].trim();
+                    if (valNK !== "-" && valNK.toLowerCase() !== "tidak ada kendala" && valNK.toLowerCase() !== "tidak ada") {
+                        catatanTeknisi = valNK;
+                    }
+                }
+            }
+        }
+
+        // 2. Catatan Helpdesk (dari logic execution / waiting approval korlap)
+        var catatanHelpdesk = "";
+        var mHD = normText.match(/(?:Catatan|Note)\s*(?:Helpdesk|Logic)\s*:\s*([^|\n\r]+)/i);
+        if (mHD && mHD[1].trim() && mHD[1].trim() !== "-") {
+            catatanHelpdesk = mHD[1].trim();
+        } else {
+            var mLogicCat = normText.match(/(?:WAITING APPROVAL KORLAP|Eksekusi Logic|GCU LOGIC)[^\n\r]*\|\s*Catatan\s*:\s*([^|\n\r]+)/i);
+            if (mLogicCat && mLogicCat[1].trim() && mLogicCat[1].trim() !== "-") {
+                catatanHelpdesk = mLogicCat[1].trim();
+            }
+        }
+
+        // 3. Catatan Korlap
         var noteKorlapText = "-";
         if (korlapNote && korlapNote.trim()) {
             noteKorlapText = korlapNote.replace(/^Catatan Korlap:\s*/i, '').trim();
@@ -3718,6 +3752,12 @@ function sendLaporanCloseTiket(ticketId, korlapNote, extraData) {
         message += "🔧 <b>RFO:</b> " + escapeHTML(rfoFull) + "\n";
         message += "🚫 <b>Kendala:</b> " + escapeHTML(kendalaClean) + "\n\n";
 
+        if (catatanTeknisi && catatanTeknisi !== "-") {
+            message += "🛠 <b>Catatan Teknisi:</b> " + escapeHTML(catatanTeknisi) + "\n";
+        }
+        if (catatanHelpdesk && catatanHelpdesk !== "-") {
+            message += "🎧 <b>Catatan Helpdesk:</b> " + escapeHTML(catatanHelpdesk) + "\n";
+        }
         message += "📝 <b>Catatan Korlap:</b> " + escapeHTML(noteKorlapText);
 
         // === SUSUN SECTION EVIDENCE (LINK DRIVE) PERSIS PERMINTAAN USER ===

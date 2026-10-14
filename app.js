@@ -1861,7 +1861,8 @@ window.approveTicketFinal = function () {
         serviceNumber: ticket.serviceNumber,
         serviceType: ticket.serviceType,
         customerName: ticket.customerName,
-        photos: ticket.photos
+        photos: ticket.photos,
+        actionHistory: ticket.actionHistory
     };
 
     fetch(SCRIPT_URL, {
