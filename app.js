@@ -2180,6 +2180,26 @@ function renderHelpdeskFlow() {
         `;
     }
 
+    let hasLogicChecked = isDatin ? (
+        state.workflowState.chk_datin1 ||
+        state.workflowState.chk_datin2 ||
+        state.workflowState.chk_datin3 ||
+        state.workflowState.chk_datin4 ||
+        state.workflowState.chk_datin5
+    ) : (
+        state.workflowState.chk_int1 ||
+        state.workflowState.chk_int2 ||
+        state.workflowState.chk_int3 ||
+        state.workflowState.chk_int4 ||
+        state.workflowState.chk_int5 ||
+        state.workflowState.chk_int6 ||
+        state.workflowState.chk_iptv1 ||
+        state.workflowState.chk_iptv2 ||
+        state.workflowState.chk_iptv3 ||
+        state.workflowState.chk_iptv4 ||
+        state.workflowState.chk_voice1
+    );
+
     let contentLogic = `
         <p class="info-text" style="margin-bottom:15px;">Silakan jalankan eksekusi pengecekan Logic sesuai flowchart berikut. Centang langkah yang sudah dilakukan:</p>
 
@@ -2192,8 +2212,12 @@ function renderHelpdeskFlow() {
         </div>
 
         <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-            <button class="btn btn-success" style="flex: 1;" onclick="window.requestApprovalBackend(event)">Ajukan Approval Korlap (Logic OK) ✅</button>
-            <button class="btn btn-outline" style="border-color: var(--danger); color: var(--danger);" onclick="updateState('showAssignFisik', true)">Masih Gangguan (Butuh Fisik) ❌</button>
+            <button class="btn ${hasLogicChecked ? 'btn-success' : 'btn-outline'}" 
+                    style="flex: 1; ${hasLogicChecked ? 'background: linear-gradient(135deg, #10b981, #059669); color: white; border: 1.5px solid #047857; font-weight: 700; box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35); cursor: pointer;' : 'background: #ffffff; color: #475569; border: 1.5px solid #cbd5e1; font-weight: 600; cursor: pointer;'}" 
+                    onclick="window.requestApprovalBackend(event)">
+                ${hasLogicChecked ? 'Ajukan Approval Korlap (Logic OK) ✅' : 'Ajukan Approval Korlap (Logic OK) ⏳'}
+            </button>
+            <button class="btn btn-outline" style="border: 1.5px solid #fca5a5; color: #dc2626; background: #ffffff;" onmouseover="this.style.background='#fef2f2'" onmouseout="this.style.background='#ffffff'" onclick="updateState('showAssignFisik', true)">Masih Gangguan (Butuh Fisik) ❌</button>
         </div>
     `;
 
@@ -2247,8 +2271,6 @@ init();
 window.requestApprovalBackend = async function (event) {
     const btn = event.target;
     const oldText = btn.innerText;
-    btn.innerText = "Mempersiapkan...";
-    btn.disabled = true;
 
     // Format summary checklist
     let checkedItems = [];
@@ -2278,6 +2300,15 @@ window.requestApprovalBackend = async function (event) {
     if(state.workflowState.chk_voice1) checkedItems.push("Layanan ACS Voice");
     
     let notes = (document.getElementById('hdNotes') ? document.getElementById('hdNotes').value : "") || state.workflowState.hdNotes || "";
+    
+    if (checkedItems.length === 0 && !notes) {
+        alert("Silakan centang langkah checklist logic yang sudah dikerjakan atau tulis catatan terlebih dahulu sebelum mengajukan approval ke Korlap!");
+        return;
+    }
+
+    btn.innerText = "Mempersiapkan...";
+    btn.disabled = true;
+
     let summaryText = "[WAITING APPROVAL KORLAP] - Eksekusi Logic: " + (checkedItems.length > 0 ? checkedItems.join(", ") : "OK") + (notes ? " | Catatan: " + notes : "");
 
     const payload = {
