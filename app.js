@@ -2180,26 +2180,6 @@ function renderHelpdeskFlow() {
         `;
     }
 
-    let hasLogicChecked = isDatin ? (
-        state.workflowState.chk_datin1 ||
-        state.workflowState.chk_datin2 ||
-        state.workflowState.chk_datin3 ||
-        state.workflowState.chk_datin4 ||
-        state.workflowState.chk_datin5
-    ) : (
-        state.workflowState.chk_int1 ||
-        state.workflowState.chk_int2 ||
-        state.workflowState.chk_int3 ||
-        state.workflowState.chk_int4 ||
-        state.workflowState.chk_int5 ||
-        state.workflowState.chk_int6 ||
-        state.workflowState.chk_iptv1 ||
-        state.workflowState.chk_iptv2 ||
-        state.workflowState.chk_iptv3 ||
-        state.workflowState.chk_iptv4 ||
-        state.workflowState.chk_voice1
-    );
-
     let contentLogic = `
         <p class="info-text" style="margin-bottom:15px;">Silakan jalankan eksekusi pengecekan Logic sesuai flowchart berikut. Centang langkah yang sudah dilakukan:</p>
 
@@ -2212,10 +2192,11 @@ function renderHelpdeskFlow() {
         </div>
 
         <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-            <button class="btn ${hasLogicChecked ? 'btn-success' : 'btn-outline'}" 
-                    style="flex: 1; ${hasLogicChecked ? 'background: linear-gradient(135deg, #10b981, #059669); color: white; border: 1.5px solid #047857; font-weight: 700; box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35); cursor: pointer;' : 'background: #ffffff; color: #475569; border: 1.5px solid #cbd5e1; font-weight: 600; cursor: pointer;'}" 
+            <button class="btn btn-outline" 
+                    id="btnSubmitApproval"
+                    style="flex: 1; background: #ffffff; color: #1e293b; border: 1.5px solid #cbd5e1; font-weight: 600; font-size: 13.5px; cursor: pointer; transition: all 0.2s ease;" 
                     onclick="window.requestApprovalBackend(event)">
-                ${hasLogicChecked ? 'Ajukan Approval Korlap (Logic OK) ✅' : 'Ajukan Approval Korlap (Logic OK) ⏳'}
+                Ajukan Approval Korlap (Logic OK) ✅
             </button>
             <button class="btn btn-outline" style="border: 1.5px solid #fca5a5; color: #dc2626; background: #ffffff;" onmouseover="this.style.background='#fef2f2'" onmouseout="this.style.background='#ffffff'" onclick="updateState('showAssignFisik', true)">Masih Gangguan (Butuh Fisik) ❌</button>
         </div>
@@ -2306,7 +2287,13 @@ window.requestApprovalBackend = async function (event) {
         return;
     }
 
-    btn.innerText = "Mempersiapkan...";
+    // UBAH WARNA TOMBOL MENJADI HIJAU SEKETIKA SAAT DIKLIK OLEH HELPDESK
+    btn.style.background = "linear-gradient(135deg, #10b981, #059669)";
+    btn.style.color = "#ffffff";
+    btn.style.borderColor = "#047857";
+    btn.style.boxShadow = "0 4px 14px rgba(16, 185, 129, 0.4)";
+    btn.style.fontWeight = "700";
+    btn.innerText = "✅ Mengajukan Approval ke Korlap...";
     btn.disabled = true;
 
     let summaryText = "[WAITING APPROVAL KORLAP] - Eksekusi Logic: " + (checkedItems.length > 0 ? checkedItems.join(", ") : "OK") + (notes ? " | Catatan: " + notes : "");
@@ -2320,7 +2307,7 @@ window.requestApprovalBackend = async function (event) {
     // Proses Foto Jika Ada
     const photoInput = document.getElementById('hdPhoto');
     if (photoInput && photoInput.files.length > 0) {
-        btn.innerText = "Mengupload Foto...";
+        btn.innerText = "✅ Mengupload Foto Evidence...";
         const file = photoInput.files[0];
         try {
             const base64String = await compressImageBase64(file);
@@ -2330,13 +2317,17 @@ window.requestApprovalBackend = async function (event) {
         } catch (e) {
             console.error(e);
             alert("Gagal memproses foto.");
+            btn.style.background = "#ffffff";
+            btn.style.color = "#1e293b";
+            btn.style.borderColor = "#cbd5e1";
+            btn.style.boxShadow = "none";
             btn.innerText = oldText;
             btn.disabled = false;
             return;
         }
     }
 
-    btn.innerText = "Mengirim...";
+    btn.innerText = "✅ Mengirim ke Korlap...";
     fetch(SCRIPT_URL, {
         method: 'POST',
         mode: 'no-cors',
@@ -2346,10 +2337,14 @@ window.requestApprovalBackend = async function (event) {
         body: JSON.stringify(payload)
     }).then(() => {
         updateTicketCategory(state.activeTicketId, 'APPROVAL KORLAP');
-        alert("Tiket dikirim ke Korlap!");
+        alert("Tiket berhasil diajukan ke Approval Korlap!");
         showDashboard('APPROVAL KORLAP');
     }).catch(err => {
         alert("Gagal koneksi ke server!");
+        btn.style.background = "#ffffff";
+        btn.style.color = "#1e293b";
+        btn.style.borderColor = "#cbd5e1";
+        btn.style.boxShadow = "none";
         btn.innerText = oldText;
         btn.disabled = false;
     });
