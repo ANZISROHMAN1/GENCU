@@ -4,6 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GENCU - GENeral Control & Update</title>
+    <!-- Favicon / Tab Icon -->
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
+    <link rel="shortcut icon" href="favicon.ico">
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
     <link rel="stylesheet" href="style.css?v=3.0">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
     <!-- Ionicons for icons -->
@@ -140,7 +145,10 @@
             <!-- VIEW: DASHBOARD -->
             <div id="view-dashboard">
                 <header class="top-header">
-                    <h2>Summary information</h2>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <img src="favicon-32x32.png" alt="GENCU" style="width: 32px; height: 32px; border-radius: 6px; box-shadow: 0 0 10px rgba(6, 182, 212, 0.4);">
+                        <h2 style="margin: 0;">Summary information</h2>
+                    </div>
                     <div class="header-actions">
                         <span class="total-data">Total data: <strong id="totalDataCount">0</strong></span>
                         <div class="date-picker">
@@ -291,9 +299,12 @@
             <!-- VIEW: WORKFLOW -->
             <div id="view-workflow" style="display: none;">
                 <header class="top-header" style="border-bottom: 1px solid var(--border); padding-bottom: 15px; margin-bottom: 25px;">
-                    <div>
-                        <h2 id="workflowPageTitle" style="font-size: 20px; color: var(--text-primary);">Role Panel</h2>
-                        <p class="subtitle" id="workflowSubtitle" style="color: var(--text-secondary); font-size: 13px; margin-top: 5px;">Manage Ticket</p>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <img src="favicon-32x32.png" alt="GENCU" style="width: 32px; height: 32px; border-radius: 6px; box-shadow: 0 0 10px rgba(6, 182, 212, 0.4);">
+                        <div>
+                            <h2 id="workflowPageTitle" style="font-size: 20px; color: var(--text-primary); margin: 0;">Role Panel</h2>
+                            <p class="subtitle" id="workflowSubtitle" style="color: var(--text-secondary); font-size: 13px; margin-top: 2px;">Manage Ticket</p>
+                        </div>
                     </div>
                     <button class="btn-action" onclick="showDashboard(state.activeFilter)" style="background: var(--bg-surface); color: var(--text-primary); border: 1px solid var(--border);">
                         <ion-icon name="arrow-back-outline"></ion-icon> Back to Inbox
