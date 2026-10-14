@@ -2076,18 +2076,23 @@ function renderHelpdeskFlow() {
     }
 
     // Cek apakah tiket masuk kategori DATIN atau INTERNET murni berdasarkan kolom SERVICE TYPE:
-    // Kategori INTERNET: Internet, IPTV, Voice, Internet OLO (menampilkan form lengkap)
-    // Kategori DATIN: ASTINET, METRO, VPN, DATIN, dll (menampilkan ceklis Datin)
+    // Kategori INTERNET HANYA untuk: Internet, IPTV, Voice, Internet OLO
+    // Di luar 4 service type tersebut (seperti ASTINET, METRO-E, VPN IP, SITE, NON_NUMBERING, WMS, WIFI, DATIN, dll), SEMUANYA WAJIB MASUK DATIN!
     let svc = (ticket && ticket.serviceType ? ticket.serviceType.toString().trim().toUpperCase() : "");
-    let isDatin = false;
+    let isInternet = (
+        svc === "INTERNET" ||
+        svc === "IPTV" ||
+        svc === "VOICE" ||
+        svc === "INTERNET OLO" ||
+        svc === "INTERNET_OLO" ||
+        svc === "INTERNET-OLO" ||
+        svc.startsWith("INTERNET OLO") ||
+        svc.startsWith("INTERNET_OLO") ||
+        ((svc.startsWith("INTERNET") || svc.startsWith("IPTV") || svc.startsWith("VOICE")) && 
+         !svc.includes("ASTINET") && !svc.includes("METRO") && !svc.includes("VPN") && !svc.includes("DATIN") && !svc.includes("OLO"))
+    );
 
-    if (svc.includes("INTERNET OLO") || svc.includes("INTERNET_OLO") || svc === "INTERNET" || svc.includes("IPTV") || svc.includes("VOICE") || svc.includes("NON_NUMBERING") || svc.includes("WMS") || svc.includes("WIFI")) {
-        isDatin = false;
-    } else if (svc.includes("ASTINET") || svc.includes("DATIN") || svc.includes("METRO") || svc.includes("VPN") || svc.includes("TRANSIT") || svc.includes("SITE")) {
-        isDatin = true;
-    } else {
-        isDatin = false;
-    }
+    let isDatin = !isInternet;
 
     let checklistSectionHtml = '';
 
