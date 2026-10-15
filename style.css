@@ -1207,3 +1207,13 @@ body:not(.light-mode) .table-container::-webkit-scrollbar-track {
         transform: translateY(20px) scale(0.95);
     }
 }
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+

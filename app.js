@@ -58,6 +58,31 @@ const dispActiveTicketId = document.getElementById('activeTicketId');
 const dashboardTitle = document.getElementById('dashboardTitle');
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwgkZAduwo1EKvp-MZgE9c0Auhfpz7aiNEi5TSer0gqHJDMjUvTcxJL3FpFfKWece2Z/exec';
 
+// === FAST CACHING SYSTEM (STALE-WHILE-REVALIDATE) ===
+const CACHE_KEYS = {
+    TICKETS: 'gencu_cached_tickets_v4',
+    TEKNISI: 'gencu_cached_teknisi_v4',
+    TIMESTAMP: 'gencu_cached_time_v4'
+};
+
+function saveToLocalStorage(key, data) {
+    try {
+        localStorage.setItem(key, JSON.stringify(data));
+    } catch (e) {
+        console.warn('Gagal menyimpan cache localStorage:', e);
+    }
+}
+
+function loadFromLocalStorage(key) {
+    try {
+        const item = localStorage.getItem(key);
+        return item ? JSON.parse(item) : null;
+    } catch (e) {
+        console.warn('Gagal membaca cache localStorage:', e);
+        return null;
+    }
+}
+
 function showRegister() {
     document.getElementById('loginCard').style.display = 'none';
     document.getElementById('registerCard').style.display = 'block';
@@ -257,11 +282,28 @@ function initAfterLogin() {
     const today = new Date();
     currentDateRange.innerText = `${today.getDate()} ${today.toLocaleString('default', { month: 'long' })} ${today.getFullYear()}`;
     updateThemeBtn(document.body.classList.contains('light-mode'));
-    fetchTickets();
-    fetchTeknisiList(); // Preload master sheet TEKNISI untuk validasi NIK GCU FISIK
     initTableDragScroll();
-    
-    // Auto refresh every 1 minute
+
+    // 1. Muat master data teknisi dari cache seketika (0.001s)
+    const cachedTeknisi = loadFromLocalStorage(CACHE_KEYS.TEKNISI);
+    if (cachedTeknisi && Array.isArray(cachedTeknisi) && cachedTeknisi.length > 0) {
+        if (typeof applyTeknisiData === 'function') {
+            applyTeknisiData(cachedTeknisi, false);
+        }
+    }
+
+    // 2. Muat data tiket dari cache secara INSTAN (< 0.05 detik)! Pengguna langsung melihat tabel 230 tiket
+    const cachedTickets = loadFromLocalStorage(CACHE_KEYS.TICKETS);
+    const hasCachedTickets = (cachedTickets && Array.isArray(cachedTickets) && cachedTickets.length > 1);
+    if (hasCachedTickets) {
+        processData(cachedTickets, false);
+    }
+
+    // 3. Sinkronkan data fresh dari server di latar belakang (background sync)
+    // Jika cache sudah ada, jangan munculkan spinner loading yang memblokir layar!
+    fetchTickets(hasCachedTickets);
+
+    // Auto refresh every 1 minute di background
     setInterval(() => {
         fetchTickets(true);
     }, 60000);
@@ -386,44 +428,68 @@ async function fetchTickets(isBackground = false) {
         emptyState.style.display = 'flex';
         emptyState.innerHTML = '<ion-icon name="sync-outline" style="animation: spin 1s linear infinite;"></ion-icon><p>Memuat Data dari Spreadsheet...</p>';
         ticketTable.style.display = 'none';
-    } else {
-        // Optional: you can show a subtle loading indicator on the reload button
-        const reloadIcon = document.querySelector('.btn-reload ion-icon');
-        if (reloadIcon) {
-            reloadIcon.style.animation = 'spin 1s linear infinite';
-        }
     }
+    startReloadAnimation();
 
     try {
-        // Muat data tiket sekaligus pastikan data master TEKNISI siap
-        const [ticketsData, _] = await Promise.all([
-            fetch(SCRIPT_URL + "?t=" + new Date().getTime()).then(res => res.json()),
-            fetchTeknisiList()
-        ]);
-        processData(ticketsData);
-        if (isBackground) stopReloadAnimation();
+        // Ambil data dengan request tunggal parameter ?with_teknisi=1
+        const res = await fetch(SCRIPT_URL + "?with_teknisi=1&t=" + new Date().getTime());
+        const data = await res.json();
+
+        if (data && typeof data === 'object' && !Array.isArray(data) && data.tickets) {
+            // Unified payload dari Apps Script (tiket + teknisi sekaligus dalam 1 request)
+            if (data.teknisi && Array.isArray(data.teknisi) && data.teknisi.length > 0) {
+                if (typeof applyTeknisiData === 'function') {
+                    applyTeknisiData(data.teknisi, false);
+                }
+            }
+            if (data.tickets && Array.isArray(data.tickets) && data.tickets.length > 1) {
+                saveToLocalStorage(CACHE_KEYS.TICKETS, data.tickets);
+                saveToLocalStorage(CACHE_KEYS.TIMESTAMP, Date.now());
+                processData(data.tickets, isBackground);
+            }
+        } else if (Array.isArray(data) && data.length > 1) {
+            // Format standar (array of rows)
+            saveToLocalStorage(CACHE_KEYS.TICKETS, data);
+            saveToLocalStorage(CACHE_KEYS.TIMESTAMP, Date.now());
+            processData(data, isBackground);
+
+            // Jika teknisi belum pernah termuat, ambil di background
+            if (!window.teknisiFetched || !window.teknisiList || window.teknisiList.length === 0) {
+                if (typeof fetchTeknisiList === 'function') fetchTeknisiList();
+            }
+        }
     } catch (err) {
-        console.warn("Fetch failed, using local simulation.", err);
-        if (isBackground) stopReloadAnimation();
-        setTimeout(() => {
-            const mockData = [
-                ["", "INC52772921", "", "", "", "", "", "", "", "", "", "", "BGR", "-27.7", "2.13", "", "LOS"],
-                ["", "INC52772922", "", "", "", "", "", "", "", "", "", "", "CLS", "-15.0", "2.00", "", "ONLINE"],
-                ["", "INC52772923", "", "", "", "", "", "", "", "", "", "", "BJD", "-28.5", "1.50", "", "DYING GASP"]
-            ];
-            processData(mockData);
-        }, 500);
+        console.warn("Fetch failed, memeriksa data lokal...", err);
+        // Jika fetch gagal dan belum ada data tiket yang ditampilkan
+        if (!state.tickets || state.tickets.length === 0) {
+            const cachedTickets = loadFromLocalStorage(CACHE_KEYS.TICKETS);
+            if (cachedTickets && Array.isArray(cachedTickets) && cachedTickets.length > 1) {
+                processData(cachedTickets, false);
+            } else {
+                showEmpty("Gagal memuat data dari server. Silakan coba beberapa saat lagi.");
+            }
+        }
+    } finally {
+        stopReloadAnimation();
     }
+}
+
+function startReloadAnimation() {
+    const reloadIcons = document.querySelectorAll('.btn-reload ion-icon[name="refresh-outline"]');
+    reloadIcons.forEach(icon => {
+        icon.style.animation = 'spin 1s linear infinite';
+    });
 }
 
 function stopReloadAnimation() {
-    const reloadIcon = document.querySelector('.btn-reload ion-icon');
-    if (reloadIcon) {
-        reloadIcon.style.animation = 'none';
-    }
+    const reloadIcons = document.querySelectorAll('.btn-reload ion-icon[name="refresh-outline"]');
+    reloadIcons.forEach(icon => {
+        icon.style.animation = 'none';
+    });
 }
 
-function processData(rows) {
+function processData(rows, isBackground = false) {
     if (!rows || rows.length < 2) {
         showEmpty("Tidak ada data ditemukan.");
         return;
@@ -815,10 +881,10 @@ function processData(rows) {
 
     parsedTickets.reverse(); // Balik array agar tiket terbaru (dari baris paling bawah di Sheet) muncul paling atas
     state.tickets = parsedTickets;
-    updateDashboardSummary();
+    updateDashboardSummary(isBackground);
 }
 
-function updateDashboardSummary() {
+function updateDashboardSummary(preserveFilters = false) {
     totalDataCount.innerText = state.tickets.length;
     countGcuFisik.innerText = state.tickets.filter(t => t.category === 'GCU FISIK').length;
     countGcuLogic.innerText = state.tickets.filter(t => t.category === 'GCU LOGIC').length;
@@ -826,8 +892,12 @@ function updateDashboardSummary() {
     if (countPending) countPending.innerText = state.tickets.filter(t => t.category === 'PENDING').length;
     countCompleted.innerText = state.tickets.filter(t => t.category === 'COMPLETED').length;
 
-    // Automatically show active dashboard
-    if (state.activeTicketId == null) {
+    // Jika preserveFilters aktif (background sync), perbarui filteredTickets tanpa mereset STO/Witel/Pencarian aktif
+    if (preserveFilters && state.activeTicketId == null) {
+        state.filteredTickets = state.tickets.filter(t => t.category === state.activeFilter);
+        window.populateStoMultiSelect();
+        renderTable();
+    } else if (state.activeTicketId == null) {
         window.showDashboard(state.activeFilter);
     }
 }
@@ -2944,36 +3014,52 @@ window.teknisiList = [];
 window.teknisiMap = new Map();
 window.teknisiFetched = false;
 
+function applyTeknisiData(list, shouldRerender = false) {
+    if (!list || !Array.isArray(list)) return;
+    _teknisiCache = list;
+    window.teknisiList = list;
+    saveToLocalStorage(CACHE_KEYS.TEKNISI, list);
+
+    const newMap = new Map();
+    list.forEach(t => {
+        const rawNik = (t.nik !== undefined && t.nik !== null) ? t.nik.toString().trim() : '';
+        if (rawNik) {
+            newMap.set(rawNik, t);
+            const digits = rawNik.replace(/\D/g, '');
+            if (digits) {
+                newMap.set(digits, t);
+            }
+        }
+    });
+    window.teknisiMap = newMap;
+    window.teknisiFetched = true;
+
+    // Re-render tabel & update summary jika tiket sudah termuat
+    if (shouldRerender && state.tickets && state.tickets.length > 0) {
+        updateDashboardSummary(true);
+        renderTable();
+    }
+}
+window.applyTeknisiData = applyTeknisiData;
+
 async function fetchTeknisiList(forceRefresh = false) {
     if (!forceRefresh && _teknisiCache && _teknisiCache.length > 0) return _teknisiCache;
+
+    if (!forceRefresh) {
+        const local = loadFromLocalStorage(CACHE_KEYS.TEKNISI);
+        if (local && Array.isArray(local) && local.length > 0) {
+            applyTeknisiData(local, false);
+            return local;
+        }
+    }
+
     if (_teknisiFetching) return _teknisiCache || [];
     _teknisiFetching = true;
     try {
         const resp = await fetch(SCRIPT_URL + '?action=get_teknisi&_t=' + new Date().getTime());
         if (resp.ok) {
-            _teknisiCache = await resp.json();
-            window.teknisiList = _teknisiCache || [];
-            
-            // Build Map dengan multiple keys (raw string, trimmed, dan digits only)
-            const newMap = new Map();
-            (window.teknisiList || []).forEach(t => {
-                const rawNik = (t.nik !== undefined && t.nik !== null) ? t.nik.toString().trim() : '';
-                if (rawNik) {
-                    newMap.set(rawNik, t);
-                    const digits = rawNik.replace(/\D/g, '');
-                    if (digits) {
-                        newMap.set(digits, t);
-                    }
-                }
-            });
-            window.teknisiMap = newMap;
-            window.teknisiFetched = true;
-            
-            // Re-render tabel & update summary jika tiket sudah termuat
-            if (state.tickets && state.tickets.length > 0) {
-                updateDashboardSummary();
-                renderTable();
-            }
+            const data = await resp.json();
+            applyTeknisiData(data, true);
         }
     } catch (e) {
         console.warn('Gagal fetch data teknisi:', e.message);

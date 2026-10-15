@@ -673,6 +673,7 @@ function doGet(e) {
   
   // Ambil tiket aktif dari DATABASE ALL TICKET (sebagai base data agar SEMUA data muncul di Dashboard)
   var sheetScrape = ss.getSheetByName("DATABASE ALL TICKET");
+  var isFromDB = !!sheetScrape;
   if (!sheetScrape) {
       // Fallback ke SCRAPING INSERA jika DATABASE ALL TICKET tidak ada
       sheetScrape = ss.getSheetByName("SCRAPING INSERA");
@@ -722,91 +723,115 @@ function doGet(e) {
                   return cell && cell.toString().trim().match(/^(INC\d+|1-SV\d+)/);
               });
           });
+          isFromDB = false;
       }
   }
 
-  // Ambil DATABASE ALL TICKET untuk di-join (mendapatkan history ACTION, RX POWER, dll)
-  var sheetDB = ss.getSheetByName("DATABASE ALL TICKET");
-  var dbMap = {}; // Map Incident ID -> Data Row dari DB
-  var dbHeaders = [];
-  
-  if (sheetDB) {
-      var dbLastRow = sheetDB.getLastRow();
-      var dbLastCol = sheetDB.getLastColumn();
-      if (dbLastRow > 1 && dbLastCol > 0) {
-          var dbData = sheetDB.getRange(1, 1, dbLastRow, dbLastCol).getValues();
-          dbHeaders = dbData[0].map(function(h) { return h.toString().toUpperCase().trim(); });
-          
-          var incIdxDB = -1;
-          for (var c = 0; c < dbHeaders.length; c++) {
-              var h = dbHeaders[c];
-              if (h.includes("INCIDENT") || h === "TICKET") {
-                  incIdxDB = c;
-                  break;
+  var resultData = [];
+  // OPTIMASI: Jika base data SUDAH dari DATABASE ALL TICKET, semua kolom (ACTION, FOTO, EVIDENCE) sudah ada!
+  // Hindari membaca ulang sheet yang sama dan menduplikasi puluhan kolom yang memperlambat respon.
+  if (!isFromDB) {
+      var sheetDB = ss.getSheetByName("DATABASE ALL TICKET");
+      var dbMap = {}; // Map Incident ID -> Data Row dari DB
+      var dbHeaders = [];
+      
+      if (sheetDB) {
+          var dbLastRow = sheetDB.getLastRow();
+          var dbLastCol = sheetDB.getLastColumn();
+          if (dbLastRow > 1 && dbLastCol > 0) {
+              var dbData = sheetDB.getRange(1, 1, dbLastRow, dbLastCol).getValues();
+              dbHeaders = dbData[0].map(function(h) { return h.toString().toUpperCase().trim(); });
+              
+              var incIdxDB = -1;
+              for (var c = 0; c < dbHeaders.length; c++) {
+                  var h = dbHeaders[c];
+                  if (h.includes("INCIDENT") || h === "TICKET") {
+                      incIdxDB = c;
+                      break;
+                  }
               }
-          }
-          if (incIdxDB !== -1) {
-              for (var i = 1; i < dbData.length; i++) {
-                  var incId = (dbData[i][incIdxDB] || "").toString().trim();
-                  if (incId) {
-                      dbMap[incId] = dbData[i]; // Timpa dengan data terbaru jika ada duplikat di DB
+              if (incIdxDB !== -1) {
+                  for (var i = 1; i < dbData.length; i++) {
+                      var incId = (dbData[i][incIdxDB] || "").toString().trim();
+                      if (incId) {
+                          dbMap[incId] = dbData[i];
+                      }
                   }
               }
           }
       }
-  }
-  
-  // Cari kolom tambahan yang perlu di-join dari DB ke Scrape
-  var columnsToJoin = ["RX POWER", "TX POWER", "OLT", "STATUS ALARM", "ACTION"];
-  
-  // Ambil semua kolom yang mengandung kata "FOTO" atau "EVIDENCE" untuk ikut di-join
-  dbHeaders.forEach(function(h) {
-      if ((h.startsWith("FOTO ") || h.includes("EVIDENCE")) && columnsToJoin.indexOf(h) === -1) {
-          columnsToJoin.push(h);
-      }
-  });
+      
+      var columnsToJoin = ["RX POWER", "TX POWER", "OLT", "STATUS ALARM", "ACTION"];
+      dbHeaders.forEach(function(h) {
+          if ((h.startsWith("FOTO ") || h.includes("EVIDENCE")) && columnsToJoin.indexOf(h) === -1) {
+              columnsToJoin.push(h);
+          }
+      });
 
-  var joinIndicesDB = {};
-  columnsToJoin.forEach(function(col) {
-      var idx = dbHeaders.indexOf(col);
-      if (idx !== -1) joinIndicesDB[col] = idx;
-  });
-  
-  // Tambahkan header tambahan ke scrape data
-  var extraHeaders = Object.keys(joinIndicesDB);
-  headers = headers.concat(extraHeaders);
-  
-  var resultData = [headers];
-  
-  // Cari index INCIDENT di scrape data
-  var incIdxScrape = -1;
-  for (var c = 0; c < headers.length; c++) {
-      var hName = headers[c].toString().toUpperCase();
-      if (hName.includes("INCIDENT") || hName === "TICKET") {
-          incIdxScrape = c;
-          break;
+      var joinIndicesDB = {};
+      columnsToJoin.forEach(function(col) {
+          var idx = dbHeaders.indexOf(col);
+          if (idx !== -1) joinIndicesDB[col] = idx;
+      });
+      
+      var extraHeaders = Object.keys(joinIndicesDB);
+      headers = headers.concat(extraHeaders);
+      
+      resultData = [headers];
+      
+      var incIdxScrape = -1;
+      for (var c = 0; c < headers.length; c++) {
+          var hName = headers[c].toString().toUpperCase();
+          if (hName.includes("INCIDENT") || hName === "TICKET") {
+              incIdxScrape = c;
+              break;
+          }
       }
+      
+      for(var i = 0; i < dataRows.length; i++) {
+          var row = dataRows[i].slice();
+          if (incIdxScrape !== -1) {
+              var incId = (row[incIdxScrape] || "").toString().trim();
+              var dbRow = dbMap[incId];
+              extraHeaders.forEach(function(col) {
+                  if (dbRow && joinIndicesDB[col] !== undefined) {
+                      row.push(dbRow[joinIndicesDB[col]]);
+                  } else {
+                      row.push("");
+                  }
+              });
+          } else {
+              extraHeaders.forEach(function(col) { row.push(""); });
+          }
+          resultData.push(row);
+      }
+  } else {
+      // Langsung gunakan data dari DATABASE ALL TICKET tanpa operasi join redundant
+      resultData = [headers].concat(dataRows);
   }
-  
-  for(var i = 0; i < dataRows.length; i++) {
-      var row = dataRows[i].slice(); // copy array
-      
-      if (incIdxScrape !== -1) {
-          var incId = (row[incIdxScrape] || "").toString().trim();
-          var dbRow = dbMap[incId];
-          
-          extraHeaders.forEach(function(col) {
-              if (dbRow && joinIndicesDB[col] !== undefined) {
-                  row.push(dbRow[joinIndicesDB[col]]);
-              } else {
-                  row.push("");
+
+  // Jika dipanggil dengan with_teknisi=1, kembalikan data tiket dan list teknisi sekaligus dalam 1 request tunggal
+  if (e && e.parameter && (e.parameter.with_teknisi === '1' || e.parameter.with_teknisi === 'true')) {
+      var sheetTeknisi = ss.getSheetByName("TEKNISI");
+      var tekList = [];
+      if (sheetTeknisi) {
+          var tekLastRow = sheetTeknisi.getLastRow();
+          if (tekLastRow > 1) {
+              var tekData = sheetTeknisi.getRange(2, 1, tekLastRow - 1, 3).getValues();
+              for (var t = 0; t < tekData.length; t++) {
+                  var tNik = tekData[t][0] ? tekData[t][0].toString().trim() : "";
+                  var tNama = tekData[t][1] ? tekData[t][1].toString().trim() : "";
+                  var tTele = tekData[t][2] ? tekData[t][2].toString().trim() : "";
+                  if (tNik) {
+                      tekList.push({ nik: tNik, nama: tNama, teleId: tTele });
+                  }
               }
-          });
-      } else {
-          extraHeaders.forEach(function(col) { row.push(""); });
+          }
       }
-      
-      resultData.push(row);
+      return ContentService.createTextOutput(JSON.stringify({
+          tickets: resultData,
+          teknisi: tekList
+      })).setMimeType(ContentService.MimeType.JSON);
   }
 
   return ContentService.createTextOutput(JSON.stringify(resultData)).setMimeType(ContentService.MimeType.JSON);
