@@ -83,6 +83,99 @@ function loadFromLocalStorage(key) {
     }
 }
 
+// === TEKNISI DATABASE LOOKUP & QUICK ASSIGN SYSTEM ===
+let _teknisiCache = null;
+let _teknisiFetching = false;
+window.teknisiList = [];
+window.teknisiMap = new Map();
+window.teknisiFetched = false;
+
+function applyTeknisiData(list, shouldRerender = false) {
+    if (!list || !Array.isArray(list)) return;
+    _teknisiCache = list;
+    window.teknisiList = list;
+    saveToLocalStorage(CACHE_KEYS.TEKNISI, list);
+
+    const newMap = new Map();
+    list.forEach(t => {
+        const rawNik = (t.nik !== undefined && t.nik !== null) ? t.nik.toString().trim() : '';
+        if (rawNik) {
+            newMap.set(rawNik, t);
+            const digits = rawNik.replace(/\D/g, '');
+            if (digits) {
+                newMap.set(digits, t);
+            }
+        }
+    });
+    window.teknisiMap = newMap;
+    window.teknisiFetched = true;
+
+    // Re-render tabel & update summary jika tiket sudah termuat
+    if (shouldRerender && state.tickets && state.tickets.length > 0) {
+        updateDashboardSummary(true);
+        renderTable();
+    }
+}
+window.applyTeknisiData = applyTeknisiData;
+
+async function fetchTeknisiList(forceRefresh = false) {
+    if (!forceRefresh && _teknisiCache && _teknisiCache.length > 0) return _teknisiCache;
+
+    if (!forceRefresh) {
+        const local = loadFromLocalStorage(CACHE_KEYS.TEKNISI);
+        if (local && Array.isArray(local) && local.length > 0) {
+            applyTeknisiData(local, false);
+            return local;
+        }
+    }
+
+    if (_teknisiFetching) return _teknisiCache || [];
+    _teknisiFetching = true;
+    try {
+        const resp = await fetch(SCRIPT_URL + '?action=get_teknisi&_t=' + new Date().getTime());
+        if (resp.ok) {
+            const data = await resp.json();
+            applyTeknisiData(data, true);
+        }
+    } catch (e) {
+        console.warn('Gagal fetch data teknisi:', e.message);
+    } finally {
+        _teknisiFetching = false;
+    }
+    return _teknisiCache || [];
+}
+window.fetchTeknisiList = fetchTeknisiList;
+
+function isTeknisiValidInDb(nik) {
+    if (!nik || nik === '-' || nik === 'Unknown' || nik === 'null') return false;
+    // Jika data teknisi belum selesai dimuat, jangan anggap kendala dulu
+    if (!window.teknisiFetched || !window.teknisiMap || window.teknisiMap.size === 0) return true;
+    const str = nik.toString().trim();
+    if (window.teknisiMap.has(str)) return true;
+    const digits = str.replace(/\D/g, '');
+    return digits ? window.teknisiMap.has(digits) : false;
+}
+window.isTeknisiValidInDb = isTeknisiValidInDb;
+
+function getTeknisiInfo(nik) {
+    if (!nik || nik === '-' || !window.teknisiMap) return null;
+    const str = nik.toString().trim();
+    if (window.teknisiMap.has(str)) return window.teknisiMap.get(str);
+    const digits = str.replace(/\D/g, '');
+    if (digits && window.teknisiMap.has(digits)) return window.teknisiMap.get(digits);
+    return null;
+}
+window.getTeknisiInfo = getTeknisiInfo;
+
+function filterKendalaAssign() {
+    const sel = document.getElementById('statusFilter');
+    if (sel) {
+        sel.value = sel.value === 'KENDALA_ASSIGN' ? 'ALL' : 'KENDALA_ASSIGN';
+        applyStatusFilter();
+    }
+}
+window.filterKendalaAssign = filterKendalaAssign;
+
 function showRegister() {
     document.getElementById('loginCard').style.display = 'none';
     document.getElementById('registerCard').style.display = 'block';
@@ -2767,8 +2860,7 @@ document.addEventListener('paste', function (e) {
     }
 });
 
-// Boot
-init();
+// Boot (dieksekusi di akhir file setelah seluruh fungsi siap)
 
 
 window.requestApprovalBackend = async function (event) {
@@ -3005,95 +3097,6 @@ window.returnToFisikFromHelpdesk = async function () {
         console.error(err);
         alert("Gagal koneksi ke server!");
     });
-};
-
-// === TEKNISI DATABASE LOOKUP & QUICK ASSIGN SYSTEM ===
-let _teknisiCache = null;
-let _teknisiFetching = false;
-window.teknisiList = [];
-window.teknisiMap = new Map();
-window.teknisiFetched = false;
-
-function applyTeknisiData(list, shouldRerender = false) {
-    if (!list || !Array.isArray(list)) return;
-    _teknisiCache = list;
-    window.teknisiList = list;
-    saveToLocalStorage(CACHE_KEYS.TEKNISI, list);
-
-    const newMap = new Map();
-    list.forEach(t => {
-        const rawNik = (t.nik !== undefined && t.nik !== null) ? t.nik.toString().trim() : '';
-        if (rawNik) {
-            newMap.set(rawNik, t);
-            const digits = rawNik.replace(/\D/g, '');
-            if (digits) {
-                newMap.set(digits, t);
-            }
-        }
-    });
-    window.teknisiMap = newMap;
-    window.teknisiFetched = true;
-
-    // Re-render tabel & update summary jika tiket sudah termuat
-    if (shouldRerender && state.tickets && state.tickets.length > 0) {
-        updateDashboardSummary(true);
-        renderTable();
-    }
-}
-window.applyTeknisiData = applyTeknisiData;
-
-async function fetchTeknisiList(forceRefresh = false) {
-    if (!forceRefresh && _teknisiCache && _teknisiCache.length > 0) return _teknisiCache;
-
-    if (!forceRefresh) {
-        const local = loadFromLocalStorage(CACHE_KEYS.TEKNISI);
-        if (local && Array.isArray(local) && local.length > 0) {
-            applyTeknisiData(local, false);
-            return local;
-        }
-    }
-
-    if (_teknisiFetching) return _teknisiCache || [];
-    _teknisiFetching = true;
-    try {
-        const resp = await fetch(SCRIPT_URL + '?action=get_teknisi&_t=' + new Date().getTime());
-        if (resp.ok) {
-            const data = await resp.json();
-            applyTeknisiData(data, true);
-        }
-    } catch (e) {
-        console.warn('Gagal fetch data teknisi:', e.message);
-    } finally {
-        _teknisiFetching = false;
-    }
-    return _teknisiCache || [];
-}
-
-window.isTeknisiValidInDb = function (nik) {
-    if (!nik || nik === '-' || nik === 'Unknown' || nik === 'null') return false;
-    // Jika data teknisi belum selesai dimuat, jangan anggap kendala dulu
-    if (!window.teknisiFetched || !window.teknisiMap || window.teknisiMap.size === 0) return true;
-    const str = nik.toString().trim();
-    if (window.teknisiMap.has(str)) return true;
-    const digits = str.replace(/\D/g, '');
-    return digits ? window.teknisiMap.has(digits) : false;
-};
-
-window.getTeknisiInfo = function (nik) {
-    if (!nik || nik === '-' || !window.teknisiMap) return null;
-    const str = nik.toString().trim();
-    if (window.teknisiMap.has(str)) return window.teknisiMap.get(str);
-    const digits = str.replace(/\D/g, '');
-    if (digits && window.teknisiMap.has(digits)) return window.teknisiMap.get(digits);
-    return null;
-};
-
-window.filterKendalaAssign = function () {
-    const sel = document.getElementById('statusFilter');
-    if (sel) {
-        sel.value = sel.value === 'KENDALA_ASSIGN' ? 'ALL' : 'KENDALA_ASSIGN';
-        applyStatusFilter();
-    }
 };
 
 // ==========================================
@@ -3631,5 +3634,13 @@ window.pickUpTicket = function(ticketId) {
         setTimeout(() => toast.remove(), 3000);
     }).catch(console.error);
 };
+
+// === APPLICATION BOOTSTRAP ===
+// Jalankan setelah seluruh fungsi, modal, dan event handler selesai dimuat
+if (typeof document !== 'undefined' && document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+} else if (typeof init === 'function') {
+    init();
+}
 
 
