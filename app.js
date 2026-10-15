@@ -381,7 +381,7 @@ function fallbackCopyText(text, label) {
     document.body.removeChild(textarea);
 }
 
-function fetchTickets(isBackground = false) {
+async function fetchTickets(isBackground = false) {
     if (!isBackground) {
         emptyState.style.display = 'flex';
         emptyState.innerHTML = '<ion-icon name="sync-outline" style="animation: spin 1s linear infinite;"></ion-icon><p>Memuat Data dari Spreadsheet...</p>';
@@ -394,24 +394,26 @@ function fetchTickets(isBackground = false) {
         }
     }
 
-    fetch(SCRIPT_URL + "?t=" + new Date().getTime())
-        .then(res => res.json())
-        .then(data => {
-            processData(data);
-            if (isBackground) stopReloadAnimation();
-        })
-        .catch(err => {
-            console.warn("Fetch failed, using local simulation.");
-            if (isBackground) stopReloadAnimation();
-            setTimeout(() => {
-                const mockData = [
-                    ["", "INC52772921", "", "", "", "", "", "", "", "", "", "", "BGR", "-27.7", "2.13", "", "LOS"],
-                    ["", "INC52772922", "", "", "", "", "", "", "", "", "", "", "CLS", "-15.0", "2.00", "", "ONLINE"],
-                    ["", "INC52772923", "", "", "", "", "", "", "", "", "", "", "BJD", "-28.5", "1.50", "", "DYING GASP"]
-                ];
-                processData(mockData);
-            }, 500);
-        });
+    try {
+        // Muat data tiket sekaligus pastikan data master TEKNISI siap
+        const [ticketsData, _] = await Promise.all([
+            fetch(SCRIPT_URL + "?t=" + new Date().getTime()).then(res => res.json()),
+            fetchTeknisiList()
+        ]);
+        processData(ticketsData);
+        if (isBackground) stopReloadAnimation();
+    } catch (err) {
+        console.warn("Fetch failed, using local simulation.", err);
+        if (isBackground) stopReloadAnimation();
+        setTimeout(() => {
+            const mockData = [
+                ["", "INC52772921", "", "", "", "", "", "", "", "", "", "", "BGR", "-27.7", "2.13", "", "LOS"],
+                ["", "INC52772922", "", "", "", "", "", "", "", "", "", "", "CLS", "-15.0", "2.00", "", "ONLINE"],
+                ["", "INC52772923", "", "", "", "", "", "", "", "", "", "", "BJD", "-28.5", "1.50", "", "DYING GASP"]
+            ];
+            processData(mockData);
+        }, 500);
+    }
 }
 
 function stopReloadAnimation() {
@@ -1165,9 +1167,10 @@ function renderTable() {
         const isGcuFisik = ticket.category === 'GCU FISIK';
         const isTeknisiValid = window.isTeknisiValidInDb(ticket.technician);
         const isKendalaAssign = isGcuFisik && !isTeknisiValid;
+        const hasTeknisiNik = ticket.technician && ticket.technician !== "-" && ticket.technician !== "Unknown" && ticket.technician !== "null";
 
         let teknisiDisplay = `<span style="color: var(--text-secondary);">-</span>`;
-        if (ticket.technician && ticket.technician !== "-") {
+        if (hasTeknisiNik) {
             const tData = window.getTeknisiInfo(ticket.technician);
             if (tData) {
                 teknisiDisplay = `
@@ -1176,8 +1179,8 @@ function renderTable() {
                         <span style="display: block; font-size: 11px; color: var(--text-secondary); max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${tData.nama}">${tData.nama}</span>
                     </div>
                 `;
-            } else if (isGcuFisik) {
-                // KENDALA ASSIGN: NIK ada di sistem web tapi tidak terdaftar di sheet TEKNISI
+            } else if (isGcuFisik && window.teknisiFetched && window.teknisiMap && window.teknisiMap.size > 0) {
+                // KENDALA ASSIGN: NIK ada di tiket tapi TIDAK TERDAFTAR di master sheet TEKNISI (setelah data teknisi selesai di-fetch)
                 teknisiDisplay = `
                     <div style="line-height: 1.25; display: flex; flex-direction: column; gap: 2px;">
                         <span style="background: #fef3c7; color: #b45309; border: 1px solid #fcd34d; font-size: 10.5px; font-weight: 800; padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 3px;" title="NIK ${ticket.technician} tidak terdaftar di master sheet TEKNISI">
@@ -1189,7 +1192,7 @@ function renderTable() {
                     </div>
                 `;
             } else {
-                teknisiDisplay = `<span style="color: var(--text-secondary);">${ticket.technician}</span>`;
+                teknisiDisplay = `<span style="color: var(--text-secondary); font-weight: 600;">👤 ${ticket.technician}</span>`;
             }
         } else if (isGcuFisik) {
             // KENDALA ASSIGN: Belum ada NIK sama sekali di GCU FISIK
@@ -2905,41 +2908,62 @@ window.teknisiList = [];
 window.teknisiMap = new Map();
 window.teknisiFetched = false;
 
-async function fetchTeknisiList() {
-    if (_teknisiCache && _teknisiCache.length > 0) return _teknisiCache;
+async function fetchTeknisiList(forceRefresh = false) {
+    if (!forceRefresh && _teknisiCache && _teknisiCache.length > 0) return _teknisiCache;
     if (_teknisiFetching) return _teknisiCache || [];
     _teknisiFetching = true;
     try {
-        const resp = await fetch(SCRIPT_URL + '?action=get_teknisi');
+        const resp = await fetch(SCRIPT_URL + '?action=get_teknisi&_t=' + new Date().getTime());
         if (resp.ok) {
             _teknisiCache = await resp.json();
-            window.teknisiList = _teknisiCache;
-            window.teknisiMap = new Map(_teknisiCache.map(t => [(t.nik || '').toString().trim(), t]));
+            window.teknisiList = _teknisiCache || [];
+            
+            // Build Map dengan multiple keys (raw string, trimmed, dan digits only)
+            const newMap = new Map();
+            (window.teknisiList || []).forEach(t => {
+                const rawNik = (t.nik !== undefined && t.nik !== null) ? t.nik.toString().trim() : '';
+                if (rawNik) {
+                    newMap.set(rawNik, t);
+                    const digits = rawNik.replace(/\D/g, '');
+                    if (digits) {
+                        newMap.set(digits, t);
+                    }
+                }
+            });
+            window.teknisiMap = newMap;
             window.teknisiFetched = true;
-            // Re-render tabel tiket jika tiket sudah termuat agar badge kendala assign langsung tampil
+            
+            // Re-render tabel & update summary jika tiket sudah termuat
             if (state.tickets && state.tickets.length > 0) {
+                updateDashboardSummary();
                 renderTable();
             }
-        } else {
-            _teknisiCache = [];
         }
     } catch (e) {
         console.warn('Gagal fetch data teknisi:', e.message);
-        _teknisiCache = [];
+    } finally {
+        _teknisiFetching = false;
     }
-    _teknisiFetching = false;
-    return _teknisiCache;
+    return _teknisiCache || [];
 }
 
 window.isTeknisiValidInDb = function (nik) {
     if (!nik || nik === '-' || nik === 'Unknown' || nik === 'null') return false;
-    if (!window.teknisiFetched || !window.teknisiMap || window.teknisiMap.size === 0) return true; // Belum selesai fetch
-    return window.teknisiMap.has(nik.toString().trim());
+    // Jika data teknisi belum selesai dimuat, jangan anggap kendala dulu
+    if (!window.teknisiFetched || !window.teknisiMap || window.teknisiMap.size === 0) return true;
+    const str = nik.toString().trim();
+    if (window.teknisiMap.has(str)) return true;
+    const digits = str.replace(/\D/g, '');
+    return digits ? window.teknisiMap.has(digits) : false;
 };
 
 window.getTeknisiInfo = function (nik) {
     if (!nik || nik === '-' || !window.teknisiMap) return null;
-    return window.teknisiMap.get(nik.toString().trim()) || null;
+    const str = nik.toString().trim();
+    if (window.teknisiMap.has(str)) return window.teknisiMap.get(str);
+    const digits = str.replace(/\D/g, '');
+    if (digits && window.teknisiMap.has(digits)) return window.teknisiMap.get(digits);
+    return null;
 };
 
 window.filterKendalaAssign = function () {
