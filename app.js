@@ -258,6 +258,7 @@ function initAfterLogin() {
     currentDateRange.innerText = `${today.getDate()} ${today.toLocaleString('default', { month: 'long' })} ${today.getFullYear()}`;
     updateThemeBtn(document.body.classList.contains('light-mode'));
     fetchTickets();
+    fetchTeknisiList(); // Preload master sheet TEKNISI untuk validasi NIK GCU FISIK
     initTableDragScroll();
     
     // Auto refresh every 1 minute
@@ -1115,6 +1116,9 @@ function renderTable() {
     // 4. Terapkan Filter Status
     if (state.statusFilter && state.statusFilter !== 'ALL') {
         displayTickets = displayTickets.filter(ticket => {
+            if (state.statusFilter === 'KENDALA_ASSIGN') {
+                return ticket.category === 'GCU FISIK' && !window.isTeknisiValidInDb(ticket.technician);
+            }
             let badgeText = '';
             if (ticket.status === 'LOS' || ticket.status.includes('DYING')) badgeText = ticket.status;
             else if (parseFloat(ticket.rx) < -27) badgeText = 'REDAMAN TINGGI';
@@ -1158,12 +1162,62 @@ function renderTable() {
         else if (parseFloat(ticket.rx) < -27) statusBadge = `<span class="status-dot" style="background: #f59e0b; box-shadow: 0 0 10px #f59e0b;"></span>`;
         else statusBadge = `<span class="status-dot"></span>`;
 
+        const isGcuFisik = ticket.category === 'GCU FISIK';
+        const isTeknisiValid = window.isTeknisiValidInDb(ticket.technician);
+        const isKendalaAssign = isGcuFisik && !isTeknisiValid;
+
+        let teknisiDisplay = `<span style="color: var(--text-secondary);">-</span>`;
+        if (ticket.technician && ticket.technician !== "-") {
+            const tData = window.getTeknisiInfo(ticket.technician);
+            if (tData) {
+                teknisiDisplay = `
+                    <div style="line-height: 1.25;">
+                        <span style="font-weight: 700; color: #0284c7; font-size: 13px;">👤 ${ticket.technician}</span>
+                        <span style="display: block; font-size: 11px; color: var(--text-secondary); max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${tData.nama}">${tData.nama}</span>
+                    </div>
+                `;
+            } else if (isGcuFisik) {
+                // KENDALA ASSIGN: NIK ada di sistem web tapi tidak terdaftar di sheet TEKNISI
+                teknisiDisplay = `
+                    <div style="line-height: 1.25; display: flex; flex-direction: column; gap: 2px;">
+                        <span style="background: #fef3c7; color: #b45309; border: 1px solid #fcd34d; font-size: 10.5px; font-weight: 800; padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 3px;" title="NIK ${ticket.technician} tidak terdaftar di master sheet TEKNISI">
+                            ⚠️ Kendala Assign
+                        </span>
+                        <span style="font-size: 11px; color: #dc2626; font-weight: 600;" title="Bukan teknisi terdaftar di sheet TEKNISI">
+                            NIK: ${ticket.technician}
+                        </span>
+                    </div>
+                `;
+            } else {
+                teknisiDisplay = `<span style="color: var(--text-secondary);">${ticket.technician}</span>`;
+            }
+        } else if (isGcuFisik) {
+            // KENDALA ASSIGN: Belum ada NIK sama sekali di GCU FISIK
+            teknisiDisplay = `
+                <div style="line-height: 1.25; display: flex; flex-direction: column; gap: 2px;">
+                    <span style="background: #fef3c7; color: #b45309; border: 1px solid #fcd34d; font-size: 10.5px; font-weight: 800; padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 3px;" title="Belum ada teknisi yang ditugaskan">
+                        ⚠️ Kendala Assign
+                    </span>
+                    <span style="font-size: 11px; color: #9ca3af; font-style: italic;">Belum Ada NIK</span>
+                </div>
+            `;
+        }
+
         let actionText = "Checklist / Assign";
         let onClickAction = `selectTicket('${ticket.incident}', '${ticket.sto}')`;
         let btnStyle = "";
         let btnDisabled = "";
 
-        if (ticket.category === 'GCU LOGIC') {
+        if (isGcuFisik) {
+            if (isKendalaAssign) {
+                actionText = "⚡ Assign Manual";
+                btnStyle = "background: linear-gradient(135deg, #f59e0b, #d97706); color: white; border: none; font-weight: 700; box-shadow: 0 2px 8px rgba(245, 158, 11, 0.35);";
+                onClickAction = `window.openQuickAssignModal('${ticket.incident}', event)`;
+            } else {
+                actionText = "Checklist / Detail";
+                btnStyle = "";
+            }
+        } else if (ticket.category === 'GCU LOGIC') {
             if (ticket.helpdeskAssignee !== "-") {
                 let isMyTicket = (ticket.helpdeskAssignee === state.userName) || (state.userNik && ticket.helpdeskAssignee.includes(state.userNik));
                 if (isMyTicket) {
@@ -1195,6 +1249,10 @@ function renderTable() {
         }
 
         let tr = document.createElement('tr');
+        if (isKendalaAssign) {
+            tr.style.borderLeft = "4px solid #f59e0b";
+            tr.style.background = "rgba(245, 158, 11, 0.02)";
+        }
         if (ticket.category === 'PENDING') {
             tr.classList.add('row-pending');
         } else if (ticket.category === 'COMPLETED') {
@@ -1230,7 +1288,7 @@ function renderTable() {
             </td>
             <td>${ticket.sto}</td>
             <td style="font-size: 13px;">${ticket.witel !== "-" ? ticket.witel : "-"}</td>
-            <td style="color: var(--text-secondary);">${ticket.technician !== "-" ? ticket.technician : "-"}</td>
+            <td>${teknisiDisplay}</td>
             <td>${ticket.rx || "-"}</td>
             <td style="text-align: center;">${statusBadge}</td>
             <td>
@@ -1245,6 +1303,21 @@ function renderTable() {
         footerEl.style.display = 'flex';
         document.getElementById('statOnline').innerText = countOnline;
         document.getElementById('statLos').innerText = countLos;
+
+        // Hitung total tiket kendala assign di GCU FISIK
+        let countKendalaAssign = 0;
+        (state.tickets || []).forEach(t => {
+            if (t.category === 'GCU FISIK' && !window.isTeknisiValidInDb(t.technician)) {
+                countKendalaAssign++;
+            }
+        });
+
+        const statKendalaEl = document.getElementById('statKendalaAssign');
+        const statKendalaWrap = document.getElementById('statKendalaAssignWrapper');
+        if (statKendalaEl && statKendalaWrap) {
+            statKendalaEl.innerText = countKendalaAssign;
+            statKendalaWrap.style.display = (state.activeFilter === 'GCU FISIK' || state.activeFilter === 'ALL') && countKendalaAssign > 0 ? 'flex' : 'none';
+        }
         // document.getElementById('statDying').innerText = countDying;
     }
 }
@@ -1950,12 +2023,30 @@ function renderKorlapFlow() {
         <p class="info-text" style="margin-top: 10px;">Status: Menunggu Helpdesk mengeksekusi pengecekan Logic.</p>
         <button class="btn btn-outline" style="margin-top: 10px;" onclick="showWorkflow('helpdesk')">Simulasikan View Helpdesk ➡️</button>`;
     } else {
-        if (assignedTo) {
-            contentAssign += `<div style="padding: 10px; background: #e0f2fe; border-left: 4px solid #0284c7; margin-bottom: 15px;">
-                <p style="color: #0284c7; font-weight: 500; margin: 0;">✅ Tiket saat ini di-assign ke NIK: <strong>${assignedTo}</strong></p>
-                <p style="font-size: 12px; color: #0369a1; margin: 4px 0 0 0;">Status: Menunggu Teknisi submit evidence fisik.</p>
+        const isTeknisiValid = window.isTeknisiValidInDb(assignedTo);
+        const isKendala = !isTeknisiValid;
+
+        if (assignedTo && isTeknisiValid) {
+            const tekData = window.getTeknisiInfo(assignedTo);
+            contentAssign += `<div style="padding: 10px 14px; background: #e0f2fe; border-left: 4px solid #0284c7; border-radius: 6px; margin-bottom: 15px;">
+                <p style="color: #0284c7; font-weight: 600; margin: 0;">✅ Tiket di-assign ke: <strong>${tekData ? tekData.nama : assignedTo}</strong> (NIK: ${assignedTo})</p>
+                <p style="font-size: 12px; color: #0369a1; margin: 4px 0 0 0;">Telegram ID: ${tekData && tekData.teleId ? tekData.teleId : '-'} | Status: Menunggu Teknisi submit evidence fisik.</p>
                 <button class="btn btn-outline" style="margin-top: 8px; font-size: 12px; padding: 4px 8px;" onclick="showWorkflow('teknisi')">Simulasikan View Teknisi ➡️</button>
             </div>`;
+        } else if (isKendala) {
+            contentAssign += `
+                <div style="padding: 12px 14px; background: #fffbeb; border: 1.5px solid #fcd34d; border-radius: 8px; margin-bottom: 15px;">
+                    <p style="color: #b45309; font-weight: 700; margin: 0; font-size: 13px; display: flex; align-items: center; gap: 6px;">
+                        ⚠️ KENDALA ASSIGN TERDETEKSI
+                    </p>
+                    <p style="font-size: 12px; color: #92400e; margin: 4px 0 8px 0;">
+                        NIK saat ini (<strong style="background: #fef3c7; padding: 1px 5px; border-radius: 3px;">${assignedTo || 'Belum Ada NIK'}</strong>) tidak terdaftar di database sheet master <strong>TEKNISI</strong>. Silakan gunakan bantuan Assign Manual di bawah:
+                    </p>
+                    <button class="btn" style="background: linear-gradient(135deg, #f59e0b, #d97706); color: white; border: none; font-weight: 700; font-size: 12.5px; padding: 8px 14px; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 2px 8px rgba(245, 158, 11, 0.35);" onclick="window.openQuickAssignModal('${ticket.incident}', event)">
+                        ⚡ Buka Dialog Bantuan Assign Manual
+                    </button>
+                </div>
+            `;
         }
 
         contentAssign += `
@@ -2807,30 +2898,296 @@ window.returnToFisikFromHelpdesk = async function () {
     });
 };
 
-// === TEKNISI DATABASE LOOKUP ===
+// === TEKNISI DATABASE LOOKUP & QUICK ASSIGN SYSTEM ===
 let _teknisiCache = null;
 let _teknisiFetching = false;
+window.teknisiList = [];
+window.teknisiMap = new Map();
+window.teknisiFetched = false;
 
 async function fetchTeknisiList() {
-    if (_teknisiCache) return _teknisiCache;
-    if (_teknisiFetching) return [];
+    if (_teknisiCache && _teknisiCache.length > 0) return _teknisiCache;
+    if (_teknisiFetching) return _teknisiCache || [];
     _teknisiFetching = true;
     try {
         const resp = await fetch(SCRIPT_URL + '?action=get_teknisi');
         if (resp.ok) {
             _teknisiCache = await resp.json();
+            window.teknisiList = _teknisiCache;
+            window.teknisiMap = new Map(_teknisiCache.map(t => [(t.nik || '').toString().trim(), t]));
+            window.teknisiFetched = true;
+            // Re-render tabel tiket jika tiket sudah termuat agar badge kendala assign langsung tampil
+            if (state.tickets && state.tickets.length > 0) {
+                renderTable();
+            }
         } else {
             _teknisiCache = [];
         }
     } catch (e) {
-        console.warn('Gagal fetch data teknisi (belum di-deploy?):', e.message);
+        console.warn('Gagal fetch data teknisi:', e.message);
         _teknisiCache = [];
     }
     _teknisiFetching = false;
     return _teknisiCache;
 }
 
-// Lazy fetch: hanya dipanggil saat form assign dibuka (bukan saat halaman dimuat)
+window.isTeknisiValidInDb = function (nik) {
+    if (!nik || nik === '-' || nik === 'Unknown' || nik === 'null') return false;
+    if (!window.teknisiFetched || !window.teknisiMap || window.teknisiMap.size === 0) return true; // Belum selesai fetch
+    return window.teknisiMap.has(nik.toString().trim());
+};
+
+window.getTeknisiInfo = function (nik) {
+    if (!nik || nik === '-' || !window.teknisiMap) return null;
+    return window.teknisiMap.get(nik.toString().trim()) || null;
+};
+
+window.filterKendalaAssign = function () {
+    const sel = document.getElementById('statusFilter');
+    if (sel) {
+        sel.value = sel.value === 'KENDALA_ASSIGN' ? 'ALL' : 'KENDALA_ASSIGN';
+        applyStatusFilter();
+    }
+};
+
+// ==========================================
+// MODAL BANTUAN ASSIGN MANUAL TEKNISI
+// ==========================================
+window.openQuickAssignModal = function (ticketId, event) {
+    if (event) event.stopPropagation();
+    const ticket = state.tickets.find(t => t.incident === ticketId);
+    if (!ticket) return;
+
+    // Hapus modal lama jika ada
+    const existing = document.getElementById('quickAssignModal');
+    if (existing) existing.remove();
+
+    // Pastikan data teknisi terurut A-Z
+    const list = (window.teknisiList || []).slice().sort((a, b) => (a.nama || '').localeCompare(b.nama || ''));
+
+    const optionsHtml = list.map(t => `
+        <option value="${t.nik}" data-nama="${t.nama}" data-tele="${t.teleId || ''}">
+            ${t.nama} — NIK: ${t.nik} ${t.teleId ? '(Telegram OK ✅)' : '(Tanpa Telegram)'}
+        </option>
+    `).join('');
+
+    const currentNikText = ticket.technician && ticket.technician !== '-' ? ticket.technician : 'Belum Ada NIK';
+
+    const modalHtml = `
+        <div id="quickAssignModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.65); backdrop-filter: blur(4px); z-index: 99999; display: flex; align-items: center; justify-content: center; padding: 15px; box-sizing: border-box;">
+            <div style="background: var(--bg-surface, #ffffff); border: 1px solid var(--border, #e2e8f0); border-radius: 14px; max-width: 520px; width: 100%; box-shadow: 0 25px 50px rgba(0,0,0,0.3); overflow: hidden; display: flex; flex-direction: column;">
+                
+                <!-- Modal Header -->
+                <div style="padding: 16px 20px; background: linear-gradient(135deg, #f59e0b, #d97706); color: white; display: flex; justify-content: space-between; align-items: center;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 22px;">⚡</span>
+                        <div>
+                            <h3 style="margin: 0; font-size: 15px; font-weight: 800; color: white;">Bantu Assign Manual Teknisi GCU FISIK</h3>
+                            <p style="margin: 2px 0 0 0; font-size: 11.5px; opacity: 0.95; color: #fffbeb;">Tiket: <strong>${ticket.incident}</strong> (${ticket.sto} - ${ticket.witel})</p>
+                        </div>
+                    </div>
+                    <button onclick="document.getElementById('quickAssignModal').remove()" style="background: rgba(255,255,255,0.2); border: none; color: white; width: 30px; height: 30px; border-radius: 50%; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: bold;">✕</button>
+                </div>
+
+                <!-- Modal Body -->
+                <div style="padding: 18px 20px; max-height: 80vh; overflow-y: auto;">
+                    
+                    <!-- Alert Kendala Assign -->
+                    <div style="background: #fffbeb; border: 1.5px solid #fcd34d; border-radius: 8px; padding: 12px; margin-bottom: 15px; font-size: 12.5px; color: #92400e;">
+                        <div style="font-weight: 700; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+                            <span>⚠️ Kendala Assign Terdeteksi</span>
+                        </div>
+                        <div>NIK dari sistem web: <strong style="color: #b45309; background: #fef3c7; padding: 1px 6px; border-radius: 4px;">${currentNikText}</strong> tidak terdaftar di database sheet master <strong>TEKNISI</strong>.</div>
+                        <div style="margin-top: 4px; font-size: 11.5px; color: #b45309;">Silakan pilih teknisi resmi di bawah untuk dialihkan & dikirimi notifikasi telegram otomatis.</div>
+                    </div>
+
+                    <!-- Ringkasan Tiket -->
+                    <div style="background: rgba(0,0,0,0.02); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; margin-bottom: 15px; font-size: 12.5px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                        <div><span style="color: var(--text-secondary);">Nomor Layanan:</span> <strong style="color: var(--text-primary); display: block;">${ticket.serviceNumber}</strong></div>
+                        <div><span style="color: var(--text-secondary);">Pelanggan:</span> <strong style="color: var(--text-primary); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${ticket.customerName}</strong></div>
+                        <div><span style="color: var(--text-secondary);">STO / Witel:</span> <strong style="color: var(--text-primary); display: block;">${ticket.sto} / ${ticket.witel}</strong></div>
+                        <div><span style="color: var(--text-secondary);">Layanan / RX:</span> <strong style="color: var(--text-primary); display: block;">${ticket.serviceType} (${ticket.rx})</strong></div>
+                    </div>
+
+                    <!-- Pilih Teknisi dari Sheet TEKNISI -->
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: block; font-weight: 700; font-size: 12.5px; color: var(--text-primary); margin-bottom: 6px;">
+                            Pilih Teknisi Resmi (Sheet TEKNISI):
+                        </label>
+                        <select id="quickAssignSelect" onchange="window.onQuickAssignSelectChange(this)" style="width: 100%; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 13px; background: var(--bg-surface); color: var(--text-primary); outline: none; cursor: pointer; box-sizing: border-box;">
+                            <option value="">-- Pilih Teknisi (${list.length} Teknisi Terdaftar) --</option>
+                            ${optionsHtml}
+                        </select>
+                    </div>
+
+                    <!-- Cari Cepat -->
+                    <div style="margin-bottom: 14px;">
+                        <label style="display: block; font-weight: 600; font-size: 11.5px; color: var(--text-secondary); margin-bottom: 4px;">
+                            Atau cari cepat dengan ketik NIK / Nama:
+                        </label>
+                        <input type="text" id="quickAssignSearchInput" placeholder="Ketik NIK atau Nama teknisi..." oninput="window.onQuickAssignSearchInput(this.value)" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 12.5px; box-sizing: border-box; background: var(--bg-surface); color: var(--text-primary);">
+                    </div>
+
+                    <!-- Kartu Info Teknisi Terpilih -->
+                    <div id="quickAssignSelectedCard" style="display: none; background: rgba(16, 185, 129, 0.08); border: 1.5px solid #10b981; border-radius: 8px; padding: 12px 14px; margin-bottom: 15px;">
+                        <div style="font-weight: 700; font-size: 13px; color: #065f46; display: flex; align-items: center; gap: 6px;">
+                            <span>✅</span> <span id="quickAssignCardName">-</span>
+                        </div>
+                        <div style="font-size: 12px; color: #047857; margin-top: 4px;">
+                            NIK: <strong id="quickAssignCardNik">-</strong> | Chat ID Telegram: <strong id="quickAssignCardTele">-</strong>
+                        </div>
+                        <div style="font-size: 11px; color: #059669; margin-top: 4px;">
+                            ✉️ Notifikasi penugasan tiket akan otomatis dikirimkan ke Telegram teknisi.
+                        </div>
+                    </div>
+
+                    <!-- Hidden Inputs -->
+                    <input type="hidden" id="quickAssignTargetNik" value="">
+                    <input type="hidden" id="quickAssignTargetNama" value="">
+                    <input type="hidden" id="quickAssignTargetTele" value="">
+
+                    <!-- Tombol Aksi -->
+                    <div style="display: flex; gap: 10px; margin-top: 15px;">
+                        <button type="button" class="btn btn-outline" style="flex: 1;" onclick="document.getElementById('quickAssignModal').remove()">Batal</button>
+                        <button type="button" id="btnSubmitQuickAssign" class="btn btn-primary" style="flex: 2; background: linear-gradient(135deg, #10b981, #059669); border: none; font-weight: 700; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);" onclick="window.submitQuickAssign('${ticket.incident}')">
+                            🚀 Simpan & Assign Teknisi
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+};
+
+window.onQuickAssignSelectChange = function (sel) {
+    const val = sel.value;
+    const card = document.getElementById('quickAssignSelectedCard');
+    const nameEl = document.getElementById('quickAssignCardName');
+    const nikEl = document.getElementById('quickAssignCardNik');
+    const teleEl = document.getElementById('quickAssignCardTele');
+    const targetNik = document.getElementById('quickAssignTargetNik');
+    const targetNama = document.getElementById('quickAssignTargetNama');
+    const targetTele = document.getElementById('quickAssignTargetTele');
+
+    if (!val) {
+        if (card) card.style.display = 'none';
+        if (targetNik) targetNik.value = '';
+        if (targetNama) targetNama.value = '';
+        if (targetTele) targetTele.value = '';
+        return;
+    }
+
+    const opt = sel.options[sel.selectedIndex];
+    const nama = opt.getAttribute('data-nama') || '';
+    const tele = opt.getAttribute('data-tele') || '-';
+
+    if (nameEl) nameEl.innerText = nama;
+    if (nikEl) nikEl.innerText = val;
+    if (teleEl) teleEl.innerText = tele;
+    if (targetNik) targetNik.value = val;
+    if (targetNama) targetNama.value = nama;
+    if (targetTele) targetTele.value = tele === '-' ? '' : tele;
+    if (card) card.style.display = 'block';
+};
+
+window.onQuickAssignSearchInput = function (query) {
+    const q = (query || '').toLowerCase().trim();
+    const sel = document.getElementById('quickAssignSelect');
+    if (!sel) return;
+
+    if (!q) {
+        sel.selectedIndex = 0;
+        window.onQuickAssignSelectChange(sel);
+        return;
+    }
+
+    let found = false;
+    for (let i = 1; i < sel.options.length; i++) {
+        const text = sel.options[i].text.toLowerCase();
+        const val = sel.options[i].value.toLowerCase();
+        if (text.includes(q) || val.includes(q)) {
+            sel.selectedIndex = i;
+            window.onQuickAssignSelectChange(sel);
+            found = true;
+            break;
+        }
+    }
+    if (!found) {
+        const card = document.getElementById('quickAssignSelectedCard');
+        if (card) card.style.display = 'none';
+    }
+};
+
+window.submitQuickAssign = function (ticketId) {
+    const nik = document.getElementById('quickAssignTargetNik') ? document.getElementById('quickAssignTargetNik').value.trim() : '';
+    const nama = document.getElementById('quickAssignTargetNama') ? document.getElementById('quickAssignTargetNama').value.trim() : '';
+    const tele = document.getElementById('quickAssignTargetTele') ? document.getElementById('quickAssignTargetTele').value.trim() : '';
+    const btn = document.getElementById('btnSubmitQuickAssign');
+
+    if (!nik) {
+        alert("Silakan pilih teknisi dari sheet TEKNISI terlebih dahulu!");
+        return;
+    }
+
+    if (btn) {
+        btn.innerText = "Menyimpan & Mengirim Tugas...";
+        btn.disabled = true;
+    }
+
+    const ticket = state.tickets.find(t => t.incident === ticketId);
+
+    const payload = {
+        action: 'assign_ticket',
+        ticketId: ticketId,
+        teknisi: nik,
+        idTele: tele || "6874834483",
+        sto: ticket ? ticket.sto : '-',
+        rx: ticket ? ticket.rx : '-',
+        tx: ticket ? ticket.tx : '-',
+        serviceNumber: ticket ? ticket.serviceNumber : '-',
+        customerName: ticket ? ticket.customerName : '-',
+        serviceType: ticket ? ticket.serviceType : '-',
+        ticketStatus: ticket ? ticket.ticketStatus : '-'
+    };
+
+    // 1. Kirim notifikasi telegram & penugasan ke backend
+    fetch(SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify(payload)
+    }).catch(console.error);
+
+    // 2. Catat history di spreadsheet bahwa tiket di-assign manual
+    fetch(SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({
+            action: 'rework_ticket',
+            ticketId: ticketId,
+            targetCategory: 'GCU FISIK',
+            summaryText: `[ASSIGN MANUAL] TEKNISI: ${nik} (${nama})`
+        })
+    }).catch(console.error);
+
+    // 3. Optimistic UI update lokal
+    if (ticket) {
+        ticket.technician = nik;
+    }
+
+    // Tutup modal
+    const modal = document.getElementById('quickAssignModal');
+    if (modal) modal.remove();
+
+    // Render ulang dashboard
+    renderTable();
+
+    // Tampilkan toast konfirmasi
+    showToast(`✅ Tiket <strong>${ticketId}</strong> berhasil di-assign manual ke <strong>${nama}</strong> (NIK: ${nik})!`);
+};
 
 let _lookupTimeout = null;
 window.lookupTeknisiByNik = function (nikValue) {
