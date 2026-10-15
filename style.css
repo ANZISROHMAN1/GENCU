@@ -222,6 +222,10 @@ body {
     overflow: hidden;
 }
 
+.card.dashboard-section {
+    overflow: visible !important;
+}
+
 /* Top-left subtle ambient light for cards */
 .card::before {
     content: '';

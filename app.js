@@ -955,15 +955,16 @@ window.populateStoMultiSelect = function () {
     // Hitung jumlah tiket per STO
     const stoCounts = {};
     baseTickets.forEach(t => {
-        if (t.sto && t.sto !== '-') {
-            stoCounts[t.sto] = (stoCounts[t.sto] || 0) + 1;
+        const s = (t.sto && t.sto !== '-') ? t.sto.toString().trim().toUpperCase() : '';
+        if (s) {
+            stoCounts[s] = (stoCounts[s] || 0) + 1;
         }
     });
 
     const uniqueSTOs = Object.keys(stoCounts).sort();
 
     // Pertahankan STO yang dipilih hanya jika masih valid di witel ini
-    state.selectedSTOs = state.selectedSTOs.filter(s => uniqueSTOs.includes(s));
+    state.selectedSTOs = state.selectedSTOs.filter(s => uniqueSTOs.includes(s.toUpperCase()));
 
     if (uniqueSTOs.length === 0) {
         listEl.innerHTML = '<div style="padding: 10px; text-align: center; font-size: 12px; color: var(--text-secondary);">Tidak ada STO tersedia</div>';
@@ -971,18 +972,36 @@ window.populateStoMultiSelect = function () {
         listEl.innerHTML = uniqueSTOs.map(sto => {
             const isChecked = state.selectedSTOs.includes(sto);
             return `
-                <label class="sto-checkbox-item" data-sto="${sto}" style="display: flex; align-items: center; justify-content: space-between; padding: 5px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; transition: background 0.15s ease;" onmouseover="this.style.background='var(--bg-hover, rgba(0,0,0,0.05))'" onmouseout="this.style.background='transparent'">
+                <div class="sto-checkbox-item" data-sto="${sto}" onclick="window.toggleStoItem('${sto}', event)" 
+                     style="display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 12px; transition: all 0.15s ease; background: ${isChecked ? 'rgba(2, 132, 199, 0.08)' : 'transparent'}; user-select: none;" 
+                     onmouseover="if(!this.querySelector('input').checked) this.style.background='var(--bg-hover, rgba(0,0,0,0.04))'" 
+                     onmouseout="if(!this.querySelector('input').checked) this.style.background='transparent'">
                     <div style="display: flex; align-items: center; gap: 8px;">
-                        <input type="checkbox" value="${sto}" ${isChecked ? 'checked' : ''} onchange="window.onStoCheckChange('${sto}', this.checked)" style="cursor: pointer; width: 14px; height: 14px;">
-                        <span style="font-weight: ${isChecked ? '700' : '500'}; color: ${isChecked ? 'var(--primary, #0284c7)' : 'var(--text-primary)'};">${sto}</span>
+                        <input type="checkbox" value="${sto}" ${isChecked ? 'checked' : ''} onchange="window.onStoCheckChange('${sto}', this.checked)" style="cursor: pointer; width: 15px; height: 15px; margin: 0;">
+                        <span style="font-weight: ${isChecked ? '700' : '600'}; color: ${isChecked ? 'var(--primary, #0284c7)' : 'var(--text-primary)'}; font-size: 12.5px;">${sto}</span>
                     </div>
-                    <span style="font-size: 10.5px; color: var(--text-secondary); background: rgba(0,0,0,0.06); padding: 1px 6px; border-radius: 10px; font-weight: 600;">${stoCounts[sto]}</span>
-                </label>
+                    <span style="font-size: 11px; color: ${isChecked ? 'var(--primary, #0284c7)' : 'var(--text-secondary)'}; background: ${isChecked ? '#e0f2fe' : 'rgba(0,0,0,0.06)'}; padding: 1px 7px; border-radius: 10px; font-weight: 700;">${stoCounts[sto]}</span>
+                </div>
             `;
         }).join('');
     }
 
     window.updateStoDropdownLabel();
+};
+
+window.toggleStoItem = function (sto, event) {
+    // Jika user mengklik langsung di checkbox input, biarkan onchange yang handle
+    if (event && event.target && event.target.tagName === 'INPUT') return;
+    if (event) event.stopPropagation();
+    
+    if (!state.selectedSTOs) state.selectedSTOs = [];
+    const isCurrentlyChecked = state.selectedSTOs.includes(sto);
+    const newChecked = !isCurrentlyChecked;
+    
+    const cb = document.querySelector(`#stoCheckboxList input[value="${sto}"]`);
+    if (cb) cb.checked = newChecked;
+    
+    window.onStoCheckChange(sto, newChecked);
 };
 
 window.updateStoDropdownLabel = function () {
@@ -1025,11 +1044,13 @@ window.toggleStoDropdown = function (event) {
     if (icon) icon.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
 
     if (!isOpen) {
+        // Refresh list STO saat menu dibuka untuk memastikan jumlah tiket up-to-date
+        window.populateStoMultiSelect();
         const searchInput = document.getElementById('stoSearchInput');
         if (searchInput) {
             searchInput.value = '';
             window.filterStoList('');
-            setTimeout(() => searchInput.focus(), 50);
+            setTimeout(() => searchInput.focus(), 60);
         }
     }
 };
@@ -1050,6 +1071,13 @@ window.onStoCheckChange = function (sto, isChecked) {
     } else {
         state.selectedSTOs = state.selectedSTOs.filter(s => s !== sto);
     }
+    
+    // Update visual item background
+    const itemEl = document.querySelector(`.sto-checkbox-item[data-sto="${sto}"]`);
+    if (itemEl) {
+        itemEl.style.background = isChecked ? 'rgba(2, 132, 199, 0.08)' : 'transparent';
+    }
+    
     window.updateStoDropdownLabel();
     renderTable();
 };
@@ -1062,11 +1090,15 @@ window.selectAllSTOs = function (selectAll) {
         checkboxes.forEach(cb => {
             cb.checked = true;
             state.selectedSTOs.push(cb.value);
+            const parent = cb.closest('.sto-checkbox-item');
+            if (parent) parent.style.background = 'rgba(2, 132, 199, 0.08)';
         });
     } else {
         state.selectedSTOs = [];
         checkboxes.forEach(cb => {
             cb.checked = false;
+            const parent = cb.closest('.sto-checkbox-item');
+            if (parent) parent.style.background = 'transparent';
         });
     }
     window.updateStoDropdownLabel();
@@ -1112,7 +1144,11 @@ function renderTable() {
 
     // 3. Terapkan Filter STO (Dapat memilih lebih dari 1 STO!)
     if (state.selectedSTOs && state.selectedSTOs.length > 0) {
-        displayTickets = displayTickets.filter(ticket => state.selectedSTOs.includes(ticket.sto));
+        const selectedUpper = state.selectedSTOs.map(s => (s || '').toString().trim().toUpperCase());
+        displayTickets = displayTickets.filter(ticket => {
+            const ticketSto = (ticket.sto || '').toString().trim().toUpperCase();
+            return selectedUpper.includes(ticketSto);
+        });
     }
 
     // 4. Terapkan Filter Status
