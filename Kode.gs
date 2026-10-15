@@ -1964,6 +1964,37 @@ function doPost(e) {
             }
         } catch (e) {}
 
+        // Update baris tiket di spreadsheet: simpan NIK teknisi dan catat di kolom ACTION (agar tetap di antrean GCU FISIK)
+        try {
+            var targetDbNames = ["DATABASE ALL TICKET", "DATABASE"];
+            for (var dbi = 0; dbi < targetDbNames.length; dbi++) {
+                var curSheet = ss.getSheetByName(targetDbNames[dbi]);
+                if (!curSheet || curSheet.getLastRow() < 2) continue;
+                var curData = curSheet.getDataRange().getValues();
+                var curHeaders = curData[0].map(function(h) { return (h || "").toString().toUpperCase().trim(); });
+                var incIdx = -1, techIdx = -1;
+                for (var hc = 0; hc < curHeaders.length; hc++) {
+                    var head = curHeaders[hc];
+                    if (incIdx === -1 && (head === "INCIDENT" || head === "TICKET" || (head.includes("INCIDENT") && !head.includes("PARENT")))) incIdx = hc;
+                    if (techIdx === -1 && (head === "TECHNICIAN" || head === "TEKNISI" || head === "OWNER")) techIdx = hc;
+                }
+                if (incIdx !== -1) {
+                    for (var ri = 1; ri < curData.length; ri++) {
+                        if (curData[ri][incIdx] && curData[ri][incIdx].toString().trim() === ticketId.toString().trim()) {
+                            if (techIdx !== -1) {
+                                curSheet.getRange(ri + 1, techIdx + 1).setValue(teknisiNIK);
+                            }
+                            var assignSummary = "[ASSIGNED] TEKNISI: " + teknisiNIK + " (" + teknisiName + ") | Ditugaskan ke GCU FISIK";
+                            updateTicketActionInSheet(curSheet, ticketId, assignSummary, "ACTION");
+                            break;
+                        }
+                    }
+                }
+            }
+        } catch(eUpDb) {
+            Logger.log("Error updating assigned technician in sheet: " + eUpDb.message);
+        }
+
         // Gunakan SCRIPT_URL statis untuk mencegah error getUrl()
         var webAppUrl = "https://script.google.com/macros/s/AKfycbwgkZAduwo1EKvp-MZgE9c0Auhfpz7aiNEi5TSer0gqHJDMjUvTcxJL3FpFfKWece2Z/exec";
         try {

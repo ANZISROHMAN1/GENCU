@@ -2472,10 +2472,28 @@ window.assignTicketToTelegram = function (btn) {
         console.error("Fetch assign_ticket error:", err);
     });
     
-    // Optimistic UI Update: Langsung pindah state tanpa menunggu server selesai mengirim telegram
+    // Optimistic UI Update: Tiket TETAP di antrean GCU FISIK (menunggu Teknisi submit evidence fisik)
     updateState('assigned', teknisi);
-    updateTicketCategory(state.activeTicketId, 'GCU LOGIC');
-    alert("Proses assign sedang berjalan di latar belakang! Tiket dipindah ke antrean GCU LOGIC.");
+    if (ticket) {
+        ticket.technician = teknisi;
+    }
+    updateTicketCategory(state.activeTicketId, 'GCU FISIK');
+    
+    const tekInfo = (typeof window.getTeknisiInfo === 'function') ? window.getTeknisiInfo(teknisi) : null;
+    const tekDisplayName = tekInfo && tekInfo.nama ? `${tekInfo.nama} (NIK: ${teknisi})` : `NIK: ${teknisi}`;
+    
+    alert(`✅ Tiket berhasil di-assign ke teknisi ${tekDisplayName}!\n\nTiket tetap berada di antrean GCU FISIK (menunggu teknisi submit evidence fisik).`);
+    
+    // Render ulang tampilan Korlap agar kartu status terupdate
+    if (typeof renderKorlapFlow === 'function') {
+        renderKorlapFlow();
+    }
+    if (typeof renderTable === 'function') {
+        renderTable();
+    }
+    if (typeof updateDashboardSummary === 'function') {
+        updateDashboardSummary();
+    }
 };
 
 // 2. TEKNISI FLOW
