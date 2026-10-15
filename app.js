@@ -1479,10 +1479,6 @@ window.getParsedEvidence = function(ticket) {
                     let prefix = parts[0].trim();
                     let logicStr = parts[1].trim();
                     
-                    if (prefix) {
-                        html += `<div style="font-weight: 600; color: var(--text-primary); margin-bottom: 10px;">${prefix}</div>`;
-                    }
-                    
                     let logicPhoto = null;
                     if (logicStr.includes('| Foto:')) {
                         let photoParts = logicStr.split('| Foto:');
@@ -1497,16 +1493,25 @@ window.getParsedEvidence = function(ticket) {
                         logicNotes = logicParts[1].trim();
                     }
                     
-                    if (logicNotes || logicPhoto) {
-                        html += `<div style="margin-bottom: 10px; padding: 12px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; font-size: 13px; color: #b45309;">`;
-                        if (logicNotes) {
-                            html += `<div style="margin-bottom: ${logicPhoto ? '8px' : '0'};"><strong>📝 Catatan Logic:</strong> ${logicNotes}</div>`;
+                    // Catatan Helpdesk & Status Waiting Approval (dipindah ke bawah setelah checklist)
+                    let logicNotesHtml = '';
+                    if (prefix || logicNotes || logicPhoto) {
+                        logicNotesHtml += `<div style="margin-top: 14px; margin-bottom: 6px;">`;
+                        if (prefix) {
+                            logicNotesHtml += `<div style="font-weight: 600; color: var(--text-primary); margin-bottom: 8px; font-size: 13px;">${prefix}</div>`;
                         }
-                        if (logicPhoto) {
-                            let photoLink = logicPhoto.replace(/(https:\/\/[^\s\\]]+)/g, '<a href="$1" target="_blank" style="color: #0284c7; font-weight: bold; text-decoration: underline; word-break: break-all;">📎 Buka Evidence Foto Logic</a>');
-                            html += `<div><strong>📸 Evidence:</strong> ${photoLink}</div>`;
+                        if (logicNotes || logicPhoto) {
+                            logicNotesHtml += `<div style="margin-bottom: 10px; padding: 12px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; font-size: 13px; color: #b45309;">`;
+                            if (logicNotes) {
+                                logicNotesHtml += `<div style="margin-bottom: ${logicPhoto ? '8px' : '0'};"><strong>📝 Catatan Logic:</strong> ${logicNotes}</div>`;
+                            }
+                            if (logicPhoto) {
+                                let photoLink = logicPhoto.replace(/(https:\/\/[^\s\\]]+)/g, '<a href="$1" target="_blank" style="color: #0284c7; font-weight: bold; text-decoration: underline; word-break: break-all;">📎 Buka Evidence Foto Logic</a>');
+                                logicNotesHtml += `<div><strong>📸 Evidence:</strong> ${photoLink}</div>`;
+                            }
+                            logicNotesHtml += `</div>`;
                         }
-                        html += `</div>`;
+                        logicNotesHtml += `</div>`;
                     }
 
                     let logicItems = logicStr.split(',').map(item => item.trim()).filter(i => i);
@@ -1527,30 +1532,48 @@ window.getParsedEvidence = function(ticket) {
                         ],
                         "📊 Summary ACS": [
                             { id: "Layanan ACS Voice", aliases: ["Cek Voice", "Executive Summary ACS"], label: "Layanan ACS Voice" }
+                        ],
+                        "💼 Layanan Datin": [
+                            { id: "Redaman (Spek/unspec)", label: "Redaman (Spek/ unspec)" },
+                            { id: "Klik VRF (ke PE)", label: "Klik VRF (arah ke PE)" },
+                            { id: "Cek koneksi LAN", label: "Cek koneksi LAN" },
+                            { id: "Cek Mac address", label: "Cek Mac address yg terkonek" },
+                            { id: "Cek status isolir", label: "Cek status isolir" }
                         ]
                     };
 
+                    let checklistHtml = '';
                     if (logicItems.length > 0) {
-                        html += `<div style="margin-bottom: 15px;">`;
+                        checklistHtml += `<div style="margin-bottom: 10px;">`;
                         for (let category in allLogicTasks) {
-                            html += `<div style="background: white; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 10px;">`;
-                            html += `<div style="background: #f8fafc; padding: 10px 15px; font-size: 12px; font-weight: bold; color: var(--text-secondary); border-bottom: 1px solid var(--border);">${category}</div>`;
+                            let hasMatchingTask = allLogicTasks[category].some(task => 
+                                logicItems.includes(task.id) || (task.aliases && task.aliases.some(a => logicItems.includes(a)))
+                            );
+                            
+                            // Jika kategori Datin tapi tidak ada item Datin yang dieksekusi, lewati
+                            if (category === "💼 Layanan Datin" && !hasMatchingTask) continue;
+
+                            checklistHtml += `<div style="background: white; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 10px;">`;
+                            checklistHtml += `<div style="background: #f8fafc; padding: 10px 15px; font-size: 12px; font-weight: bold; color: var(--text-secondary); border-bottom: 1px solid var(--border);">${category}</div>`;
                             
                             allLogicTasks[category].forEach(task => {
                                 let isExecuted = logicItems.includes(task.id) || (task.aliases && task.aliases.some(a => logicItems.includes(a)));
                                 let statusText = isExecuted ? `<span style="color: var(--success); font-weight: 600;">Executed ✅</span>` : `<span style="color: var(--text-secondary); font-weight: 500;">Dilewati ➖</span>`;
                                 
-                                html += `
+                                checklistHtml += `
                                     <div style="display: flex; flex-wrap: wrap; gap: 5px; justify-content: space-between; padding: 10px 15px; border-bottom: 1px solid var(--border); font-size: 13px;">
                                         <span style="color: ${isExecuted ? 'var(--text-primary)' : 'var(--text-secondary)'}; font-weight: ${isExecuted ? '600' : '400'};">${task.label}</span>
                                         <span style="text-align: right; min-width: max-content;">${statusText}</span>
                                     </div>
                                 `;
                             });
-                            html += `</div>`;
+                            checklistHtml += `</div>`;
                         }
-                        html += `</div>`;
+                        checklistHtml += `</div>`;
                     }
+
+                    // TUKAR POSISI: Checklist Logic di atas, Catatan Helpdesk di bawah (posisi pickup)
+                    html += checklistHtml + logicNotesHtml;
                 } else if (trimmed.includes('EVIDENCE FISIK SUBMITTED:')) {
                     let parts = trimmed.split('EVIDENCE FISIK SUBMITTED:');
                     let prefix = parts[0].trim();
@@ -1590,16 +1613,23 @@ window.getParsedEvidence = function(ticket) {
 
     let arrFisik = [];
     let arrLogic = [];
+    let arrLogicPickup = [];
+    let arrLogicExec = [];
+    let arrLogicOther = [];
     
     blocks.forEach(block => {
         let b = block.trim();
         if (!b) return;
         let bUpper = b.toUpperCase();
         
+        let isPickup = bUpper.includes("PICKED UP BY");
         let isFisik = bUpper.match(/EVIDENCE FISIK|GCU FISIK|ASSIGNED|PENYEBAB\s*:|PERBAIKAN\s*:|SEGMEN\s*:|GCU JALUR|GCU ONT|GCU DC|SCC\/TSC|REDAMAN ODP/i);
         let isLogic = bUpper.match(/WAITING APPROVAL KORLAP|EKSEKUSI LOGIC|PINDAH CHANNEL|CHECKLIST NAT|ENABLE IPV6|FIREWALL MEDIUM|CEK ONT|CEK FPP|CEK ACS|CEK CHANNEL|CEK ISOLIR|CEK STB|CEK VOICE|LAYANAN ACS VOICE|SUMMARY ACS|KLIK VRF|VRF|KONEKSI LAN|MAC ADDRESS|STATUS ISOLIR|REDAMAN \(SPEK|DATIN/i);
         
-        if (!isLogic && !isFisik) {
+        if (isPickup) {
+            isLogic = true;
+            isFisik = false;
+        } else if (!isLogic && !isFisik) {
             if (bUpper.includes("LOGIC") || bUpper.includes("HELPDESK")) isLogic = true;
             if (bUpper.includes("TEKNISI") || bUpper.includes("FISIK")) isFisik = true;
         }
@@ -1611,15 +1641,34 @@ window.getParsedEvidence = function(ticket) {
         
         let htmlBlock = `<div style="margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px dashed #e2e8f0;">${formatEvidenceBlock(b)}</div>`;
         
-        if (isLogic && !isFisik) {
-            arrLogic.push(htmlBlock);
+        if (isPickup) {
+            // TUKAR POSISI: Pickup Helpdesk ditaruh paling atas di tempat catatan helpdesk
+            let pickupBlockHtml = `<div style="margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px dashed var(--border); font-weight: 600; color: var(--text-primary); font-size: 13px;">${formatEvidenceBlock(b)}</div>`;
+            arrLogicPickup.push(pickupBlockHtml);
+        } else if (isLogic && !isFisik) {
+            if (bUpper.includes("EKSEKUSI LOGIC") || bUpper.includes("WAITING APPROVAL KORLAP")) {
+                arrLogicExec.push(htmlBlock);
+            } else {
+                arrLogicOther.push(htmlBlock);
+            }
         } else if (isFisik && !isLogic) {
             arrFisik.push(htmlBlock);
         } else {
             arrFisik.push(htmlBlock);
-            arrLogic.push(htmlBlock);
+            arrLogicOther.push(htmlBlock);
         }
     });
+
+    // Fallback: Jika belum ada blok pickup di riwayat, tapi ada helpdeskAssignee
+    if (arrLogicPickup.length === 0 && ticket.helpdeskAssignee && ticket.helpdeskAssignee !== "-") {
+        arrLogicPickup.push(`<div style="margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px dashed var(--border); font-weight: 600; color: var(--text-primary); font-size: 13px;">[PICKED UP BY] ${ticket.helpdeskAssignee}</div>`);
+    }
+
+    // URUTAN RENDER LOGIC:
+    // 1. Pickup Helpdesk (Posisi teratas / tempat catatan helpdesk sebelumnya)
+    // 2. Checklist & Catatan Helpdesk (Catatan di bawah checklist / tempat pickup sebelumnya)
+    // 3. Riwayat Logic lainnya (jika ada)
+    arrLogic = [...arrLogicPickup, ...arrLogicExec, ...arrLogicOther];
 
     let evidenceFisikText = arrFisik.join('\n');
     let evidenceLogicText = arrLogic.join('\n');
