@@ -898,6 +898,8 @@ window.selectTicket = function (ticketId, sto) {
     state.activeTicketId = ticketId;
     state.activeSto = sto;
     state.workflowState = {}; // reset progress
+    window.selectedHdPhotoFile = null;
+    window.selectedHdPhotoUrl = null;
     dispActiveTicketId.innerText = ticketId;
 
     const ticket = state.tickets.find(t => t.incident === ticketId);
@@ -2290,6 +2292,11 @@ function renderHelpdeskFlow() {
         `;
     }
 
+    let hasPhoto = !!window.selectedHdPhotoFile;
+    let photoName = hasPhoto ? (window.selectedHdPhotoFile.name || "Evidence_Pasted.png") : "";
+    let photoSizeText = hasPhoto ? `✅ Siap dikirim (${Math.round(window.selectedHdPhotoFile.size / 1024)} KB)` : "";
+    let photoPreviewSrc = window.selectedHdPhotoUrl || "";
+
     let contentLogic = `
         <p class="info-text" style="margin-bottom:15px;">Silakan jalankan eksekusi pengecekan Logic sesuai flowchart berikut. Centang langkah yang sudah dilakukan:</p>
 
@@ -2297,7 +2304,48 @@ function renderHelpdeskFlow() {
 
         <div style="margin-top: 15px; margin-bottom: 15px;">
             <label class="block text-sm font-medium text-gray-700 mb-1" style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Upload Foto Evidence Logic (Opsional)</label>
-            <input type="file" id="hdPhoto" accept="image/*" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 10px; background: white; box-sizing: border-box;">
+            
+            <!-- Custom Zone Copas Evidence -->
+            <div id="hdPhotoPasteZone" 
+                 tabindex="0"
+                 onclick="window.activateHdPhotoPaste(event)" 
+                 ondragover="event.preventDefault(); this.style.borderColor='var(--primary, #0284c7)';" 
+                 ondragleave="this.style.borderColor='var(--border)';" 
+                 ondrop="event.preventDefault(); if(event.dataTransfer && event.dataTransfer.files.length > 0) window.handleHdPhotoFile(event.dataTransfer.files[0]);"
+                 style="width: 100%; border: ${hasPhoto ? '1.5px solid #10b981' : '1.5px dashed var(--border)'}; border-radius: 8px; padding: 14px 12px; margin-bottom: 10px; background: ${hasPhoto ? 'rgba(16, 185, 129, 0.04)' : 'var(--bg-surface)'}; cursor: pointer; text-align: center; transition: all 0.2s ease; outline: none; box-sizing: border-box; position: relative;">
+                
+                <input type="file" id="hdPhoto" accept="image/*" style="display: none;" onchange="if(this.files && this.files.length > 0) window.handleHdPhotoFile(this.files[0])">
+                
+                <!-- Prompt State: Sebelum ada file / gambar -->
+                <div id="hdPastePrompt" style="display: ${hasPhoto ? 'none' : 'flex'}; flex-direction: column; align-items: center; gap: 6px;">
+                    <span style="font-size: 22px;">📋</span>
+                    <span id="hdPasteText" style="font-size: 14px; font-weight: 700; color: var(--primary, #0284c7);">(copas disini ya)</span>
+                    <span id="hdPasteSubtext" style="font-size: 11px; color: var(--text-secondary);">Klik tulisan di atas untuk mengaktifkan, lalu tekan Ctrl+V / Cmd+V untuk menempel gambar</span>
+                    <button type="button" class="btn btn-outline" style="font-size: 11px; padding: 4px 10px; margin-top: 4px; border-radius: 6px;" onclick="event.stopPropagation(); document.getElementById('hdPhoto').click();">📁 Atau Pilih File dari Galeri</button>
+                </div>
+
+                <!-- Preview State: Setelah gambar dicopas / dipilih -->
+                <div id="hdPastePreview" style="display: ${hasPhoto ? 'flex' : 'none'}; align-items: center; justify-content: space-between; gap: 12px; padding: 2px 4px; width: 100%; box-sizing: border-box;">
+                    <div style="display: flex; align-items: center; gap: 12px; overflow: hidden;">
+                        <img id="hdPhotoImgPreview" src="${photoPreviewSrc}" alt="Preview Evidence" style="width: 55px; height: 55px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); box-shadow: 0 2px 6px rgba(0,0,0,0.1); flex-shrink: 0;">
+                        <div style="text-align: left; overflow: hidden;">
+                            <span id="hdPhotoFileName" style="font-size: 12.5px; font-weight: 700; color: var(--text-primary); display: block; text-overflow: ellipsis; white-space: nowrap; overflow: hidden;">${photoName}</span>
+                            <span id="hdPhotoFileSize" style="font-size: 11px; color: var(--success); font-weight: 600;">${photoSizeText}</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Tombol X Revisi Evidence -->
+                    <button type="button" 
+                            onclick="window.removeHdPhoto(event)" 
+                            title="Hapus atau Revisi Evidence" 
+                            style="background: #fee2e2; border: 1.5px solid #ef4444; color: #dc2626; border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; transition: all 0.2s ease;"
+                            onmouseover="this.style.background='#fecaca'"
+                            onmouseout="this.style.background='#fee2e2'">
+                        <span style="font-size: 14px; font-weight: 900;">✕</span> Hapus / Revisi
+                    </button>
+                </div>
+            </div>
+
             <textarea id="hdNotes" oninput="state.workflowState.hdNotes = this.value" placeholder="Tulis catatan logic / link evidence foto tambahan di sini..." rows="2" style="width: 100%; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px; box-sizing: border-box;">${state.workflowState.hdNotes || ''}</textarea>
         </div>
 
@@ -2354,6 +2402,121 @@ function renderHelpdeskFlow() {
         workflowContainer.appendChild(createStep('step-h-assign', 'Assign Teknisi untuk Fisik', contentAssignFisik));
     }
 }
+
+// ==========================================
+// EVIDENCE LOGIC COPAS & PASTE HANDLER
+// ==========================================
+window.activateHdPhotoPaste = function (event) {
+    if (event) event.stopPropagation();
+    const zone = document.getElementById('hdPhotoPasteZone');
+    const textEl = document.getElementById('hdPasteText');
+    const subtextEl = document.getElementById('hdPasteSubtext');
+    if (!zone) return;
+
+    zone.focus();
+    zone.style.border = '2px dashed var(--primary, #0284c7)';
+    zone.style.background = 'rgba(2, 132, 199, 0.08)';
+    zone.style.boxShadow = '0 0 14px rgba(2, 132, 199, 0.25)';
+
+    if (textEl) {
+        textEl.innerText = "🎯 SIAP DI-COPAS! Silakan tekan Ctrl+V (atau Cmd+V) sekarang";
+        textEl.style.color = "var(--primary, #0284c7)";
+    }
+    if (subtextEl) {
+        subtextEl.innerText = "Clipboard gambar otomatis terdeteksi, atau gunakan tombol di bawah untuk memilih file";
+    }
+};
+
+window.handleHdPhotoFile = function (file) {
+    if (!file) return;
+    window.selectedHdPhotoFile = file;
+
+    try {
+        const dataTransfer = new DataTransfer();
+        dataTransfer.items.add(file);
+        const input = document.getElementById('hdPhoto');
+        if (input) input.files = dataTransfer.files;
+    } catch (e) {}
+
+    const reader = new FileReader();
+    reader.onload = function (e) {
+        window.selectedHdPhotoUrl = e.target.result;
+        const imgEl = document.getElementById('hdPhotoImgPreview');
+        const nameEl = document.getElementById('hdPhotoFileName');
+        const sizeEl = document.getElementById('hdPhotoFileSize');
+        const promptEl = document.getElementById('hdPastePrompt');
+        const previewEl = document.getElementById('hdPastePreview');
+        const zone = document.getElementById('hdPhotoPasteZone');
+
+        if (imgEl) imgEl.src = e.target.result;
+        if (nameEl) nameEl.innerText = file.name || ("Evidence_" + (state.activeTicketId || 'Logic') + ".png");
+        if (sizeEl) sizeEl.innerText = `✅ Siap dikirim (${Math.round(file.size / 1024)} KB)`;
+        if (promptEl) promptEl.style.display = 'none';
+        if (previewEl) previewEl.style.display = 'flex';
+        if (zone) {
+            zone.style.border = '1.5px solid #10b981';
+            zone.style.background = 'rgba(16, 185, 129, 0.04)';
+            zone.style.boxShadow = '0 2px 8px rgba(16, 185, 129, 0.15)';
+        }
+    };
+    reader.readAsDataURL(file);
+};
+
+window.removeHdPhoto = function (event) {
+    if (event) event.stopPropagation();
+    window.selectedHdPhotoFile = null;
+    window.selectedHdPhotoUrl = null;
+
+    const input = document.getElementById('hdPhoto');
+    if (input) input.value = '';
+
+    const zone = document.getElementById('hdPhotoPasteZone');
+    const promptEl = document.getElementById('hdPastePrompt');
+    const previewEl = document.getElementById('hdPastePreview');
+    const imgEl = document.getElementById('hdPhotoImgPreview');
+
+    if (imgEl) imgEl.src = '';
+    if (previewEl) previewEl.style.display = 'none';
+    if (promptEl) promptEl.style.display = 'flex';
+
+    if (zone) {
+        zone.style.border = '1.5px dashed var(--border)';
+        zone.style.background = 'var(--bg-surface)';
+        zone.style.boxShadow = 'none';
+    }
+
+    const pasteText = document.getElementById('hdPasteText');
+    if (pasteText) {
+        pasteText.innerText = "(copas disini ya)";
+        pasteText.style.color = "var(--primary, #0284c7)";
+    }
+    const pasteSubtext = document.getElementById('hdPasteSubtext');
+    if (pasteSubtext) {
+        pasteSubtext.innerText = "Klik tulisan di atas untuk mengaktifkan, lalu tekan Ctrl+V / Cmd+V untuk menempel gambar";
+    }
+};
+
+document.addEventListener('paste', function (e) {
+    const zone = document.getElementById('hdPhotoPasteZone');
+    const viewWorkflow = document.getElementById('view-workflow');
+    if (zone && viewWorkflow && viewWorkflow.style.display !== 'none') {
+        const items = (e.clipboardData || window.clipboardData)?.items;
+        if (!items) return;
+        for (let i = 0; i < items.length; i++) {
+            if (items[i].type && items[i].type.indexOf('image') !== -1) {
+                const blob = items[i].getAsFile();
+                if (blob) {
+                    e.preventDefault();
+                    const ticketId = state.activeTicketId || 'Logic';
+                    const timestamp = new Date().toTimeString().split(' ')[0].replace(/:/g, '');
+                    const file = new File([blob], `Evidence_${ticketId}_${timestamp}.png`, { type: blob.type || 'image/png' });
+                    window.handleHdPhotoFile(file);
+                    break;
+                }
+            }
+        }
+    }
+});
 
 // Boot
 init();
@@ -2416,9 +2579,9 @@ window.requestApprovalBackend = async function (event) {
 
     // Proses Foto Jika Ada
     const photoInput = document.getElementById('hdPhoto');
-    if (photoInput && photoInput.files.length > 0) {
+    const file = window.selectedHdPhotoFile || (photoInput && photoInput.files.length > 0 ? photoInput.files[0] : null);
+    if (file) {
         btn.innerText = "✅ Mengupload Foto Evidence...";
-        const file = photoInput.files[0];
         try {
             const base64String = await compressImageBase64(file);
             payload.photoBase64 = base64String;
@@ -2564,13 +2727,13 @@ window.returnToFisikFromHelpdesk = async function () {
     
     // Proses Foto Jika Ada
     const photoInput = document.getElementById('hdPhoto');
-    if (photoInput && photoInput.files.length > 0) {
-        const file = photoInput.files[0];
+    const file = window.selectedHdPhotoFile || (photoInput && photoInput.files.length > 0 ? photoInput.files[0] : null);
+    if (file) {
         try {
             const base64String = await compressImageBase64(file);
             payload.photoBase64 = base64String;
-            payload.photoMimeType = file.type;
-            payload.photoName = "Evidence_LogicRework_" + state.activeTicketId + "_" + file.name;
+            payload.photoMimeType = file.type || 'image/jpeg';
+            payload.photoName = "Evidence_LogicRework_" + state.activeTicketId + "_" + (file.name || "evidence.jpeg");
         } catch (e) {
             console.error(e);
             alert("Gagal memproses foto.");
