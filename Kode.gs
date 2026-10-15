@@ -1275,6 +1275,105 @@ function registerTeknisiTg(nik, senderName, chatId, username) {
   }
 }
 
+function sendActiveTicketsForTeknisi(nik, chatId, tekName) {
+  if (!nik || !chatId) return;
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheetDB = ss.getSheetByName("DATABASE ALL TICKET") || ss.getSheetByName("SCRAPING INSERA");
+    if (!sheetDB) return;
+    
+    var lastRow = sheetDB.getLastRow();
+    var lastCol = sheetDB.getLastColumn();
+    if (lastRow < 2 || lastCol < 1) return;
+    
+    var data = sheetDB.getRange(1, 1, lastRow, lastCol).getValues();
+    var headers = data[0].map(function(h) { return h.toString().toUpperCase().trim(); });
+    
+    var incIdx = -1, sNumIdx = -1, stoIdx = -1, custIdx = -1, svcIdx = -1;
+    var statusIdx = -1, rxIdx = -1, txIdx = -1, techIdx = -1, actionIdx = -1;
+    
+    for (var c = 0; c < headers.length; c++) {
+      var h = headers[c];
+      if (h.includes("INCIDENT") || h === "TICKET") incIdx = c;
+      else if (h === "SERVICE NO" || h === "SERVICENO" || h === "NOINET") sNumIdx = c;
+      else if (h === "WORKZONE" || h === "STO") stoIdx = c;
+      else if (h === "CUSTOMER NAME" || h === "CUSTOMER") custIdx = c;
+      else if (h === "SERVICE TYPE") svcIdx = c;
+      else if (h === "STATUS" || h === "TICKET STATUS") statusIdx = c;
+      else if (h === "ONU RX" || h === "RX POWER") rxIdx = c;
+      else if (h === "ONU TX" || h === "TX POWER") txIdx = c;
+      else if (h.includes("TEKNISI") || h === "TECHNICIAN") techIdx = c;
+      else if (h.includes("ACTION")) actionIdx = c;
+    }
+    
+    if (incIdx === -1) incIdx = 3;
+    if (techIdx === -1) techIdx = 49;
+    
+    var targetNikClean = nik.toString().replace(/[^0-9]/g, '');
+    var activeTickets = [];
+    
+    for (var r = 1; r < data.length; r++) {
+      var row = data[r];
+      var rowInc = (row[incIdx] || "").toString().trim();
+      if (!rowInc || !rowInc.match(/^(INC\d+|1-SV\d+)/)) continue;
+      
+      var rowTech = (techIdx !== -1 && row[techIdx]) ? row[techIdx].toString().trim() : "";
+      var rowAction = (actionIdx !== -1 && row[actionIdx]) ? row[actionIdx].toString().toUpperCase() : "";
+      var rowStatus = (statusIdx !== -1 && row[statusIdx]) ? row[statusIdx].toString().toUpperCase() : "";
+      
+      // Lewati jika tiket sudah closed / selesai / pending
+      if (rowStatus.includes("CLOSED") || rowStatus.includes("RESOLV") || rowAction.includes("[COMPLETED]") || rowAction.includes("[PENDING]")) {
+        continue;
+      }
+      
+      var isMyTicket = false;
+      var techClean = rowTech.replace(/[^0-9]/g, '');
+      if (techClean && techClean === targetNikClean) {
+        isMyTicket = true;
+      } else if (rowAction.includes("TEKNISI: " + targetNikClean) || rowAction.includes("ASSIGNED] " + targetNikClean)) {
+        isMyTicket = true;
+      }
+      
+      if (isMyTicket) {
+        var sNum = (sNumIdx !== -1 && row[sNumIdx]) ? row[sNumIdx].toString().trim() : "-";
+        var sto = (stoIdx !== -1 && row[stoIdx]) ? row[stoIdx].toString().trim() : "-";
+        var cust = (custIdx !== -1 && row[custIdx]) ? row[custIdx].toString().trim() : "-";
+        var svc = (svcIdx !== -1 && row[svcIdx]) ? row[svcIdx].toString().trim() : "-";
+        var rx = (rxIdx !== -1 && row[rxIdx]) ? row[rxIdx].toString().trim() : "-";
+        var tx = (txIdx !== -1 && row[txIdx]) ? row[txIdx].toString().trim() : "-";
+        
+        activeTickets.push({
+          ticketId: rowInc,
+          sNum: sNum,
+          sto: sto,
+          custName: cust,
+          serviceType: svc,
+          statusInfo: rowStatus || "-",
+          rx: rx,
+          tx: tx
+        });
+      }
+    }
+    
+    if (activeTickets.length > 0) {
+      sendTelegramRaw(chatId, "📋 <b>STATUS PENUGASAN AKTIF (" + activeTickets.length + " Tiket):</b>\nBerikut adalah tiket tugas aktif Anda saat ini:");
+      var maxSend = Math.min(activeTickets.length, 5);
+      for (var i = 0; i < maxSend; i++) {
+        var t = activeTickets[i];
+        autoAssignTicket(chatId, tekName || nik, t.ticketId, t.sNum, t.custName, t.sto, t.serviceType, t.statusInfo, t.rx, t.tx);
+        Utilities.sleep(300);
+      }
+      if (activeTickets.length > 5) {
+        sendTelegramRaw(chatId, "<i>(Masih ada " + (activeTickets.length - 5) + " tiket aktif lainnya di antrean Anda. Ketik /tiket kapan saja untuk melihat status terbaru)</i>");
+      }
+    } else {
+      sendTelegramRaw(chatId, "ℹ️ <b>Status Tugas Saat Ini:</b>\nSaat ini belum ada tiket aktif yang ditugaskan ke NIK <code>" + targetNikClean + "</code> di antrean.\n\nTiket tugas baru akan otomatis dikirimkan ke chat ini begitu di-assign oleh Korlap / sistem. Semangat bertugas! 🫡");
+    }
+  } catch(err) {
+    Logger.log("sendActiveTicketsForTeknisi error: " + err.message);
+  }
+}
+
 function doPost(e) {
   var payload = "";
   var dataObj = {};
@@ -1351,6 +1450,9 @@ function doPost(e) {
                                           "📱 <b>Telegram ID:</b> <code>" + chatId + "</code>\n\n" +
                                           "Akun Anda telah terhubung dengan <b>GENCU BOT</b>. Setiap tiket tugas yang di-assign ke NIK Anda akan otomatis dikirimkan ke chat ini lengkap dengan tombol evidence fisik & logic. Semangat bertugas! 🫡";
                       sendTelegramRaw(chatId, regSuccessMsg);
+                      
+                      // Auto-sync tiket aktif milik teknisi detik itu juga
+                      sendActiveTicketsForTeknisi(nikCandidate, chatId, tekName);
                   } else {
                       var welcomeHelp = "👋 Halo <b>" + escapeHTML(senderName) + "</b>!\n\n" +
                                         "Selamat datang di <b>GENCU BOT</b> (General Control & Update).\n\n" +
@@ -1372,6 +1474,37 @@ function doPost(e) {
                                   "Halo <b>" + escapeHTML(tekNameDirect) + "</b>,\n" +
                                   "NIK <code>" + directNik + "</code> berhasil ditautkan ke Telegram Anda. Tiket tugas Anda akan langsung dikirimkan ke chat ini. 🫡";
                   sendTelegramRaw(chatId, msgDirect);
+                  
+                  // Auto-sync tiket aktif milik teknisi detik itu juga
+                  sendActiveTicketsForTeknisi(directNik, chatId, tekNameDirect);
+                  return HtmlService.createHtmlOutput("OK");
+              }
+
+              // 5. Command /tiket atau /cek (Teknisi mengecek daftar tiket aktifnya sendiri kapan saja)
+              if (msgText.startsWith("/tiket") || msgText.startsWith("/cek") || msgText.startsWith("/myticket") || msgText.startsWith("/list")) {
+                  var senderNik = "";
+                  var senderTekName = senderName;
+                  var ssTek = SpreadsheetApp.getActiveSpreadsheet();
+                  var sheetTek = ssTek.getSheetByName("TEKNISI");
+                  if (sheetTek && sheetTek.getLastRow() > 1) {
+                      var tekData = sheetTek.getRange(2, 1, sheetTek.getLastRow() - 1, 3).getValues();
+                      for (var t = 0; t < tekData.length; t++) {
+                          if (tekData[t][2] && tekData[t][2].toString().trim() === chatId.toString().trim()) {
+                              senderNik = tekData[t][0].toString().trim();
+                              senderTekName = tekData[t][1] ? tekData[t][1].toString().trim() : senderName;
+                              break;
+                          }
+                      }
+                  }
+                  if (senderNik) {
+                      sendActiveTicketsForTeknisi(senderNik, chatId, senderTekName);
+                  } else {
+                      var notRegMsg = "⚠️ <b>Akun Anda Belum Terdaftar!</b>\n\n" +
+                                      "Silakan daftarkan NIK Anda terlebih dahulu dengan format:\n" +
+                                      "👉 <code>/start [NIK_ANDA]</code>\n" +
+                                      "Contoh: <code>/start 18860070</code>";
+                      sendTelegramRaw(chatId, notRegMsg);
+                  }
                   return HtmlService.createHtmlOutput("OK");
               }
           }
@@ -1832,7 +1965,11 @@ function doPost(e) {
         } catch (e) {}
 
         // Gunakan SCRIPT_URL statis untuk mencegah error getUrl()
-        var webAppUrl = ScriptApp.getService().getUrl();
+        var webAppUrl = "https://script.google.com/macros/s/AKfycbwgkZAduwo1EKvp-MZgE9c0Auhfpz7aiNEi5TSer0gqHJDMjUvTcxJL3FpFfKWece2Z/exec";
+        try {
+            var sUrl = ScriptApp.getService().getUrl();
+            if (sUrl && sUrl.startsWith("http")) webAppUrl = sUrl;
+        } catch(e) {}
         var evidenceLink = webAppUrl + "?action=form_evidence&ticket=" + encodeURIComponent(ticketId) + "&inet=" + encodeURIComponent(sNum) + "&rx=" + encodeURIComponent(rx) + "&tx=" + encodeURIComponent(tx);
         var logicLink = webAppUrl + "?action=mark_gcu_logic&ticket=" + encodeURIComponent(ticketId);
         
@@ -3278,7 +3415,11 @@ function autoAssignTicket(chatIdTg, teknisiName, ticketId, sNum, custName, sto, 
     var rx = cleanRxPower(rxPower || "-");
     var tx = cleanTxPower(txPower || "-");
     
-    var webAppUrl = ScriptApp.getService().getUrl();
+    var webAppUrl = "https://script.google.com/macros/s/AKfycbwgkZAduwo1EKvp-MZgE9c0Auhfpz7aiNEi5TSer0gqHJDMjUvTcxJL3FpFfKWece2Z/exec";
+    try {
+        var sUrl = ScriptApp.getService().getUrl();
+        if (sUrl && sUrl.startsWith("http")) webAppUrl = sUrl;
+    } catch(e) {}
     var evidenceLink = webAppUrl + "?action=form_evidence&ticket=" + encodeURIComponent(ticketId) + "&inet=" + encodeURIComponent(sNum) + "&rx=" + encodeURIComponent(rx) + "&tx=" + encodeURIComponent(tx);
     var logicLink = webAppUrl + "?action=mark_gcu_logic&ticket=" + encodeURIComponent(ticketId);
     
