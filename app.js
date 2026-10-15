@@ -4,6 +4,7 @@ const state = {
     filteredTickets: [],
     activeFilter: 'GCU FISIK',
     statusFilter: 'ALL',
+    selectedSTOs: [],
     // Active View State
     activeTicketId: null,
     activeSto: null,
@@ -868,21 +869,8 @@ window.showDashboard = function (filterStatus) {
         witelEl.value = 'ALL';
     }
 
-    // Update STO filter options
-    const stoEl = document.getElementById('stoFilter');
-    if (stoEl) {
-        let uniqueSTOs = [...new Set(state.filteredTickets.map(t => t.sto).filter(s => s && s !== "-"))];
-        uniqueSTOs.sort();
-        stoEl.innerHTML = '<option value="ALL">Semua STO</option>';
-        uniqueSTOs.forEach(sto => {
-            let opt = document.createElement('option');
-            opt.value = sto;
-            opt.innerText = sto;
-            stoEl.appendChild(opt);
-        });
-        state.stoFilter = 'ALL';
-        stoEl.value = 'ALL';
-    }
+    // Update STO multi-select filter options
+    window.populateStoMultiSelect();
 
     renderTable();
 };
@@ -930,49 +918,171 @@ window.selectTicket = function (ticketId, sto) {
 };
 
 window.applyStatusFilter = function () {
-    const filterVal = document.getElementById('statusFilter').value;
+    const filterVal = document.getElementById('statusFilter') ? document.getElementById('statusFilter').value : "ALL";
     const searchVal = document.getElementById('searchTicketInput') ? document.getElementById('searchTicketInput').value.trim().toUpperCase() : "";
     const witelVal = document.getElementById('witelFilter') ? document.getElementById('witelFilter').value : "ALL";
-    const stoVal = document.getElementById('stoFilter') ? document.getElementById('stoFilter').value : "ALL";
     
     state.statusFilter = filterVal;
     state.searchFilter = searchVal;
     state.witelFilter = witelVal;
-    state.stoFilter = stoVal;
     
-    // Opsional: Perbarui opsi STO berdasarkan Witel yang dipilih (untuk UX yang lebih baik)
-    const stoEl = document.getElementById('stoFilter');
-    if (stoEl && state.witelFilter !== 'ALL') {
-        let validSTOs = [...new Set(state.filteredTickets.filter(t => t.witel === state.witelFilter).map(t => t.sto).filter(s => s && s !== "-"))];
-        validSTOs.sort();
-        // Hanya update opsinya, jaga value saat ini jika masih valid
-        let currentSto = stoEl.value;
-        stoEl.innerHTML = '<option value="ALL">Semua STO</option>';
-        validSTOs.forEach(sto => {
-            let opt = document.createElement('option');
-            opt.value = sto;
-            opt.innerText = sto;
-            stoEl.appendChild(opt);
-        });
-        if (validSTOs.includes(currentSto)) stoEl.value = currentSto;
-        else { stoEl.value = 'ALL'; state.stoFilter = 'ALL'; }
-    } else if (stoEl && state.witelFilter === 'ALL') {
-        let allSTOs = [...new Set(state.filteredTickets.map(t => t.sto).filter(s => s && s !== "-"))];
-        allSTOs.sort();
-        let currentSto = stoEl.value;
-        stoEl.innerHTML = '<option value="ALL">Semua STO</option>';
-        allSTOs.forEach(sto => {
-            let opt = document.createElement('option');
-            opt.value = sto;
-            opt.innerText = sto;
-            stoEl.appendChild(opt);
-        });
-        if (allSTOs.includes(currentSto)) stoEl.value = currentSto;
-        else { stoEl.value = 'ALL'; state.stoFilter = 'ALL'; }
-    }
+    // Perbarui opsi STO berdasarkan Witel yang dipilih
+    window.populateStoMultiSelect();
     
     renderTable();
 };
+
+// ==========================================
+// MULTI-SELECT STO FILTER LOGIC
+// ==========================================
+window.populateStoMultiSelect = function () {
+    const listEl = document.getElementById('stoCheckboxList');
+    if (!listEl) return;
+
+    if (!state.selectedSTOs) state.selectedSTOs = [];
+
+    // Filter tiket dasar berdasarkan Witel jika Witel dipilih
+    let baseTickets = state.filteredTickets || [];
+    if (state.witelFilter && state.witelFilter !== 'ALL') {
+        baseTickets = baseTickets.filter(t => t.witel === state.witelFilter);
+    }
+
+    // Hitung jumlah tiket per STO
+    const stoCounts = {};
+    baseTickets.forEach(t => {
+        if (t.sto && t.sto !== '-') {
+            stoCounts[t.sto] = (stoCounts[t.sto] || 0) + 1;
+        }
+    });
+
+    const uniqueSTOs = Object.keys(stoCounts).sort();
+
+    // Pertahankan STO yang dipilih hanya jika masih valid di witel ini
+    state.selectedSTOs = state.selectedSTOs.filter(s => uniqueSTOs.includes(s));
+
+    if (uniqueSTOs.length === 0) {
+        listEl.innerHTML = '<div style="padding: 10px; text-align: center; font-size: 12px; color: var(--text-secondary);">Tidak ada STO tersedia</div>';
+    } else {
+        listEl.innerHTML = uniqueSTOs.map(sto => {
+            const isChecked = state.selectedSTOs.includes(sto);
+            return `
+                <label class="sto-checkbox-item" data-sto="${sto}" style="display: flex; align-items: center; justify-content: space-between; padding: 5px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; transition: background 0.15s ease;" onmouseover="this.style.background='var(--bg-hover, rgba(0,0,0,0.05))'" onmouseout="this.style.background='transparent'">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <input type="checkbox" value="${sto}" ${isChecked ? 'checked' : ''} onchange="window.onStoCheckChange('${sto}', this.checked)" style="cursor: pointer; width: 14px; height: 14px;">
+                        <span style="font-weight: ${isChecked ? '700' : '500'}; color: ${isChecked ? 'var(--primary, #0284c7)' : 'var(--text-primary)'};">${sto}</span>
+                    </div>
+                    <span style="font-size: 10.5px; color: var(--text-secondary); background: rgba(0,0,0,0.06); padding: 1px 6px; border-radius: 10px; font-weight: 600;">${stoCounts[sto]}</span>
+                </label>
+            `;
+        }).join('');
+    }
+
+    window.updateStoDropdownLabel();
+};
+
+window.updateStoDropdownLabel = function () {
+    const labelEl = document.getElementById('stoDropdownLabel');
+    const clearBtn = document.getElementById('stoClearBtn');
+    if (!labelEl) return;
+
+    const count = (state.selectedSTOs || []).length;
+    if (count === 0) {
+        labelEl.innerText = "Semua STO";
+        labelEl.style.fontWeight = "500";
+        labelEl.style.color = "var(--text-primary)";
+        if (clearBtn) clearBtn.style.display = "none";
+    } else if (count === 1) {
+        labelEl.innerText = `STO: ${state.selectedSTOs[0]}`;
+        labelEl.style.fontWeight = "700";
+        labelEl.style.color = "var(--primary, #0284c7)";
+        if (clearBtn) clearBtn.style.display = "inline";
+    } else if (count <= 2) {
+        labelEl.innerText = state.selectedSTOs.join(", ");
+        labelEl.style.fontWeight = "700";
+        labelEl.style.color = "var(--primary, #0284c7)";
+        if (clearBtn) clearBtn.style.display = "inline";
+    } else {
+        labelEl.innerText = `${count} STO Terpilih`;
+        labelEl.style.fontWeight = "700";
+        labelEl.style.color = "var(--primary, #0284c7)";
+        if (clearBtn) clearBtn.style.display = "inline";
+    }
+};
+
+window.toggleStoDropdown = function (event) {
+    if (event) event.stopPropagation();
+    const menu = document.getElementById('stoDropdownMenu');
+    const icon = document.getElementById('stoChevronIcon');
+    if (!menu) return;
+
+    const isOpen = menu.style.display === 'block';
+    menu.style.display = isOpen ? 'none' : 'block';
+    if (icon) icon.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
+
+    if (!isOpen) {
+        const searchInput = document.getElementById('stoSearchInput');
+        if (searchInput) {
+            searchInput.value = '';
+            window.filterStoList('');
+            setTimeout(() => searchInput.focus(), 50);
+        }
+    }
+};
+
+window.filterStoList = function (query) {
+    const q = (query || "").trim().toUpperCase();
+    const items = document.querySelectorAll('.sto-checkbox-item');
+    items.forEach(item => {
+        const sto = (item.getAttribute('data-sto') || "").toUpperCase();
+        item.style.display = sto.includes(q) ? 'flex' : 'none';
+    });
+};
+
+window.onStoCheckChange = function (sto, isChecked) {
+    if (!state.selectedSTOs) state.selectedSTOs = [];
+    if (isChecked) {
+        if (!state.selectedSTOs.includes(sto)) state.selectedSTOs.push(sto);
+    } else {
+        state.selectedSTOs = state.selectedSTOs.filter(s => s !== sto);
+    }
+    window.updateStoDropdownLabel();
+    renderTable();
+};
+
+window.selectAllSTOs = function (selectAll) {
+    if (!state.selectedSTOs) state.selectedSTOs = [];
+    const checkboxes = document.querySelectorAll('#stoCheckboxList input[type="checkbox"]');
+    if (selectAll) {
+        state.selectedSTOs = [];
+        checkboxes.forEach(cb => {
+            cb.checked = true;
+            state.selectedSTOs.push(cb.value);
+        });
+    } else {
+        state.selectedSTOs = [];
+        checkboxes.forEach(cb => {
+            cb.checked = false;
+        });
+    }
+    window.updateStoDropdownLabel();
+    renderTable();
+};
+
+window.clearStoFilter = function (event) {
+    if (event) event.stopPropagation();
+    window.selectAllSTOs(false);
+};
+
+// Tutup dropdown jika klik di luar area
+document.addEventListener('click', function (e) {
+    const container = document.getElementById('stoMultiSelectContainer');
+    const menu = document.getElementById('stoDropdownMenu');
+    const icon = document.getElementById('stoChevronIcon');
+    if (menu && container && !container.contains(e.target)) {
+        menu.style.display = 'none';
+        if (icon) icon.style.transform = 'rotate(0deg)';
+    }
+});
 
 function renderTable() {
     emptyState.style.display = 'none';
@@ -995,9 +1105,9 @@ function renderTable() {
         displayTickets = displayTickets.filter(ticket => ticket.witel === state.witelFilter);
     }
 
-    // 3. Terapkan Filter STO
-    if (state.stoFilter && state.stoFilter !== 'ALL') {
-        displayTickets = displayTickets.filter(ticket => ticket.sto === state.stoFilter);
+    // 3. Terapkan Filter STO (Dapat memilih lebih dari 1 STO!)
+    if (state.selectedSTOs && state.selectedSTOs.length > 0) {
+        displayTickets = displayTickets.filter(ticket => state.selectedSTOs.includes(ticket.sto));
     }
 
     // 4. Terapkan Filter Status
@@ -1016,7 +1126,7 @@ function renderTable() {
 
     const badgeEl = document.getElementById('filteredCountBadge');
     if (badgeEl) {
-        if ((state.statusFilter && state.statusFilter !== 'ALL') || state.searchFilter) {
+        if ((state.statusFilter && state.statusFilter !== 'ALL') || state.searchFilter || (state.selectedSTOs && state.selectedSTOs.length > 0) || (state.witelFilter && state.witelFilter !== 'ALL')) {
             badgeEl.style.display = 'inline-block';
             badgeEl.innerText = displayTickets.length;
         } else {
