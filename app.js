@@ -4803,6 +4803,9 @@ window.setGaulFilterChip = function (chip) {
     } else if (chip === 'DONE') {
         const c = document.getElementById('gaulChipDone');
         if (c) c.classList.add('active');
+    } else if (chip === 'UNASSIGNED') {
+        const c = document.getElementById('gaulChipUnassigned');
+        if (c) c.classList.add('active');
     }
     window.filterKonselingGaulTable();
 };
@@ -4928,8 +4931,25 @@ window.renderKonselingGaulDashboard = function () {
     // Update KPI Cards
     const elKasus = document.getElementById('gaulKpiTotalKasus');
     if (elKasus) elKasus.innerText = totalKasusGaul;
+
+    let unassignedItem = gaulList.find(t => t.nik === '-' || t.nik === 'TANPA_NIK');
+    let unassignedCount = unassignedItem ? unassignedItem.count : 0;
+
     const elTek = document.getElementById('gaulKpiTotalTeknisi');
-    if (elTek) elTek.innerText = gaulList.filter(t => t.nik !== '-').length;
+    if (elTek) elTek.innerText = gaulList.filter(t => t.nik !== '-' && t.nik !== 'TANPA_NIK').length;
+
+    const elSubTek = document.getElementById('gaulKpiSubTeknisi');
+    if (elSubTek) {
+        if (unassignedCount > 0) {
+            elSubTek.innerHTML = `<span>⚠️ <strong>${unassignedCount}</strong> kasus belum di-assign teknisi</span>`;
+        } else {
+            elSubTek.innerHTML = `<span>Menyumbang repeat incident (GAUL/LAPUL)</span>`;
+        }
+    }
+
+    const chipUnassignedCount = document.getElementById('gaulChipUnassignedCount');
+    if (chipUnassignedCount) chipUnassignedCount.innerText = unassignedCount;
+
     const elKonseling = document.getElementById('gaulKpiTotalKonseling');
     if (elKonseling) elKonseling.innerText = Object.keys(logs).length;
 
@@ -4947,10 +4967,17 @@ window.filterKonselingGaulTable = function () {
     let list = window._gaulCachedList || [];
 
     // Filter Chip
-    if (chip === 'PERLU') {
-        list = list.filter(item => item.counselingStatus === 'PERLU' || item.count >= 3 || item.totalScore >= 5);
-    } else if (chip === 'DONE') {
-        list = list.filter(item => item.counselingLog && (item.counselingLog.status === 'SELESAI' || item.counselingStatus === 'SELESAI'));
+    if (chip === 'UNASSIGNED') {
+        list = list.filter(item => item.nik === '-' || item.nik === 'TANPA_NIK');
+    } else {
+        // Sembunyikan 'Belum Di-assign' secara default agar ranking benar-benar fokus ke personil teknisi riil
+        list = list.filter(item => item.nik !== '-' && item.nik !== 'TANPA_NIK');
+
+        if (chip === 'PERLU') {
+            list = list.filter(item => item.counselingStatus === 'PERLU' || item.count >= 3 || item.totalScore >= 5);
+        } else if (chip === 'DONE') {
+            list = list.filter(item => item.counselingLog && (item.counselingLog.status === 'SELESAI' || item.counselingStatus === 'SELESAI'));
+        }
     }
 
     // Filter Search Query
@@ -4993,6 +5020,23 @@ window.filterKonselingGaulTable = function () {
             statusBadge = `<span class="badge-status-konseling badge-status-pantau">🟡 Pantau Ringan</span>`;
         }
 
+        let isRealTech = item.nik && item.nik !== '-' && item.nik !== 'TANPA_NIK';
+        let actionButtons = '';
+        if (isRealTech) {
+            actionButtons += `
+                <button class="btn-drawer" onclick="window.openKonselingModal('${item.nik}', ${item.count})" title="Catat evaluasi & konseling" style="background: rgba(244, 63, 94, 0.15); color: #f43f5e; border-color: rgba(244, 63, 94, 0.3);">
+                    <ion-icon name="clipboard-outline"></ion-icon> Catat
+                </button>
+            `;
+        }
+        actionButtons += `
+            <button class="btn-drawer" id="btnDrawerGaul-${safeId}" onclick="window.toggleGaulDrawer('${safeId}')" title="Buka rincian tiket GAUL">
+                <ion-icon name="list-outline"></ion-icon>
+                <span id="lblDrawerGaul-${safeId}">Tiket (${item.count})</span>
+                <ion-icon name="chevron-down-outline" id="iconDrawerGaul-${safeId}" style="transition: 0.2s;"></ion-icon>
+            </button>
+        `;
+
         html += `
             <tr id="gaulRow-${safeId}">
                 <td style="text-align: center;">
@@ -5019,19 +5063,12 @@ window.filterKonselingGaulTable = function () {
                     </span>
                 </td>
                 <td>
-                    <div style="font-size: 11.5px; line-height: 1.4; color: var(--text-primary);">${symptomsStr}</div>
+                    <div style="font-size: 11.5px; line-height: 1.4; color: var(--text-primary); max-width: 280px; word-break: break-word;">${symptomsStr}</div>
                 </td>
                 <td>${statusBadge}</td>
                 <td style="text-align: center;">
                     <div style="display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap;">
-                        <button class="btn-drawer" onclick="window.openKonselingModal('${item.nik}', ${item.count})" title="Catat evaluasi & konseling" style="background: rgba(244, 63, 94, 0.15); color: #f43f5e; border-color: rgba(244, 63, 94, 0.3);">
-                            <ion-icon name="clipboard-outline"></ion-icon> Catat
-                        </button>
-                        <button class="btn-drawer" id="btnDrawerGaul-${safeId}" onclick="window.toggleGaulDrawer('${safeId}')" title="Buka rincian tiket GAUL">
-                            <ion-icon name="list-outline"></ion-icon>
-                            <span id="lblDrawerGaul-${safeId}">Tiket (${item.count})</span>
-                            <ion-icon name="chevron-down-outline" id="iconDrawerGaul-${safeId}" style="transition: 0.2s;"></ion-icon>
-                        </button>
+                        ${actionButtons}
                     </div>
                 </td>
             </tr>

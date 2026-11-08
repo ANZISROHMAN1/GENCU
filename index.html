@@ -808,7 +808,7 @@
                                 <ion-icon name="warning" style="font-size: 32px; opacity: 0.8;"></ion-icon>
                             </div>
                             <div style="margin-top: 10px; font-size: 11.5px; color: rgba(255,255,255,0.9);">
-                                <span>Menyumbang repeat incident (GAUL/LAPUL)</span>
+                                <span id="gaulKpiSubTeknisi">Menyumbang repeat incident (GAUL/LAPUL)</span>
                             </div>
                         </div>
                     </div>
@@ -842,9 +842,10 @@
                                 <input type="text" id="gaulSearchInput" placeholder="Cari NIK / Nama Teknisi / STO..." oninput="window.filterKonselingGaulTable()">
                             </div>
                             <div class="mon-filter-chips">
-                                <button class="mon-chip active" id="gaulChipAll" onclick="window.setGaulFilterChip('ALL')">Semua</button>
+                                <button class="mon-chip active" id="gaulChipAll" onclick="window.setGaulFilterChip('ALL')">Semua Teknisi</button>
                                 <button class="mon-chip" id="gaulChipPerlu" onclick="window.setGaulFilterChip('PERLU')">🔴 Perlu Konseling (&ge; 3)</button>
                                 <button class="mon-chip" id="gaulChipDone" onclick="window.setGaulFilterChip('DONE')">🟢 Sudah Konseling</button>
+                                <button class="mon-chip" id="gaulChipUnassigned" onclick="window.setGaulFilterChip('UNASSIGNED')">⚠️ Belum Di-assign (<span id="gaulChipUnassignedCount">0</span>)</button>
                             </div>
                         </div>
                     </div>
@@ -949,7 +950,7 @@
         </div>
     </div>
 
-    <script src="app.js?v=3.5"></script>
+    <script src="app.js?v=3.6"></script>
     <script>
         // Mobile sidebar toggle
         function toggleSidebar() {
