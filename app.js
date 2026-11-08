@@ -681,7 +681,10 @@ function processData(rows, isBackground = false) {
     let ticketStatusIdx = headers.findIndex(h => h === "STATUS" || h === "TICKET STATUS" || (h.includes("STATUS") && !h.includes("ALARM") && !h.includes("GUARANTE") && !h.includes("DATE") && !h.includes("LINK") && !h.includes("INFO")));
     let gaulIdx = headers.findIndex(h => h === "GAUL" || h.includes("GAUL") || h === "GANGGUAN ULANG");
     let lapulIdx = headers.findIndex(h => h === "LAPUL" || h.includes("LAPUL") || h === "LAPORAN ULANG");
-    let symptomIdx = headers.findIndex(h => h === "SYMPTOM" || h.includes("SYMPTOM") || h === "SUMMARY" || h.includes("SUMMARY"));
+    let symptomIdx = headers.findIndex(h => h === "SYMPTOM" || (h.includes("SYMPTOM") && !h.includes("SUMMARY")));
+    if (symptomIdx === -1) {
+        symptomIdx = headers.findIndex(h => h === "SUMMARY" || h.includes("SUMMARY"));
+    }
     let solutionIdx = headers.findIndex(h => h === "SOLUTION" || h.includes("SOLUTION"));
 
     let photoColumns = {};
@@ -973,6 +976,15 @@ function processData(rows, isBackground = false) {
             let symptom = "-";
             if (symptomIdx !== -1 && row[symptomIdx]) {
                 symptom = row[symptomIdx].toString().trim() || "-";
+                if (symptom.includes("|")) {
+                    let parts = symptom.split("|").map(p => p.trim()).filter(p => p && p.toLowerCase() !== "null" && p.toLowerCase() !== "technical");
+                    if (parts.length > 0) {
+                        symptom = parts[parts.length - 1];
+                    }
+                }
+                if (symptom.length > 55) {
+                    symptom = symptom.substring(0, 52) + "...";
+                }
             }
 
             let solution = "-";
@@ -4782,6 +4794,9 @@ window.showKonselingGaulView = function () {
     const menu = document.getElementById('menuKonselingGaul');
     if (menu) menu.classList.add('active');
 
+    const gaulContainer = document.getElementById('gaulTableContainer');
+    if (gaulContainer) gaulContainer.scrollLeft = 0;
+
     window.renderKonselingGaulDashboard();
 };
 
@@ -4899,6 +4914,13 @@ window.renderKonselingGaulDashboard = function () {
             }
 
             let sym = (t.symptom && t.symptom !== '-') ? t.symptom.trim() : null;
+            if (sym && sym.includes('|')) {
+                let parts = sym.split('|').map(p => p.trim()).filter(p => p && p.toLowerCase() !== 'null' && p.toLowerCase() !== 'technical');
+                if (parts.length > 0) sym = parts[parts.length - 1];
+            }
+            if (sym && sym.length > 50) {
+                sym = sym.substring(0, 48) + '...';
+            }
             if (!sym && (t.status || '').toUpperCase().includes('LOS')) {
                 sym = 'LOS (Loss of Signal)';
             }
@@ -4922,7 +4944,11 @@ window.renderKonselingGaulDashboard = function () {
         }
 
         let sortedSym = Object.entries(item.symptomMap).sort((a, b) => b[1] - a[1]);
-        item.topSymptoms = sortedSym.slice(0, 2).map(([s, cnt]) => `${s} (${cnt}x)`);
+        item.topSymptoms = sortedSym.slice(0, 2).map(([s, cnt]) => {
+            let label = s;
+            if (label.length > 36) label = label.substring(0, 34) + '...';
+            return `<span style="font-weight: 500;">${label}</span> <strong style="color: #f43f5e; font-size: 11px;">(${cnt}x)</strong>`;
+        });
     });
 
     gaulList.sort((a, b) => (b.totalScore * 2 + b.count) - (a.totalScore * 2 + a.count));
@@ -5039,35 +5065,35 @@ window.filterKonselingGaulTable = function () {
 
         html += `
             <tr id="gaulRow-${safeId}">
-                <td style="text-align: center;">
+                <td style="text-align: center; width: 55px; vertical-align: middle;">
                     <div class="mon-rank-num ${rankClass}" style="margin: 0 auto;">${idx + 1}</div>
                 </td>
-                <td>
+                <td style="white-space: nowrap; vertical-align: middle;">
                     <div style="font-weight: 700; color: var(--text-primary); font-size: 13.5px;">${item.nama}</div>
                     <div style="font-size: 11.5px; color: var(--text-secondary); margin-top: 3px;">
                         <span>NIK: <code>${item.nik}</code></span>
                         ${!item.isValidInDb && item.nik !== '-' ? '<span style="color: #f59e0b; font-weight: 700; margin-left: 6px;">⚠️ Belum di DB</span>' : ''}
                     </div>
                 </td>
-                <td>
-                    <div style="font-size: 12.5px;">${stoStr}</div>
+                <td style="white-space: normal; max-width: 150px; vertical-align: middle;">
+                    <div style="font-size: 12px; line-height: 1.3;">${stoStr}</div>
                 </td>
-                <td style="text-align: center;">
+                <td style="text-align: center; white-space: nowrap; vertical-align: middle;">
                     <span class="badge-gaul">
                         <ion-icon name="flame"></ion-icon> ${item.count} Kasus
                     </span>
                 </td>
-                <td style="text-align: center;">
+                <td style="text-align: center; white-space: nowrap; vertical-align: middle;">
                     <span style="display: inline-block; padding: 3px 8px; border-radius: 6px; background: rgba(244, 63, 94, 0.1); color: #f43f5e; font-weight: 800; font-size: 12px;">
                         Score ${item.totalScore}
                     </span>
                 </td>
-                <td>
-                    <div style="font-size: 11.5px; line-height: 1.4; color: var(--text-primary); max-width: 280px; word-break: break-word;">${symptomsStr}</div>
+                <td style="white-space: normal; max-width: 280px; min-width: 200px; word-break: break-word; vertical-align: middle;">
+                    <div style="font-size: 11.5px; line-height: 1.4; color: var(--text-primary); white-space: normal; word-break: break-word;">${symptomsStr}</div>
                 </td>
-                <td>${statusBadge}</td>
-                <td style="text-align: center;">
-                    <div style="display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap;">
+                <td style="text-align: center; white-space: nowrap; vertical-align: middle;">${statusBadge}</td>
+                <td style="text-align: center; white-space: nowrap; vertical-align: middle;">
+                    <div style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: nowrap;">
                         ${actionButtons}
                     </div>
                 </td>

@@ -850,18 +850,18 @@
                         </div>
                     </div>
 
-                    <div class="table-container" style="max-height: 600px; overflow-y: auto;">
-                        <table class="data-table">
+                    <div class="table-container" id="gaulTableContainer" style="max-height: 600px; overflow-y: auto;">
+                        <table class="data-table" id="gaulDataTable" style="min-width: 980px; width: 100%;">
                             <thead>
                                 <tr>
                                     <th style="width: 55px; text-align: center;">RANK</th>
-                                    <th>TEKNISI</th>
-                                    <th>STO / AREA DOMINAN</th>
-                                    <th style="text-align: center;">TOTAL TIKET GAUL</th>
-                                    <th style="text-align: center;">REPEAT SCORE</th>
-                                    <th>GEJALA SERING MUNCUL</th>
-                                    <th>STATUS KONSELING</th>
-                                    <th style="text-align: center; width: 240px;">AKSI</th>
+                                    <th style="min-width: 170px;">TEKNISI</th>
+                                    <th style="min-width: 140px;">STO / AREA DOMINAN</th>
+                                    <th style="text-align: center; width: 130px;">TOTAL TIKET GAUL</th>
+                                    <th style="text-align: center; width: 100px;">REPEAT SCORE</th>
+                                    <th style="min-width: 220px; max-width: 280px;">GEJALA SERING MUNCUL</th>
+                                    <th style="text-align: center; width: 140px;">STATUS KONSELING</th>
+                                    <th style="text-align: center; width: 170px;">AKSI</th>
                                 </tr>
                             </thead>
                             <tbody id="gaulTableBody">
@@ -950,7 +950,7 @@
         </div>
     </div>
 
-    <script src="app.js?v=3.6"></script>
+    <script src="app.js?v=3.7"></script>
     <script>
         // Mobile sidebar toggle
         function toggleSidebar() {

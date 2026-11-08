@@ -1545,5 +1545,18 @@ body.light-mode .nested-ticket-table th {
     color: var(--primary);
 }
 
+/* Styling Khusus Tabel Konseling GAUL */
+#gaulDataTable {
+    min-width: 980px !important;
+    width: 100% !important;
+}
+
+#gaulDataTable th,
+#gaulDataTable td {
+    padding: 12px 14px;
+    vertical-align: middle;
+}
+
+
 
 
