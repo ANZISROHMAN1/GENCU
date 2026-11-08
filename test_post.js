@@ -1,4 +1,4 @@
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyYTj41Fk1iLgZ6ph3Ol5PDcUDelBOOph4DfXJx_trHcLtkzHLfz6qWFsnNPHGMtBGY/exec";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzIbDSPLfWeZVLchBcW-1UV5K_wIsWf2yHXbm8Ip0RHEbkLMaedw3saxWA10oNzaz2G/exec";
 
 async function test() {
     console.log("Testing POST to: " + SCRIPT_URL);

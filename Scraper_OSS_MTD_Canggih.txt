@@ -11,7 +11,7 @@
 (function() {
     'use strict';
 
-    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwgkZAduwo1EKvp-MZgE9c0Auhfpz7aiNEi5TSer0gqHJDMjUvTcxJL3FpFfKWece2Z/exec';
+    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzIbDSPLfWeZVLchBcW-1UV5K_wIsWf2yHXbm8Ip0RHEbkLMaedw3saxWA10oNzaz2G/exec';
     
     // ==========================================
     // DAFTAR URL BOOKMARK FALLBACK

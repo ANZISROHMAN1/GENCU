@@ -124,10 +124,29 @@
                         <a href="#" class="nav-item" id="menuApprovalKorlap" onclick="showDashboard('APPROVAL KORLAP')"><ion-icon name="checkmark-done-outline" style="margin-right: 10px;"></ion-icon> APPROVAL KORLAP</a>
                         <a href="#" class="nav-item" id="menuPending" onclick="showDashboard('PENDING')"><ion-icon name="pause-circle-outline" style="margin-right: 10px;"></ion-icon> PENDING</a>
                         <a href="#" class="nav-item" id="menuCompleted" onclick="showDashboard('COMPLETED')"><ion-icon name="ribbon-outline" style="margin-right: 10px;"></ion-icon> COMPLETED</a>
+
+                        <div style="height: 1px; background: var(--border); margin: 10px 18px; opacity: 0.6;"></div>
+                        
+                        <div style="padding: 4px 20px 2px; font-size: 10px; font-weight: 800; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1px;">
+                            MONITORING &amp; QUALITY
+                        </div>
+
+                        <!-- 1. Menu Monitoring GCU Teknisi -->
+                        <a href="#" class="nav-item" id="menuMonitoringTeknisi" onclick="showMonitoringTeknisiView()" style="color: #06b6d4; font-weight: 700;">
+                            <ion-icon name="people-outline" style="margin-right: 10px; color: #06b6d4; font-size: 17px;"></ion-icon> MONITORING GCU TEKNISI
+                        </a>
+
+                        <!-- 2. Menu Konseling Teknisi Penyumbang GAUL -->
+                        <a href="#" class="nav-item" id="menuKonselingGaul" onclick="showKonselingGaulView()" style="color: #f43f5e; font-weight: 700;">
+                            <ion-icon name="flame-outline" style="margin-right: 10px; color: #f43f5e; font-size: 17px;"></ion-icon> KONSELING GAUL
+                        </a>
+
+                        <!-- 3. Rekap Kinerja Witel -->
+                        <a href="#" class="nav-item" id="menuMonitoring" onclick="showMonitoringView()" style="color: #8b5cf6; font-weight: 700;">
+                            <ion-icon name="stats-chart-outline" style="margin-right: 10px; color: #8b5cf6; font-size: 17px;"></ion-icon> REKAP KINERJA WITEL
+                        </a>
                     </nav>
                 </div>
-
-
             </div>
             
             <div style="margin-top: auto; padding: 20px;">
@@ -347,10 +366,590 @@
                     <!-- Wizard steps will be rendered here -->
                 </div>
             </div>
+
+            <!-- VIEW: MONITORING KINERJA -->
+            <div id="view-monitoring" style="display: none;">
+                <header class="top-header">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="width: 36px; height: 36px; border-radius: 8px; background: rgba(6, 182, 212, 0.15); border: 1px solid rgba(6, 182, 212, 0.3); display: flex; align-items: center; justify-content: center;">
+                            <ion-icon name="stats-chart" style="font-size: 20px; color: #06b6d4;"></ion-icon>
+                        </div>
+                        <div>
+                            <h2 style="margin: 0; font-size: 20px;">Monitoring Kinerja & Backlog GENCU</h2>
+                            <p class="subtitle" style="margin: 2px 0 0 0; font-size: 11.5px; color: var(--text-secondary);">Pantau teknisi pending GCU Fisik, beban antrean GCU Logic, dan antrean Approval Korlap</p>
+                        </div>
+                    </div>
+                    <div class="header-actions">
+                        <div class="filter-select-group filter-group-witel" style="margin-bottom: 0;">
+                            <label for="monWitelFilter">WITEL:</label>
+                            <select id="monWitelFilter" onchange="window.onMonWitelChange()">
+                                <option value="ALL">Semua Witel</option>
+                            </select>
+                        </div>
+                        <button class="btn-reload" onclick="toggleTheme()">
+                            <ion-icon name="sunny-outline"></ion-icon> Theme
+                        </button>
+                        <button class="btn-reload" onclick="fetchTickets(true)">
+                            <ion-icon name="refresh-outline"></ion-icon> Reload
+                        </button>
+                    </div>
+                </header>
+
+                <!-- Top KPI Cards -->
+                <div class="summary-cards mon-kpi-grid">
+                    <div class="card summary-card card-fisik" onclick="window.switchMonTab('teknisi')" style="cursor: pointer;" title="Klik untuk lihat detail teknisi">
+                        <div class="card-content" style="width: 100%;">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                <div>
+                                    <h1 id="monKpiFisikCount">0</h1>
+                                    <p><ion-icon name="construct-outline"></ion-icon> PENDING GCU FISIK</p>
+                                </div>
+                                <ion-icon name="hammer" style="font-size: 32px; opacity: 0.8;"></ion-icon>
+                            </div>
+                            <div style="margin-top: 10px; font-size: 11.5px; color: rgba(255,255,255,0.85); display: flex; gap: 12px; flex-wrap: wrap;">
+                                <span>👤 <strong id="monKpiTeknisiCount">0</strong> Teknisi</span>
+                                <span>⚠️ <strong id="monKpiKendalaAssignCount">0</strong> Kendala NIK</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card summary-card card-logic" onclick="window.switchMonTab('logic')" style="cursor: pointer;" title="Klik untuk lihat detail GCU Logic">
+                        <div class="card-content" style="width: 100%;">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                <div>
+                                    <h1 id="monKpiLogicCount">0</h1>
+                                    <p><ion-icon name="hardware-chip-outline"></ion-icon> BEBAN GCU LOGIC</p>
+                                </div>
+                                <ion-icon name="hardware-chip" style="font-size: 32px; opacity: 0.8;"></ion-icon>
+                            </div>
+                            <div style="margin-top: 10px; font-size: 11.5px; color: rgba(255,255,255,0.85); display: flex; gap: 12px; flex-wrap: wrap;">
+                                <span>🏢 <strong id="monKpiStoLogicCount">0</strong> STO Terdampak</span>
+                                <span>🔴 <strong id="monKpiLosLogicCount">0</strong> LOS</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card summary-card card-korlap" onclick="window.switchMonTab('korlap')" style="cursor: pointer;" title="Klik untuk lihat detail Approval Korlap">
+                        <div class="card-content" style="width: 100%;">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                <div>
+                                    <h1 id="monKpiApprovalCount">0</h1>
+                                    <p><ion-icon name="shield-checkmark-outline"></ion-icon> PENDING APPROVAL KORLAP</p>
+                                </div>
+                                <ion-icon name="shield-checkmark" style="font-size: 32px; opacity: 0.8;"></ion-icon>
+                            </div>
+                            <div style="margin-top: 10px; font-size: 11.5px; color: rgba(255,255,255,0.85); display: flex; gap: 12px; flex-wrap: wrap;">
+                                <span>🏢 <strong id="monKpiStoKorlapCount">0</strong> STO Menunggu</span>
+                                <span>⏳ Terlama: <strong id="monKpiOldestApproval">-</strong></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sub-tab Pills Navigation -->
+                <div class="mon-tabs-container">
+                    <button class="mon-tab-btn active" id="monTabBtn-overview" onclick="window.switchMonTab('overview')">
+                        <ion-icon name="grid-outline"></ion-icon> <span>Ringkasan Utama</span>
+                    </button>
+                    <button class="mon-tab-btn" id="monTabBtn-teknisi" onclick="window.switchMonTab('teknisi')">
+                        <ion-icon name="person-outline"></ion-icon> <span>Teknisi Belum GCU Fisik</span>
+                        <span class="mon-tab-badge" id="monTabBadgeTeknisi">0</span>
+                    </button>
+                    <button class="mon-tab-btn" id="monTabBtn-logic" onclick="window.switchMonTab('logic')">
+                        <ion-icon name="laptop-outline"></ion-icon> <span>Beban GCU Logic</span>
+                        <span class="mon-tab-badge" id="monTabBadgeLogic">0</span>
+                    </button>
+                    <button class="mon-tab-btn" id="monTabBtn-korlap" onclick="window.switchMonTab('korlap')">
+                        <ion-icon name="checkmark-done-circle-outline"></ion-icon> <span>Approval Korlap Tertunda</span>
+                        <span class="mon-tab-badge" id="monTabBadgeKorlap">0</span>
+                    </button>
+                </div>
+
+                <!-- SUB-VIEW 1: OVERVIEW -->
+                <div class="mon-subview" id="monSubview-overview">
+                    <div class="mon-overview-grid">
+                        <!-- Top Teknisi Card -->
+                        <div class="card mon-overview-card">
+                            <div class="mon-card-header">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <div class="mon-icon-badge" style="background: rgba(100, 116, 139, 0.2); color: #94a3b8;">
+                                        <ion-icon name="construct"></ion-icon>
+                                    </div>
+                                    <div>
+                                        <h4 style="margin: 0; font-size: 15px;">Top Teknisi Belum Check Up</h4>
+                                        <p style="margin: 2px 0 0; font-size: 11px; color: var(--text-secondary);">Teknisi dengan beban GCU Fisik terbanyak</p>
+                                    </div>
+                                </div>
+                                <button class="btn-table-action" onclick="window.switchMonTab('teknisi')" style="font-size: 11px; padding: 4px 8px;">
+                                    Semua <ion-icon name="arrow-forward-outline"></ion-icon>
+                                </button>
+                            </div>
+                            <div id="monTopTeknisiList" class="mon-ranking-list">
+                                <!-- Populated dynamically -->
+                            </div>
+                        </div>
+
+                        <!-- Top GCU Logic Card -->
+                        <div class="card mon-overview-card">
+                            <div class="mon-card-header">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <div class="mon-icon-badge" style="background: rgba(59, 130, 246, 0.2); color: #3b82f6;">
+                                        <ion-icon name="hardware-chip"></ion-icon>
+                                    </div>
+                                    <div>
+                                        <h4 style="margin: 0; font-size: 15px;">Top STO Antrean Logic</h4>
+                                        <p style="margin: 2px 0 0; font-size: 11px; color: var(--text-secondary);">STO dengan tiket GCU Logic tertinggi</p>
+                                    </div>
+                                </div>
+                                <button class="btn-table-action" onclick="window.switchMonTab('logic')" style="font-size: 11px; padding: 4px 8px;">
+                                    Semua <ion-icon name="arrow-forward-outline"></ion-icon>
+                                </button>
+                            </div>
+                            <div id="monTopLogicList" class="mon-ranking-list">
+                                <!-- Populated dynamically -->
+                            </div>
+                        </div>
+
+                        <!-- Top Korlap Card -->
+                        <div class="card mon-overview-card">
+                            <div class="mon-card-header">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <div class="mon-icon-badge" style="background: rgba(139, 92, 246, 0.2); color: #8b5cf6;">
+                                        <ion-icon name="shield-checkmark"></ion-icon>
+                                    </div>
+                                    <div>
+                                        <h4 style="margin: 0; font-size: 15px;">Top STO Pending Approval</h4>
+                                        <p style="margin: 2px 0 0; font-size: 11px; color: var(--text-secondary);">Area Korlap dengan approval tertunda</p>
+                                    </div>
+                                </div>
+                                <button class="btn-table-action" onclick="window.switchMonTab('korlap')" style="font-size: 11px; padding: 4px 8px;">
+                                    Semua <ion-icon name="arrow-forward-outline"></ion-icon>
+                                </button>
+                            </div>
+                            <div id="monTopKorlapList" class="mon-ranking-list">
+                                <!-- Populated dynamically -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SUB-VIEW 2: TEKNISI BELUM GCU FISIK -->
+                <div class="mon-subview" id="monSubview-teknisi" style="display: none;">
+                    <div class="card dashboard-section">
+                        <div class="dashboard-header" style="flex-wrap: wrap; gap: 12px;">
+                            <div>
+                                <h3 style="margin: 0; font-size: 16px;">Daftar Teknisi Belum General Check Up</h3>
+                                <p class="subtitle" style="margin-top: 3px;">Urutan beban tugas GCU Fisik yang belum diselesaikan teknisi</p>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                                <div class="filter-search-box" style="margin-bottom: 0;">
+                                    <ion-icon name="search-outline"></ion-icon>
+                                    <input type="text" id="monTeknisiSearchInput" placeholder="Cari NIK / Nama / STO..." oninput="window.filterMonTeknisiTable()">
+                                </div>
+                                <div class="mon-filter-chips">
+                                    <button class="mon-chip active" id="monChipAll" onclick="window.setTeknisiFilterChip('ALL')">Semua</button>
+                                    <button class="mon-chip" id="monChipKendala" onclick="window.setTeknisiFilterChip('KENDALA')">⚠️ Kendala Assign</button>
+                                    <button class="mon-chip" id="monChipHigh" onclick="window.setTeknisiFilterChip('HIGH')">🔴 Tiket &ge; 5</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="table-container" style="max-height: 550px;">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 60px;">RANK</th>
+                                        <th>TEKNISI</th>
+                                        <th>STO / AREA DOMINAN</th>
+                                        <th style="text-align: center;">TOTAL TIKET</th>
+                                        <th>BREAKDOWN STATUS</th>
+                                        <th>STATUS BOT TG</th>
+                                        <th style="text-align: center;">AKSI</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="monTeknisiTableBody">
+                                    <!-- Populated dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SUB-VIEW 3: BEBAN GCU LOGIC -->
+                <div class="mon-subview" id="monSubview-logic" style="display: none;">
+                    <div class="card dashboard-section">
+                        <div class="dashboard-header">
+                            <div>
+                                <h3 style="margin: 0; font-size: 16px;">Distribusi Antrean GCU Logic per STO</h3>
+                                <p class="subtitle" style="margin-top: 3px;">Beban tiket logic yang menunggu penanganan Helpdesk</p>
+                            </div>
+                        </div>
+                        <div class="table-container" style="max-height: 550px;">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 60px;">RANK</th>
+                                        <th>STO</th>
+                                        <th>WITEL</th>
+                                        <th style="text-align: center;">TOTAL TIKET LOGIC</th>
+                                        <th>BREAKDOWN KONDISI</th>
+                                        <th>PENUGASAN HELPDESK</th>
+                                        <th style="text-align: center;">AKSI</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="monLogicTableBody">
+                                    <!-- Populated dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SUB-VIEW 4: APPROVAL KORLAP TERTUNDA -->
+                <div class="mon-subview" id="monSubview-korlap" style="display: none;">
+                    <div class="card dashboard-section">
+                        <div class="dashboard-header">
+                            <div>
+                                <h3 style="margin: 0; font-size: 16px;">Antrean Approval Korlap Menumpuk</h3>
+                                <p class="subtitle" style="margin-top: 3px;">Tiket yang sudah diselesaikan dan masih menunggu verifikasi / approve Korlap</p>
+                            </div>
+                        </div>
+                        <div class="table-container" style="max-height: 550px;">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 60px;">RANK</th>
+                                        <th>STO</th>
+                                        <th>WITEL</th>
+                                        <th style="text-align: center;">PENDING APPROVAL</th>
+                                        <th>TIKET TERLAMA MENUNGGU</th>
+                                        <th>TEKNISI TERKAIT</th>
+                                        <th style="text-align: center;">AKSI</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="monKorlapTableBody">
+                                    <!-- Populated dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW: MONITORING GCU TEKNISI (Backlog per Teknisi & Rincian Tiket) -->
+            <div id="view-monitoring-teknisi" style="display: none;">
+                <header class="top-header">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="width: 38px; height: 38px; border-radius: 10px; background: rgba(6, 182, 212, 0.15); border: 1px solid rgba(6, 182, 212, 0.3); display: flex; align-items: center; justify-content: center;">
+                            <ion-icon name="people" style="font-size: 22px; color: #06b6d4;"></ion-icon>
+                        </div>
+                        <div>
+                            <h2 style="margin: 0; font-size: 20px;">Monitoring GCU Teknisi</h2>
+                            <p class="subtitle" style="margin: 2px 0 0 0; font-size: 11.5px; color: var(--text-secondary);">Pantau teknisi yang belum menyelesaikan General Check Up (GCU Fisik) dan rincian tiket tugasnya</p>
+                        </div>
+                    </div>
+                    <div class="header-actions">
+                        <div class="filter-select-group filter-group-witel" style="margin-bottom: 0;">
+                            <label for="monTekWitelFilter">WITEL:</label>
+                            <select id="monTekWitelFilter" onchange="window.onMonTekWitelChange()">
+                                <option value="ALL">Semua Witel</option>
+                            </select>
+                        </div>
+                        <button class="btn-reload" onclick="toggleTheme()">
+                            <ion-icon name="sunny-outline"></ion-icon> Theme
+                        </button>
+                        <button class="btn-reload" onclick="fetchTickets(true)">
+                            <ion-icon name="refresh-outline"></ion-icon> Reload
+                        </button>
+                    </div>
+                </header>
+
+                <!-- KPI Cards -->
+                <div class="summary-cards mon-kpi-grid">
+                    <div class="card summary-card card-fisik">
+                        <div class="card-content" style="width: 100%;">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                <div>
+                                    <h1 id="monTekKpiTotalTiket">0</h1>
+                                    <p><ion-icon name="construct-outline"></ion-icon> TOTAL TIKET BELUM GCU</p>
+                                </div>
+                                <ion-icon name="document-text" style="font-size: 32px; opacity: 0.8;"></ion-icon>
+                            </div>
+                            <div style="margin-top: 10px; font-size: 11.5px; color: rgba(255,255,255,0.9);">
+                                <span>Menumpuk di antrean GCU Fisik teknisi</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card summary-card card-logic">
+                        <div class="card-content" style="width: 100%;">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                <div>
+                                    <h1 id="monTekKpiTotalTeknisi">0</h1>
+                                    <p><ion-icon name="person-outline"></ion-icon> TEKNISI BERBEBAN GCU</p>
+                                </div>
+                                <ion-icon name="people" style="font-size: 32px; opacity: 0.8;"></ion-icon>
+                            </div>
+                            <div style="margin-top: 10px; font-size: 11.5px; color: rgba(255,255,255,0.9);">
+                                <span>Teknisi yang memiliki tugas aktif</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card summary-card card-korlap">
+                        <div class="card-content" style="width: 100%;">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                <div>
+                                    <h1 id="monTekKpiKritis">0</h1>
+                                    <p><ion-icon name="warning-outline"></ion-icon> KONDISI KRITIS (LOS / HIGH RX)</p>
+                                </div>
+                                <ion-icon name="alert-circle" style="font-size: 32px; opacity: 0.8;"></ion-icon>
+                            </div>
+                            <div style="margin-top: 10px; font-size: 11.5px; color: rgba(255,255,255,0.9);">
+                                <span>⚠️ <strong id="monTekKpiKendala">0</strong> Kendala NIK (Belum di DB)</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Main Content Section -->
+                <div class="card dashboard-section">
+                    <div class="dashboard-header" style="flex-wrap: wrap; gap: 12px;">
+                        <div>
+                            <h3 style="margin: 0; font-size: 16px;">Daftar Teknisi Belum Check Up Fisik</h3>
+                            <p class="subtitle" style="margin-top: 3px;">Urutan beban tugas GCU Fisik yang belum diselesaikan. Klik "Lihat Rincian Tiket" untuk membuka detail tugas per teknisi.</p>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                            <div class="filter-search-box" style="margin-bottom: 0;">
+                                <ion-icon name="search-outline"></ion-icon>
+                                <input type="text" id="monTekSearchInput" placeholder="Cari NIK / Nama Teknisi / STO..." oninput="window.filterMonTeknisiViewTable()">
+                            </div>
+                            <div class="mon-filter-chips">
+                                <button class="mon-chip active" id="monTekChipAll" onclick="window.setMonTekChip('ALL')">Semua</button>
+                                <button class="mon-chip" id="monTekChipHigh" onclick="window.setMonTekChip('HIGH')">🔴 Tiket &ge; 5</button>
+                                <button class="mon-chip" id="monTekChipKendala" onclick="window.setMonTekChip('KENDALA')">⚠️ Kendala NIK</button>
+                                <button class="mon-chip" id="monTekChipLos" onclick="window.setMonTekChip('LOS')">🔴 Ada LOS</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="table-container" style="max-height: 600px; overflow-y: auto;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 55px; text-align: center;">RANK</th>
+                                    <th>TEKNISI</th>
+                                    <th>STO / AREA KERJA</th>
+                                    <th style="text-align: center;">TOTAL TIKET GCU</th>
+                                    <th>BREAKDOWN KONDISI</th>
+                                    <th>BOT TELEGRAM</th>
+                                    <th style="text-align: center; width: 240px;">AKSI</th>
+                                </tr>
+                            </thead>
+                            <tbody id="monTekViewTableBody">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW: KONSELING TEKNISI PENYUMBANG GAUL -->
+            <div id="view-konseling-gaul" style="display: none;">
+                <header class="top-header">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="width: 38px; height: 38px; border-radius: 10px; background: rgba(244, 63, 94, 0.15); border: 1px solid rgba(244, 63, 94, 0.3); display: flex; align-items: center; justify-content: center;">
+                            <ion-icon name="flame" style="font-size: 22px; color: #f43f5e;"></ion-icon>
+                        </div>
+                        <div>
+                            <h2 style="margin: 0; font-size: 20px;">Konseling Teknisi Penyumbang GAUL</h2>
+                            <p class="subtitle" style="margin: 2px 0 0 0; font-size: 11.5px; color: var(--text-secondary);">Monitoring &amp; tindak lanjut teknisi dengan repeat trouble / gangguan berulang tertinggi</p>
+                        </div>
+                    </div>
+                    <div class="header-actions">
+                        <div class="filter-select-group filter-group-witel" style="margin-bottom: 0;">
+                            <label for="konselingWitelFilter">WITEL:</label>
+                            <select id="konselingWitelFilter" onchange="window.onKonselingWitelChange()">
+                                <option value="ALL">Semua Witel</option>
+                            </select>
+                        </div>
+                        <button class="btn-reload" onclick="toggleTheme()">
+                            <ion-icon name="sunny-outline"></ion-icon> Theme
+                        </button>
+                        <button class="btn-reload" onclick="fetchTickets(true)">
+                            <ion-icon name="refresh-outline"></ion-icon> Reload
+                        </button>
+                    </div>
+                </header>
+
+                <!-- Top KPI Cards -->
+                <div class="summary-cards mon-kpi-grid">
+                    <div class="card summary-card" style="background: linear-gradient(135deg, #e11d48, #be123c) !important; border: none;">
+                        <div class="card-content" style="width: 100%;">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                <div>
+                                    <h1 id="gaulKpiTotalKasus">0</h1>
+                                    <p><ion-icon name="flame-outline"></ion-icon> TOTAL TIKET GAUL (REPEAT)</p>
+                                </div>
+                                <ion-icon name="flame" style="font-size: 32px; opacity: 0.8;"></ion-icon>
+                            </div>
+                            <div style="margin-top: 10px; font-size: 11.5px; color: rgba(255,255,255,0.9);">
+                                <span>Kasus gangguan berulang di pelanggan</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card summary-card" style="background: linear-gradient(135deg, #f97316, #ea580c) !important; border: none;">
+                        <div class="card-content" style="width: 100%;">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                <div>
+                                    <h1 id="gaulKpiTotalTeknisi">0</h1>
+                                    <p><ion-icon name="people-outline"></ion-icon> TEKNISI TERIDENTIFIKASI</p>
+                                </div>
+                                <ion-icon name="warning" style="font-size: 32px; opacity: 0.8;"></ion-icon>
+                            </div>
+                            <div style="margin-top: 10px; font-size: 11.5px; color: rgba(255,255,255,0.9);">
+                                <span>Menyumbang repeat incident (GAUL/LAPUL)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card summary-card" style="background: linear-gradient(135deg, #10b981, #059669) !important; border: none;">
+                        <div class="card-content" style="width: 100%;">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                <div>
+                                    <h1 id="gaulKpiTotalKonseling">0</h1>
+                                    <p><ion-icon name="clipboard-outline"></ion-icon> SESI KONSELING DICATAT</p>
+                                </div>
+                                <ion-icon name="checkmark-done-circle" style="font-size: 32px; opacity: 0.8;"></ion-icon>
+                            </div>
+                            <div style="margin-top: 10px; font-size: 11.5px; color: rgba(255,255,255,0.9);">
+                                <span>Telah dievaluasi &amp; diarahkan oleh Korlap</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Main Content Section -->
+                <div class="card dashboard-section">
+                    <div class="dashboard-header" style="flex-wrap: wrap; gap: 12px;">
+                        <div>
+                            <h3 style="margin: 0; font-size: 16px;">Ranking Teknisi Penyumbang GAUL</h3>
+                            <p class="subtitle" style="margin-top: 3px;">Prioritas konseling didasarkan pada akumulasi tiket repeat incident (GAUL &amp; LAPUL). Klik "Catat Konseling" untuk log pembinaan.</p>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                            <div class="filter-search-box" style="margin-bottom: 0;">
+                                <ion-icon name="search-outline"></ion-icon>
+                                <input type="text" id="gaulSearchInput" placeholder="Cari NIK / Nama Teknisi / STO..." oninput="window.filterKonselingGaulTable()">
+                            </div>
+                            <div class="mon-filter-chips">
+                                <button class="mon-chip active" id="gaulChipAll" onclick="window.setGaulFilterChip('ALL')">Semua</button>
+                                <button class="mon-chip" id="gaulChipPerlu" onclick="window.setGaulFilterChip('PERLU')">🔴 Perlu Konseling (&ge; 3)</button>
+                                <button class="mon-chip" id="gaulChipDone" onclick="window.setGaulFilterChip('DONE')">🟢 Sudah Konseling</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="table-container" style="max-height: 600px; overflow-y: auto;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 55px; text-align: center;">RANK</th>
+                                    <th>TEKNISI</th>
+                                    <th>STO / AREA DOMINAN</th>
+                                    <th style="text-align: center;">TOTAL TIKET GAUL</th>
+                                    <th style="text-align: center;">REPEAT SCORE</th>
+                                    <th>GEJALA SERING MUNCUL</th>
+                                    <th>STATUS KONSELING</th>
+                                    <th style="text-align: center; width: 240px;">AKSI</th>
+                                </tr>
+                            </thead>
+                            <tbody id="gaulTableBody">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
         </main>
     </div>
 
-    <script src="app.js?v=3.0"></script>
+    <!-- MODAL: CATAT KONSELING GAUL -->
+    <div id="modalKonselingGaul" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(4px); z-index: 99999; align-items: center; justify-content: center; padding: 20px;">
+        <div class="card" style="width: 100%; max-width: 560px; padding: 26px; border-radius: 16px; background: var(--bg-surface); border: 1px solid var(--border); box-shadow: 0 15px 40px rgba(0,0,0,0.5); max-height: 90vh; overflow-y: auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 12px;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 36px; height: 36px; border-radius: 8px; background: rgba(244, 63, 94, 0.15); display: flex; align-items: center; justify-content: center;">
+                        <ion-icon name="clipboard" style="font-size: 20px; color: #f43f5e;"></ion-icon>
+                    </div>
+                    <div>
+                        <h3 style="margin: 0; font-size: 16px; color: var(--text-primary);">Form Konseling Teknisi GAUL</h3>
+                        <p style="margin: 2px 0 0; font-size: 11px; color: var(--text-secondary);">Catat sesi evaluasi dan komitmen perbaikan kualitas kerja</p>
+                    </div>
+                </div>
+                <button type="button" onclick="window.closeKonselingModal()" style="background: none; border: none; color: var(--text-secondary); font-size: 24px; cursor: pointer; padding: 4px; line-height: 1;">&times;</button>
+            </div>
+
+            <form id="formKonselingGaul" onsubmit="window.saveKonselingLog(event)">
+                <input type="hidden" id="konselingNik">
+                <input type="hidden" id="konselingNama">
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
+                    <div>
+                        <label style="display: block; font-size: 11px; font-weight: 700; color: var(--text-secondary); margin-bottom: 5px; text-transform: uppercase;">Teknisi</label>
+                        <div id="dispKonselingTeknisi" style="padding: 10px 12px; border-radius: 8px; background: rgba(255,255,255,0.05); border: 1px solid var(--border); font-size: 13px; font-weight: 700; color: var(--text-primary);">-</div>
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 11px; font-weight: 700; color: var(--text-secondary); margin-bottom: 5px; text-transform: uppercase;">Total Kasus GAUL</label>
+                        <div id="dispKonselingTotalGaul" style="padding: 10px 12px; border-radius: 8px; background: rgba(244, 63, 94, 0.1); border: 1px solid rgba(244, 63, 94, 0.3); font-size: 13px; font-weight: 800; color: #f43f5e;">-</div>
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
+                    <div>
+                        <label for="konselingKonselor" style="display: block; font-size: 11px; font-weight: 700; color: var(--text-secondary); margin-bottom: 5px; text-transform: uppercase;">Konselor / Korlap</label>
+                        <input type="text" id="konselingKonselor" required style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-surface); color: var(--text-primary); font-size: 13px; box-sizing: border-box;">
+                    </div>
+                    <div>
+                        <label for="konselingTanggal" style="display: block; font-size: 11px; font-weight: 700; color: var(--text-secondary); margin-bottom: 5px; text-transform: uppercase;">Tanggal Konseling</label>
+                        <input type="date" id="konselingTanggal" required style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-surface); color: var(--text-primary); font-size: 13px; box-sizing: border-box;">
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 14px;">
+                    <label for="konselingKategori" style="display: block; font-size: 11px; font-weight: 700; color: var(--text-secondary); margin-bottom: 5px; text-transform: uppercase;">Fokus Akar Masalah</label>
+                    <select id="konselingKategori" required style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-surface); color: var(--text-primary); font-size: 13px; box-sizing: border-box;">
+                        <option value="Splicing & Kerapian Sambungan">Splicing &amp; Kerapian Sambungan (Redaman tidak stabil)</option>
+                        <option value="Patchcord & Bending Dropcore">Patchcord Terjepit / Bending Dropcore di rumah pelanggan</option>
+                        <option value="Konektor Kotor / Rusak">Konektor Adaptor ODP/Roset Kotor atau Rusak</option>
+                        <option value="Konfigurasi ONT / Settingan Logic">Settingan Port / Konfigurasi ONT salah</option>
+                        <option value="Kepatuhan SOP GCU">Kurang Teliti / Tidak Mengukur OPM sebelum Closing</option>
+                        <option value="Lainnya">Faktor Eksternal / Kabel Korosi / Lainnya</option>
+                    </select>
+                </div>
+
+                <div style="margin-bottom: 14px;">
+                    <label for="konselingCatatan" style="display: block; font-size: 11px; font-weight: 700; color: var(--text-secondary); margin-bottom: 5px; text-transform: uppercase;">Catatan Arahan &amp; Komitmen Teknisi</label>
+                    <textarea id="konselingCatatan" rows="3" required placeholder="Contoh: Teknisi berkomitmen selalu membersihkan ferrule konektor dengan alkohol pad dan wajib ukur redaman OPM sebelum lapor selesai..." style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-surface); color: var(--text-primary); font-size: 13px; box-sizing: border-box; resize: vertical;"></textarea>
+                </div>
+
+                <div style="margin-bottom: 20px;">
+                    <label for="konselingStatus" style="display: block; font-size: 11px; font-weight: 700; color: var(--text-secondary); margin-bottom: 5px; text-transform: uppercase;">Status Tindak Lanjut</label>
+                    <select id="konselingStatus" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-surface); color: var(--text-primary); font-size: 13px; box-sizing: border-box;">
+                        <option value="SELESAI">🟢 Selesai Konseling (Komitmen Disepakati)</option>
+                        <option value="MONITORING">🟡 Dalam Pantauan Ulang (1 Minggu)</option>
+                        <option value="DIJADWALKAN">🔵 Jadwal Konseling Ulang</option>
+                    </select>
+                </div>
+
+                <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                    <button type="button" onclick="window.closeKonselingModal()" style="padding: 10px 16px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--text-secondary); font-size: 13px; font-weight: 600; cursor: pointer;">Batal</button>
+                    <button type="submit" style="padding: 10px 20px; border-radius: 8px; border: none; background: #f43f5e; color: white; font-size: 13px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 12px rgba(244, 63, 94, 0.3);">Simpan Konseling</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="app.js?v=3.5"></script>
     <script>
         // Mobile sidebar toggle
         function toggleSidebar() {

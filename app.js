@@ -51,12 +51,15 @@ const ticketTableBody = document.getElementById('ticketTableBody');
 
 const viewDashboard = document.getElementById('view-dashboard');
 const viewWorkflow = document.getElementById('view-workflow');
+const viewMonitoring = document.getElementById('view-monitoring');
+const viewMonitoringTeknisi = document.getElementById('view-monitoring-teknisi');
+const viewKonselingGaul = document.getElementById('view-konseling-gaul');
 const workflowContainer = document.getElementById('workflowContainer');
 const workflowPageTitle = document.getElementById('workflowPageTitle');
 const workflowSubtitle = document.getElementById('workflowSubtitle');
 const dispActiveTicketId = document.getElementById('activeTicketId');
 const dashboardTitle = document.getElementById('dashboardTitle');
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwgkZAduwo1EKvp-MZgE9c0Auhfpz7aiNEi5TSer0gqHJDMjUvTcxJL3FpFfKWece2Z/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzIbDSPLfWeZVLchBcW-1UV5K_wIsWf2yHXbm8Ip0RHEbkLMaedw3saxWA10oNzaz2G/exec';
 
 // === FAST CACHING SYSTEM (STALE-WHILE-REVALIDATE) ===
 const CACHE_KEYS = {
@@ -676,6 +679,10 @@ function processData(rows, isBackground = false) {
     }
     let serviceTypeIdx = headers.findIndex(h => h === "SERVICE TYPE" || h === "KODE PRODUK" || (h.includes("SERVICE") && !h.includes("NO") && !h.includes("NUMBER") && !h.includes("ID")));
     let ticketStatusIdx = headers.findIndex(h => h === "STATUS" || h === "TICKET STATUS" || (h.includes("STATUS") && !h.includes("ALARM") && !h.includes("GUARANTE") && !h.includes("DATE") && !h.includes("LINK") && !h.includes("INFO")));
+    let gaulIdx = headers.findIndex(h => h === "GAUL" || h.includes("GAUL") || h === "GANGGUAN ULANG");
+    let lapulIdx = headers.findIndex(h => h === "LAPUL" || h.includes("LAPUL") || h === "LAPORAN ULANG");
+    let symptomIdx = headers.findIndex(h => h === "SYMPTOM" || h.includes("SYMPTOM") || h === "SUMMARY" || h.includes("SUMMARY"));
+    let solutionIdx = headers.findIndex(h => h === "SOLUTION" || h.includes("SOLUTION"));
 
     let photoColumns = {};
     headers.forEach((h, idx) => {
@@ -949,6 +956,30 @@ function processData(rows, isBackground = false) {
                 }
             }
 
+            let gaul = 0;
+            if (gaulIdx !== -1 && row[gaulIdx]) {
+                let gNum = parseInt(row[gaulIdx]);
+                if (!isNaN(gNum)) gaul = gNum;
+                else if (row[gaulIdx].toString().trim() && row[gaulIdx].toString().trim() !== "0") gaul = 1;
+            }
+
+            let lapul = 0;
+            if (lapulIdx !== -1 && row[lapulIdx]) {
+                let lNum = parseInt(row[lapulIdx]);
+                if (!isNaN(lNum)) lapul = lNum;
+                else if (row[lapulIdx].toString().trim() && row[lapulIdx].toString().trim() !== "0") lapul = 1;
+            }
+
+            let symptom = "-";
+            if (symptomIdx !== -1 && row[symptomIdx]) {
+                symptom = row[symptomIdx].toString().trim() || "-";
+            }
+
+            let solution = "-";
+            if (solutionIdx !== -1 && row[solutionIdx]) {
+                solution = row[solutionIdx].toString().trim() || "-";
+            }
+
             parsedTickets.push({
                 incident: ticketId,
                 serviceNumber: sNum !== "-" ? sNum : "Unknown",
@@ -967,7 +998,11 @@ function processData(rows, isBackground = false) {
                 evFisik: evFisik,
                 helpdeskAssignee: helpdeskAssignee,
                 photos: photos,
-                statusDate: statusDate
+                statusDate: statusDate,
+                gaul: gaul,
+                lapul: lapul,
+                symptom: symptom,
+                solution: solution
             });
         }
     }
@@ -985,8 +1020,14 @@ function updateDashboardSummary(preserveFilters = false) {
     if (countPending) countPending.innerText = state.tickets.filter(t => t.category === 'PENDING').length;
     countCompleted.innerText = state.tickets.filter(t => t.category === 'COMPLETED').length;
 
-    // Jika preserveFilters aktif (background sync), perbarui filteredTickets tanpa mereset STO/Witel/Pencarian aktif
-    if (preserveFilters && state.activeTicketId == null) {
+    // Jika sedang di view monitoring, refresh monitoring dashboard
+    if (state.activeView === 'monitoring') {
+        window.renderMonitoringDashboard();
+    } else if (state.activeView === 'monitoring-teknisi') {
+        window.renderMonitoringTeknisiDashboard();
+    } else if (state.activeView === 'konseling-gaul') {
+        window.renderKonselingGaulDashboard();
+    } else if (preserveFilters && state.activeTicketId == null) {
         state.filteredTickets = state.tickets.filter(t => t.category === state.activeFilter);
         window.populateStoMultiSelect();
         renderTable();
@@ -997,12 +1038,18 @@ function updateDashboardSummary(preserveFilters = false) {
 
 // NAVIGATION
 window.showDashboard = function (filterStatus) {
+    state.activeView = 'dashboard';
     state.activeFilter = filterStatus;
     dashboardTitle.innerText = `Dashboard - ${filterStatus}`;
 
     // UI Toggle
     viewDashboard.style.display = 'block';
     viewWorkflow.style.display = 'none';
+    if (viewMonitoring) viewMonitoring.style.display = 'none';
+    const vMonTek = document.getElementById('view-monitoring-teknisi');
+    if (vMonTek) vMonTek.style.display = 'none';
+    const vGaul = document.getElementById('view-konseling-gaul');
+    if (vGaul) vGaul.style.display = 'none';
 
     // Sidebar Active state
     document.querySelectorAll('.nav-links .nav-item').forEach(el => el.classList.remove('active'));
@@ -1042,11 +1089,17 @@ window.showDashboard = function (filterStatus) {
 };
 
 window.showWorkflow = function (role) {
+    state.activeView = 'workflow';
     state.role = role;
 
     // UI Toggle
     viewDashboard.style.display = 'none';
     viewWorkflow.style.display = 'block';
+    if (viewMonitoring) viewMonitoring.style.display = 'none';
+    const vMonTek = document.getElementById('view-monitoring-teknisi');
+    if (vMonTek) vMonTek.style.display = 'none';
+    const vGaul = document.getElementById('view-konseling-gaul');
+    if (vGaul) vGaul.style.display = 'none';
 
     // Sidebar Active state
     document.querySelectorAll('.nav-links .nav-item').forEach(el => el.classList.remove('active'));
@@ -3651,6 +3704,1552 @@ window.pickUpTicket = function(ticketId) {
         document.body.appendChild(toast);
         setTimeout(() => toast.remove(), 3000);
     }).catch(console.error);
+};
+
+// ==========================================
+// MONITORING KINERJA & BACKLOG SUBSYSTEM
+// ==========================================
+window.monActiveTab = 'overview';
+window.monTeknisiChipFilter = 'ALL';
+window.monWitelFilterVal = 'ALL';
+window._monCachedTeknisiList = [];
+window._monCachedLogicList = [];
+window._monCachedKorlapList = [];
+
+window.showMonitoringView = function () {
+    state.activeView = 'monitoring';
+
+    if (viewDashboard) viewDashboard.style.display = 'none';
+    if (viewWorkflow) viewWorkflow.style.display = 'none';
+    const viewMon = document.getElementById('view-monitoring');
+    if (viewMon) viewMon.style.display = 'block';
+    const vMonTek = document.getElementById('view-monitoring-teknisi');
+    if (vMonTek) vMonTek.style.display = 'none';
+    const vGaul = document.getElementById('view-konseling-gaul');
+    if (vGaul) vGaul.style.display = 'none';
+
+    // Sidebar Active State
+    document.querySelectorAll('.nav-links .nav-item').forEach(el => el.classList.remove('active'));
+    const menuMon = document.getElementById('menuMonitoring');
+    if (menuMon) menuMon.classList.add('active');
+
+    window.renderMonitoringDashboard();
+};
+
+window.switchMonTab = function (tabName) {
+    window.monActiveTab = tabName;
+
+    // Update Tab Buttons
+    document.querySelectorAll('.mon-tab-btn').forEach(btn => btn.classList.remove('active'));
+    const targetBtn = document.getElementById(`monTabBtn-${tabName}`);
+    if (targetBtn) targetBtn.classList.add('active');
+
+    // Update Subviews
+    document.querySelectorAll('.mon-subview').forEach(view => view.style.display = 'none');
+    const targetView = document.getElementById(`monSubview-${tabName}`);
+    if (targetView) targetView.style.display = 'block';
+};
+
+window.onMonWitelChange = function () {
+    const sel = document.getElementById('monWitelFilter');
+    window.monWitelFilterVal = sel ? sel.value : 'ALL';
+    window.renderMonitoringDashboard();
+};
+
+window.setTeknisiFilterChip = function (chip) {
+    window.monTeknisiChipFilter = chip;
+    document.querySelectorAll('.mon-chip').forEach(c => c.classList.remove('active'));
+    if (chip === 'ALL') {
+        const c = document.getElementById('monChipAll');
+        if (c) c.classList.add('active');
+    } else if (chip === 'KENDALA') {
+        const c = document.getElementById('monChipKendala');
+        if (c) c.classList.add('active');
+    } else if (chip === 'HIGH') {
+        const c = document.getElementById('monChipHigh');
+        if (c) c.classList.add('active');
+    }
+    window.filterMonTeknisiTable();
+};
+
+window.renderMonitoringDashboard = function () {
+    const allTickets = state.tickets || [];
+
+    // Populate WITEL Filter options in Monitoring header
+    const monWitelEl = document.getElementById('monWitelFilter');
+    if (monWitelEl) {
+        let uniqueWITELs = [...new Set(allTickets.map(t => t.witel).filter(w => w && w !== "-"))];
+        uniqueWITELs.sort();
+        let curVal = monWitelEl.value || window.monWitelFilterVal || 'ALL';
+        monWitelEl.innerHTML = '<option value="ALL">Semua Witel</option>';
+        uniqueWITELs.forEach(w => {
+            let opt = document.createElement('option');
+            opt.value = w;
+            opt.innerText = w;
+            if (w === curVal) opt.selected = true;
+            monWitelEl.appendChild(opt);
+        });
+        if (window.monWitelFilterVal && window.monWitelFilterVal !== 'ALL') {
+            monWitelEl.value = window.monWitelFilterVal;
+        }
+    }
+
+    // Filter tickets according to selected Witel
+    let tickets = allTickets;
+    if (window.monWitelFilterVal && window.monWitelFilterVal !== 'ALL') {
+        tickets = tickets.filter(t => t.witel === window.monWitelFilterVal);
+    }
+
+    // 1. ==================== GCU FISIK AGGREGATION (TEKNISI) ====================
+    const fisikTickets = tickets.filter(t => t.category === 'GCU FISIK');
+    const tekMap = new Map();
+    let totalKendalaFisik = 0;
+
+    fisikTickets.forEach(t => {
+        let rawNik = (t.technician && t.technician !== "-" && t.technician !== "Unknown" && t.technician !== "null")
+            ? t.technician.toString().trim()
+            : "";
+        let isValid = rawNik ? window.isTeknisiValidInDb(rawNik) : false;
+        if (!isValid) totalKendalaFisik++;
+
+        let groupKey = rawNik || "TANPA_NIK";
+        if (!tekMap.has(groupKey)) {
+            let tInfo = rawNik ? window.getTeknisiInfo(rawNik) : null;
+            tekMap.set(groupKey, {
+                nik: rawNik || "-",
+                nama: tInfo ? tInfo.nama : (rawNik ? (isValid ? rawNik : `⚠️ ${rawNik}`) : "⚠️ Belum Di-assign"),
+                teleId: tInfo && tInfo.teleId ? tInfo.teleId : "-",
+                isValidInDb: isValid,
+                total: 0,
+                stos: {},
+                witels: new Set(),
+                losCount: 0,
+                highRxCount: 0,
+                normalCount: 0,
+                tickets: []
+            });
+        }
+
+        let tekItem = tekMap.get(groupKey);
+        tekItem.total++;
+        tekItem.tickets.push(t);
+
+        if (t.sto && t.sto !== '-') {
+            tekItem.stos[t.sto] = (tekItem.stos[t.sto] || 0) + 1;
+        }
+        if (t.witel && t.witel !== '-') {
+            tekItem.witels.add(t.witel);
+        }
+
+        let rxNum = parseFloat(t.rx);
+        let st = (t.status || '').toUpperCase();
+        if (st.includes('LOS') || (t.rx && t.rx.toUpperCase().includes('LOS'))) {
+            tekItem.losCount++;
+        } else if (!isNaN(rxNum) && rxNum < -27) {
+            tekItem.highRxCount++;
+        } else {
+            tekItem.normalCount++;
+        }
+    });
+
+    let teknisiRankList = Array.from(tekMap.values());
+    teknisiRankList.sort((a, b) => b.total - a.total);
+    window._monCachedTeknisiList = teknisiRankList;
+
+    // 2. ==================== GCU LOGIC AGGREGATION ====================
+    const logicTickets = tickets.filter(t => t.category === 'GCU LOGIC');
+    const logicStoMap = new Map();
+    let totalLosLogic = 0;
+
+    logicTickets.forEach(t => {
+        let stoKey = (t.sto && t.sto !== '-') ? t.sto.toString().trim().toUpperCase() : 'UNKNOWN';
+        if (!logicStoMap.has(stoKey)) {
+            logicStoMap.set(stoKey, {
+                sto: stoKey,
+                witel: t.witel || '-',
+                total: 0,
+                losCount: 0,
+                highRxCount: 0,
+                normalCount: 0,
+                assignedCount: 0,
+                unassignedCount: 0,
+                tickets: []
+            });
+        }
+
+        let stoItem = logicStoMap.get(stoKey);
+        stoItem.total++;
+        stoItem.tickets.push(t);
+
+        let rxNum = parseFloat(t.rx);
+        let st = (t.status || '').toUpperCase();
+        if (st.includes('LOS') || (t.rx && t.rx.toUpperCase().includes('LOS'))) {
+            stoItem.losCount++;
+            totalLosLogic++;
+        } else if (!isNaN(rxNum) && rxNum < -27) {
+            stoItem.highRxCount++;
+        } else {
+            stoItem.normalCount++;
+        }
+
+        if (t.helpdeskAssignee && t.helpdeskAssignee !== '-') {
+            stoItem.assignedCount++;
+        } else {
+            stoItem.unassignedCount++;
+        }
+    });
+
+    let logicRankList = Array.from(logicStoMap.values());
+    logicRankList.sort((a, b) => b.total - a.total);
+    window._monCachedLogicList = logicRankList;
+
+    // 3. ==================== APPROVAL KORLAP AGGREGATION ====================
+    const korlapTickets = tickets.filter(t => t.category === 'APPROVAL KORLAP');
+    const korlapStoMap = new Map();
+    let oldestOverallApprovalDate = null;
+
+    korlapTickets.forEach(t => {
+        let stoKey = (t.sto && t.sto !== '-') ? t.sto.toString().trim().toUpperCase() : 'UNKNOWN';
+        if (!korlapStoMap.has(stoKey)) {
+            korlapStoMap.set(stoKey, {
+                sto: stoKey,
+                witel: t.witel || '-',
+                total: 0,
+                oldestDateStr: null,
+                oldestTimestamp: Infinity,
+                technicians: new Set(),
+                tickets: []
+            });
+        }
+
+        let kItem = korlapStoMap.get(stoKey);
+        kItem.total++;
+        kItem.tickets.push(t);
+
+        if (t.technician && t.technician !== '-') {
+            let tData = window.getTeknisiInfo(t.technician);
+            kItem.technicians.add(tData ? tData.nama : t.technician);
+        }
+
+        if (t.statusDate && t.statusDate !== '-') {
+            let ts = new Date(t.statusDate).getTime();
+            if (!isNaN(ts) && ts < kItem.oldestTimestamp) {
+                kItem.oldestTimestamp = ts;
+                kItem.oldestDateStr = t.statusDate;
+            }
+            if (!isNaN(ts) && (!oldestOverallApprovalDate || ts < oldestOverallApprovalDate.ts)) {
+                oldestOverallApprovalDate = { ts: ts, str: t.statusDate };
+            }
+        }
+    });
+
+    let korlapRankList = Array.from(korlapStoMap.values());
+    korlapRankList.sort((a, b) => b.total - a.total);
+    window._monCachedKorlapList = korlapRankList;
+
+    // 4. ==================== UPDATE KPI CARDS & BADGES ====================
+    const elFisikCount = document.getElementById('monKpiFisikCount');
+    if (elFisikCount) elFisikCount.innerText = fisikTickets.length;
+    const elTekCount = document.getElementById('monKpiTeknisiCount');
+    if (elTekCount) elTekCount.innerText = teknisiRankList.filter(t => t.nik !== '-').length;
+    const elKendalaCount = document.getElementById('monKpiKendalaAssignCount');
+    if (elKendalaCount) elKendalaCount.innerText = totalKendalaFisik;
+
+    const elLogicCount = document.getElementById('monKpiLogicCount');
+    if (elLogicCount) elLogicCount.innerText = logicTickets.length;
+    const elStoLogicCount = document.getElementById('monKpiStoLogicCount');
+    if (elStoLogicCount) elStoLogicCount.innerText = logicRankList.length;
+    const elLosLogicCount = document.getElementById('monKpiLosLogicCount');
+    if (elLosLogicCount) elLosLogicCount.innerText = totalLosLogic;
+
+    const elApprovalCount = document.getElementById('monKpiApprovalCount');
+    if (elApprovalCount) elApprovalCount.innerText = korlapTickets.length;
+    const elStoKorlapCount = document.getElementById('monKpiStoKorlapCount');
+    if (elStoKorlapCount) elStoKorlapCount.innerText = korlapRankList.length;
+
+    let oldestApprovalText = '-';
+    if (oldestOverallApprovalDate) {
+        let diffMs = Date.now() - oldestOverallApprovalDate.ts;
+        let diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        let diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        if (diffDays > 0) oldestApprovalText = `${diffDays} hari lalu`;
+        else if (diffHours > 0) oldestApprovalText = `${diffHours} jam lalu`;
+        else oldestApprovalText = `Hari ini`;
+    }
+    const elOldest = document.getElementById('monKpiOldestApproval');
+    if (elOldest) elOldest.innerText = oldestApprovalText;
+
+    const badgeTek = document.getElementById('monTabBadgeTeknisi');
+    if (badgeTek) badgeTek.innerText = teknisiRankList.length;
+    const badgeLog = document.getElementById('monTabBadgeLogic');
+    if (badgeLog) badgeLog.innerText = logicRankList.length;
+    const badgeKor = document.getElementById('monTabBadgeKorlap');
+    if (badgeKor) badgeKor.innerText = korlapRankList.length;
+
+    // 5. ==================== RENDER OVERVIEW TOP 5 ====================
+    renderOverviewTop5(teknisiRankList, logicRankList, korlapRankList);
+
+    // 6. ==================== RENDER TAB TABLES ====================
+    window.filterMonTeknisiTable();
+    renderLogicTable(logicRankList);
+    renderKorlapTable(korlapRankList);
+};
+
+function renderOverviewTop5(teknisiList, logicList, korlapList) {
+    // 1. Top 5 Teknisi
+    const topTekContainer = document.getElementById('monTopTeknisiList');
+    if (topTekContainer) {
+        if (!teknisiList || teknisiList.length === 0) {
+            topTekContainer.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 20px; font-size: 13px;">Tidak ada antrean GCU Fisik aktif 🎉</div>';
+        } else {
+            let html = '';
+            const top5Tek = teknisiList.slice(0, 5);
+            top5Tek.forEach((item, idx) => {
+                const rankClass = idx === 0 ? 'rank-1' : (idx === 1 ? 'rank-2' : (idx === 2 ? 'rank-3' : 'rank-other'));
+                const stoSummary = Object.keys(item.stos).slice(0, 2).map(s => `${s} (${item.stos[s]})`).join(', ') || '-';
+                const isWarning = !item.isValidInDb;
+
+                html += `
+                    <div class="mon-rank-item">
+                        <div style="display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1;">
+                            <div class="mon-rank-num ${rankClass}">${idx + 1}</div>
+                            <div style="min-width: 0; flex: 1;">
+                                <div style="font-weight: 700; font-size: 13px; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                    ${item.nama}
+                                </div>
+                                <div style="font-size: 11.5px; color: var(--text-secondary); display: flex; gap: 8px; align-items: center; margin-top: 2px;">
+                                    <span>NIK: <strong>${item.nik}</strong></span>
+                                    <span>•</span>
+                                    <span>STO: ${stoSummary}</span>
+                                    ${isWarning ? '<span style="color: #f59e0b; font-weight: 700; font-size: 10.5px;">⚠️ Belum di DB</span>' : ''}
+                                </div>
+                            </div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <div style="text-align: right;">
+                                <div style="font-size: 16px; font-weight: 800; color: #ef4444; line-height: 1;">${item.total}</div>
+                                <div style="font-size: 10px; color: var(--text-secondary); text-transform: uppercase;">Tiket</div>
+                            </div>
+                            <button class="btn-table-action" onclick="window.jumpToTeknisiFisik('${item.nik}')" title="Lihat ${item.total} tiket teknisi ini di GCU Fisik" style="padding: 5px 9px;">
+                                <ion-icon name="search-outline"></ion-icon>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+            topTekContainer.innerHTML = html;
+        }
+    }
+
+    // 2. Top 5 GCU Logic
+    const topLogicContainer = document.getElementById('monTopLogicList');
+    if (topLogicContainer) {
+        if (!logicList || logicList.length === 0) {
+            topLogicContainer.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 20px; font-size: 13px;">Tidak ada tiket di antrean GCU Logic 🎉</div>';
+        } else {
+            let html = '';
+            const top5Logic = logicList.slice(0, 5);
+            top5Logic.forEach((item, idx) => {
+                const rankClass = idx === 0 ? 'rank-1' : (idx === 1 ? 'rank-2' : (idx === 2 ? 'rank-3' : 'rank-other'));
+                html += `
+                    <div class="mon-rank-item">
+                        <div style="display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1;">
+                            <div class="mon-rank-num ${rankClass}">${idx + 1}</div>
+                            <div style="min-width: 0; flex: 1;">
+                                <div style="font-weight: 800; font-size: 14px; color: #3b82f6;">
+                                    STO ${item.sto}
+                                </div>
+                                <div style="font-size: 11.5px; color: var(--text-secondary); margin-top: 2px;">
+                                    Witel: ${item.witel} • <span style="color: #ef4444;">${item.losCount} LOS</span> / <span style="color: #f59e0b;">${item.highRxCount} Redaman</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <div style="text-align: right;">
+                                <div style="font-size: 16px; font-weight: 800; color: #3b82f6; line-height: 1;">${item.total}</div>
+                                <div style="font-size: 10px; color: var(--text-secondary); text-transform: uppercase;">Tiket</div>
+                            </div>
+                            <button class="btn-table-action" onclick="window.jumpToGcuLogicSto('${item.sto}')" title="Buka antrean STO ${item.sto} di GCU Logic" style="padding: 5px 9px;">
+                                <ion-icon name="open-outline"></ion-icon>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+            topLogicContainer.innerHTML = html;
+        }
+    }
+
+    // 3. Top 5 Approval Korlap
+    const topKorlapContainer = document.getElementById('monTopKorlapList');
+    if (topKorlapContainer) {
+        if (!korlapList || korlapList.length === 0) {
+            topKorlapContainer.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 20px; font-size: 13px;">Semua tiket telah di-approve Korlap 🎉</div>';
+        } else {
+            let html = '';
+            const top5Korlap = korlapList.slice(0, 5);
+            top5Korlap.forEach((item, idx) => {
+                const rankClass = idx === 0 ? 'rank-1' : (idx === 1 ? 'rank-2' : (idx === 2 ? 'rank-3' : 'rank-other'));
+                let oldestStr = '-';
+                if (item.oldestTimestamp && item.oldestTimestamp !== Infinity) {
+                    let diffMs = Date.now() - item.oldestTimestamp;
+                    let diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                    let diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                    if (diffDays > 0) oldestStr = `${diffDays} hari lalu`;
+                    else if (diffHours > 0) oldestStr = `${diffHours} jam lalu`;
+                    else oldestStr = `Hari ini`;
+                }
+
+                html += `
+                    <div class="mon-rank-item">
+                        <div style="display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1;">
+                            <div class="mon-rank-num ${rankClass}">${idx + 1}</div>
+                            <div style="min-width: 0; flex: 1;">
+                                <div style="font-weight: 800; font-size: 14px; color: #8b5cf6;">
+                                    STO ${item.sto}
+                                </div>
+                                <div style="font-size: 11.5px; color: var(--text-secondary); margin-top: 2px;">
+                                    Witel: ${item.witel} • Terlama: <strong>${oldestStr}</strong>
+                                </div>
+                            </div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <div style="text-align: right;">
+                                <div style="font-size: 16px; font-weight: 800; color: #8b5cf6; line-height: 1;">${item.total}</div>
+                                <div style="font-size: 10px; color: var(--text-secondary); text-transform: uppercase;">Pending</div>
+                            </div>
+                            <button class="btn-table-action" onclick="window.jumpToApprovalSto('${item.sto}')" title="Buka Approval untuk STO ${item.sto}" style="padding: 5px 9px;">
+                                <ion-icon name="shield-checkmark-outline"></ion-icon>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+            topKorlapContainer.innerHTML = html;
+        }
+    }
+}
+
+window.filterMonTeknisiTable = function () {
+    const tbody = document.getElementById('monTeknisiTableBody');
+    if (!tbody) return;
+
+    const searchInput = document.getElementById('monTeknisiSearchInput');
+    const query = searchInput ? searchInput.value.trim().toUpperCase() : '';
+    const chip = window.monTeknisiChipFilter || 'ALL';
+
+    let list = window._monCachedTeknisiList || [];
+
+    // Filter Chip
+    if (chip === 'KENDALA') {
+        list = list.filter(item => !item.isValidInDb || item.nik === '-');
+    } else if (chip === 'HIGH') {
+        list = list.filter(item => item.total >= 5);
+    }
+
+    // Filter Search Query
+    if (query) {
+        list = list.filter(item => {
+            const matchNik = item.nik && item.nik.toUpperCase().includes(query);
+            const matchNama = item.nama && item.nama.toUpperCase().includes(query);
+            const matchSto = Object.keys(item.stos || {}).some(s => s.toUpperCase().includes(query));
+            return matchNik || matchNama || matchSto;
+        });
+    }
+
+    if (list.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 25px; color: var(--text-secondary);">Tidak ada data teknisi yang sesuai filter.</td></tr>`;
+        return;
+    }
+
+    let html = '';
+    list.forEach((item, idx) => {
+        const stoStr = Object.keys(item.stos).map(s => `<strong>${s}</strong> (${item.stos[s]})`).join(', ') || '-';
+        const rankClass = idx === 0 ? 'rank-1' : (idx === 1 ? 'rank-2' : (idx === 2 ? 'rank-3' : 'rank-other'));
+        
+        let dbStatusBadge = '';
+        if (item.nik === '-') {
+            dbStatusBadge = `<span style="font-size: 11px; padding: 2px 7px; border-radius: 4px; background: #fee2e2; color: #991b1b; font-weight: 700;">⚠️ Tanpa NIK</span>`;
+        } else if (!item.isValidInDb) {
+            dbStatusBadge = `<span style="font-size: 11px; padding: 2px 7px; border-radius: 4px; background: #fef3c7; color: #b45309; font-weight: 700;">⚠️ Kendala Assign</span>`;
+        } else {
+            dbStatusBadge = `<span style="font-size: 11px; padding: 2px 7px; border-radius: 4px; background: #dcfce7; color: #166534; font-weight: 700;">✓ Terdaftar DB</span>`;
+        }
+
+        let tgStatusBadge = '';
+        if (item.teleId && item.teleId !== '-') {
+            tgStatusBadge = `<span style="font-size: 11.5px; color: #0284c7; display: flex; align-items: center; gap: 4px;"><ion-icon name="paper-plane-outline"></ion-icon> <code>${item.teleId}</code></span>`;
+        } else {
+            tgStatusBadge = `<span style="font-size: 11px; color: var(--text-secondary);">Belum /start</span>`;
+        }
+
+        html += `
+            <tr>
+                <td style="text-align: center;">
+                    <div class="mon-rank-num ${rankClass}" style="margin: 0 auto;">${idx + 1}</div>
+                </td>
+                <td>
+                    <div style="font-weight: 700; color: var(--text-primary);">${item.nama}</div>
+                    <div style="font-size: 11.5px; color: var(--text-secondary); margin-top: 2px; display: flex; align-items: center; gap: 8px;">
+                        <span>NIK: <code>${item.nik}</code></span>
+                        ${dbStatusBadge}
+                    </div>
+                </td>
+                <td>
+                    <div style="font-size: 12.5px;">${stoStr}</div>
+                </td>
+                <td style="text-align: center;">
+                    <span style="display: inline-block; padding: 4px 10px; border-radius: 12px; background: rgba(239, 68, 68, 0.15); color: #ef4444; font-weight: 800; font-size: 13px;">
+                        ${item.total} Tiket
+                    </span>
+                </td>
+                <td>
+                    <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                        ${item.losCount > 0 ? `<span style="font-size: 11px; padding: 2px 6px; border-radius: 4px; background: #fee2e2; color: #ef4444; font-weight: 700;">🔴 ${item.losCount} LOS</span>` : ''}
+                        ${item.highRxCount > 0 ? `<span style="font-size: 11px; padding: 2px 6px; border-radius: 4px; background: #fef3c7; color: #d97706; font-weight: 700;">🟡 ${item.highRxCount} &lt; -27 dBm</span>` : ''}
+                        ${item.normalCount > 0 ? `<span style="font-size: 11px; padding: 2px 6px; border-radius: 4px; background: #dcfce7; color: #16a34a; font-weight: 700;">🟢 ${item.normalCount} OK</span>` : ''}
+                    </div>
+                </td>
+                <td>${tgStatusBadge}</td>
+                <td style="text-align: center;">
+                    <button class="btn-table-action" onclick="window.jumpToTeknisiFisik('${item.nik}')" title="Filter tiket GCU Fisik teknisi ini" style="white-space: nowrap;">
+                        <ion-icon name="search-outline"></ion-icon> Lihat Tiket
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+    tbody.innerHTML = html;
+};
+
+function renderLogicTable(logicList) {
+    const tbody = document.getElementById('monLogicTableBody');
+    if (!tbody) return;
+
+    if (!logicList || logicList.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 25px; color: var(--text-secondary);">Tidak ada antrean GCU Logic.</td></tr>`;
+        return;
+    }
+
+    let html = '';
+    logicList.forEach((item, idx) => {
+        const rankClass = idx === 0 ? 'rank-1' : (idx === 1 ? 'rank-2' : (idx === 2 ? 'rank-3' : 'rank-other'));
+
+        html += `
+            <tr>
+                <td style="text-align: center;">
+                    <div class="mon-rank-num ${rankClass}" style="margin: 0 auto;">${idx + 1}</div>
+                </td>
+                <td>
+                    <span style="font-weight: 800; font-size: 13.5px; color: #3b82f6;">STO ${item.sto}</span>
+                </td>
+                <td>${item.witel}</td>
+                <td style="text-align: center;">
+                    <span style="display: inline-block; padding: 4px 10px; border-radius: 12px; background: rgba(59, 130, 246, 0.15); color: #3b82f6; font-weight: 800; font-size: 13px;">
+                        ${item.total} Tiket
+                    </span>
+                </td>
+                <td>
+                    <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                        ${item.losCount > 0 ? `<span style="font-size: 11px; padding: 2px 6px; border-radius: 4px; background: #fee2e2; color: #ef4444; font-weight: 700;">🔴 ${item.losCount} LOS</span>` : ''}
+                        ${item.highRxCount > 0 ? `<span style="font-size: 11px; padding: 2px 6px; border-radius: 4px; background: #fef3c7; color: #d97706; font-weight: 700;">🟡 ${item.highRxCount} Redaman Tinggi</span>` : ''}
+                        ${item.normalCount > 0 ? `<span style="font-size: 11px; padding: 2px 6px; border-radius: 4px; background: #dcfce7; color: #16a34a; font-weight: 700;">🟢 ${item.normalCount} Normal</span>` : ''}
+                    </div>
+                </td>
+                <td>
+                    <div style="font-size: 12px;">
+                        <span style="color: #10b981; font-weight: 600;">✓ ${item.assignedCount} Di-handle</span> / 
+                        <span style="color: #f59e0b; font-weight: 600;">⏳ ${item.unassignedCount} Idle</span>
+                    </div>
+                </td>
+                <td style="text-align: center;">
+                    <button class="btn-table-action" onclick="window.jumpToGcuLogicSto('${item.sto}')" title="Buka antrean GCU Logic STO ${item.sto}" style="white-space: nowrap;">
+                        <ion-icon name="open-outline"></ion-icon> Buka Antrean
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+    tbody.innerHTML = html;
+}
+
+function renderKorlapTable(korlapList) {
+    const tbody = document.getElementById('monKorlapTableBody');
+    if (!tbody) return;
+
+    if (!korlapList || korlapList.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 25px; color: var(--text-secondary);">Tidak ada tiket menunggu Approval Korlap.</td></tr>`;
+        return;
+    }
+
+    let html = '';
+    korlapList.forEach((item, idx) => {
+        const rankClass = idx === 0 ? 'rank-1' : (idx === 1 ? 'rank-2' : (idx === 2 ? 'rank-3' : 'rank-other'));
+        
+        let oldestStr = '-';
+        if (item.oldestTimestamp && item.oldestTimestamp !== Infinity) {
+            let diffMs = Date.now() - item.oldestTimestamp;
+            let diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+            let diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            if (diffDays > 0) oldestStr = `<span style="color: #ef4444; font-weight: 700;">${diffDays} hari lalu</span>`;
+            else if (diffHours > 0) oldestStr = `<span style="color: #f59e0b; font-weight: 700;">${diffHours} jam lalu</span>`;
+            else oldestStr = `<span style="color: #10b981; font-weight: 700;">Hari ini</span>`;
+        }
+
+        const tekNames = Array.from(item.technicians).slice(0, 3).join(', ') || '-';
+        const tekMore = item.technicians.size > 3 ? ` (+${item.technicians.size - 3})` : '';
+
+        html += `
+            <tr>
+                <td style="text-align: center;">
+                    <div class="mon-rank-num ${rankClass}" style="margin: 0 auto;">${idx + 1}</div>
+                </td>
+                <td>
+                    <span style="font-weight: 800; font-size: 13.5px; color: #8b5cf6;">STO ${item.sto}</span>
+                </td>
+                <td>${item.witel}</td>
+                <td style="text-align: center;">
+                    <span style="display: inline-block; padding: 4px 10px; border-radius: 12px; background: rgba(139, 92, 246, 0.15); color: #8b5cf6; font-weight: 800; font-size: 13px;">
+                        ${item.total} Menunggu
+                    </span>
+                </td>
+                <td>
+                    <div>${oldestStr}</div>
+                    <div style="font-size: 11px; color: var(--text-secondary); margin-top: 2px;">${item.oldestDateStr || '-'}</div>
+                </td>
+                <td>
+                    <div style="font-size: 12px; color: var(--text-secondary); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${Array.from(item.technicians).join(', ')}">
+                        👤 ${tekNames}${tekMore}
+                    </div>
+                </td>
+                <td style="text-align: center;">
+                    <button class="btn-table-action" onclick="window.jumpToApprovalSto('${item.sto}')" title="Buka Approval Korlap STO ${item.sto}" style="white-space: nowrap;">
+                        <ion-icon name="shield-checkmark-outline"></ion-icon> Review & Approve
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+    tbody.innerHTML = html;
+}
+
+// ==========================================
+// QUICK JUMP HELPERS
+// ==========================================
+window.jumpToTeknisiFisik = function (nik) {
+    window.showDashboard('GCU FISIK');
+    const searchInput = document.getElementById('searchTicketInput');
+    if (searchInput) {
+        searchInput.value = (nik && nik !== '-' && nik !== 'TANPA_NIK') ? nik : '';
+    }
+    window.applyStatusFilter();
+    const tbl = document.getElementById('ticketTableContainer');
+    if (tbl) tbl.scrollIntoView({ behavior: 'smooth' });
+    if (window.showToast) {
+        window.showToast(`Menampilkan tiket GCU FISIK untuk teknisi: <strong>${nik}</strong>`, true);
+    }
+};
+
+window.jumpToGcuLogicSto = function (sto) {
+    window.showDashboard('GCU LOGIC');
+    if (sto && sto !== '-' && sto !== 'UNKNOWN') {
+        state.selectedSTOs = [sto.toUpperCase()];
+        window.updateStoDropdownLabel();
+    }
+    window.applyStatusFilter();
+    const tbl = document.getElementById('ticketTableContainer');
+    if (tbl) tbl.scrollIntoView({ behavior: 'smooth' });
+    if (window.showToast) {
+        window.showToast(`Menampilkan antrean GCU LOGIC untuk STO: <strong>${sto}</strong>`, true);
+    }
+};
+
+window.jumpToApprovalSto = function (sto) {
+    window.showDashboard('APPROVAL KORLAP');
+    if (sto && sto !== '-' && sto !== 'UNKNOWN') {
+        state.selectedSTOs = [sto.toUpperCase()];
+        window.updateStoDropdownLabel();
+    }
+    window.applyStatusFilter();
+    const tbl = document.getElementById('ticketTableContainer');
+    if (tbl) tbl.scrollIntoView({ behavior: 'smooth' });
+    if (window.showToast) {
+        window.showToast(`Menampilkan tiket APPROVAL KORLAP untuk STO: <strong>${sto}</strong>`, true);
+    }
+};
+
+// ==========================================
+// HELPER: SAFE ID GENERATOR
+// ==========================================
+function getSafeMonId(str) {
+    return (str || '').toString().replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
+// ==========================================
+// SUBSYSTEM: MONITORING GCU TEKNISI (Backlog per Teknisi & Rincian Tiket)
+// ==========================================
+window.monTekWitelFilterVal = 'ALL';
+window.monTekChipFilter = 'ALL';
+window._monTekCachedList = [];
+
+window.showMonitoringTeknisiView = function () {
+    state.activeView = 'monitoring-teknisi';
+
+    if (viewDashboard) viewDashboard.style.display = 'none';
+    if (viewWorkflow) viewWorkflow.style.display = 'none';
+    const viewMon = document.getElementById('view-monitoring');
+    if (viewMon) viewMon.style.display = 'none';
+    const vMonTek = document.getElementById('view-monitoring-teknisi');
+    if (vMonTek) vMonTek.style.display = 'block';
+    const vGaul = document.getElementById('view-konseling-gaul');
+    if (vGaul) vGaul.style.display = 'none';
+
+    // Sidebar Active State
+    document.querySelectorAll('.nav-links .nav-item').forEach(el => el.classList.remove('active'));
+    const menu = document.getElementById('menuMonitoringTeknisi');
+    if (menu) menu.classList.add('active');
+
+    window.renderMonitoringTeknisiDashboard();
+};
+
+window.onMonTekWitelChange = function () {
+    const sel = document.getElementById('monTekWitelFilter');
+    window.monTekWitelFilterVal = sel ? sel.value : 'ALL';
+    window.renderMonitoringTeknisiDashboard();
+};
+
+window.setMonTekChip = function (chip) {
+    window.monTekChipFilter = chip;
+    document.querySelectorAll('#view-monitoring-teknisi .mon-chip').forEach(c => c.classList.remove('active'));
+    if (chip === 'ALL') {
+        const c = document.getElementById('monTekChipAll');
+        if (c) c.classList.add('active');
+    } else if (chip === 'HIGH') {
+        const c = document.getElementById('monTekChipHigh');
+        if (c) c.classList.add('active');
+    } else if (chip === 'KENDALA') {
+        const c = document.getElementById('monTekChipKendala');
+        if (c) c.classList.add('active');
+    } else if (chip === 'LOS') {
+        const c = document.getElementById('monTekChipLos');
+        if (c) c.classList.add('active');
+    }
+    window.filterMonTeknisiViewTable();
+};
+
+window.renderMonitoringTeknisiDashboard = function () {
+    const allTickets = state.tickets || [];
+
+    // Populate WITEL Filter options in header
+    const monWitelEl = document.getElementById('monTekWitelFilter');
+    if (monWitelEl) {
+        let uniqueWITELs = [...new Set(allTickets.map(t => t.witel).filter(w => w && w !== "-"))];
+        uniqueWITELs.sort();
+        let curVal = monWitelEl.value || window.monTekWitelFilterVal || 'ALL';
+        monWitelEl.innerHTML = '<option value="ALL">Semua Witel</option>';
+        uniqueWITELs.forEach(w => {
+            let opt = document.createElement('option');
+            opt.value = w;
+            opt.innerText = w;
+            if (w === curVal) opt.selected = true;
+            monWitelEl.appendChild(opt);
+        });
+        if (window.monTekWitelFilterVal && window.monTekWitelFilterVal !== 'ALL') {
+            monWitelEl.value = window.monTekWitelFilterVal;
+        }
+    }
+
+    // Filter tickets to GCU FISIK and Witel
+    let tickets = allTickets.filter(t => t.category === 'GCU FISIK');
+    if (window.monTekWitelFilterVal && window.monTekWitelFilterVal !== 'ALL') {
+        tickets = tickets.filter(t => t.witel === window.monTekWitelFilterVal);
+    }
+
+    const tekMap = new Map();
+    let totalKritis = 0;
+    let totalKendala = 0;
+
+    tickets.forEach(t => {
+        let rawNik = (t.technician && t.technician !== "-" && t.technician !== "Unknown" && t.technician !== "null")
+            ? t.technician.toString().trim()
+            : "";
+        let isValid = rawNik ? window.isTeknisiValidInDb(rawNik) : false;
+        if (!isValid) totalKendala++;
+
+        let groupKey = rawNik || "TANPA_NIK";
+        if (!tekMap.has(groupKey)) {
+            let tInfo = rawNik ? window.getTeknisiInfo(rawNik) : null;
+            tekMap.set(groupKey, {
+                nik: rawNik || "-",
+                nama: tInfo ? tInfo.nama : (rawNik ? (isValid ? rawNik : `⚠️ ${rawNik}`) : "⚠️ Belum Di-assign"),
+                teleId: tInfo && tInfo.teleId ? tInfo.teleId : "-",
+                isValidInDb: isValid,
+                total: 0,
+                stos: {},
+                witels: new Set(),
+                losCount: 0,
+                highRxCount: 0,
+                normalCount: 0,
+                tickets: []
+            });
+        }
+
+        let tekItem = tekMap.get(groupKey);
+        tekItem.total++;
+        tekItem.tickets.push(t);
+
+        if (t.sto && t.sto !== '-') {
+            tekItem.stos[t.sto] = (tekItem.stos[t.sto] || 0) + 1;
+        }
+        if (t.witel && t.witel !== '-') {
+            tekItem.witels.add(t.witel);
+        }
+
+        let rxNum = parseFloat(t.rx);
+        let st = (t.status || '').toUpperCase();
+        let rxStr = (t.rx || '').toUpperCase();
+        if (st.includes('LOS') || rxStr.includes('LOS')) {
+            tekItem.losCount++;
+            totalKritis++;
+        } else if (!isNaN(rxNum) && rxNum < -27) {
+            tekItem.highRxCount++;
+            totalKritis++;
+        } else {
+            tekItem.normalCount++;
+        }
+    });
+
+    let teknisiList = Array.from(tekMap.values());
+    teknisiList.sort((a, b) => b.total - a.total);
+    window._monTekCachedList = teknisiList;
+
+    // Update KPI Cards
+    const elTotalTiket = document.getElementById('monTekKpiTotalTiket');
+    if (elTotalTiket) elTotalTiket.innerText = tickets.length;
+    const elTotalTek = document.getElementById('monTekKpiTotalTeknisi');
+    if (elTotalTek) elTotalTek.innerText = teknisiList.filter(t => t.nik !== '-').length;
+    const elKritis = document.getElementById('monTekKpiKritis');
+    if (elKritis) elKritis.innerText = totalKritis;
+    const elKendala = document.getElementById('monTekKpiKendala');
+    if (elKendala) elKendala.innerText = totalKendala;
+
+    window.filterMonTeknisiViewTable();
+};
+
+window.filterMonTeknisiViewTable = function () {
+    const tbody = document.getElementById('monTekViewTableBody');
+    if (!tbody) return;
+
+    const searchInput = document.getElementById('monTekSearchInput');
+    const query = searchInput ? searchInput.value.trim().toUpperCase() : '';
+    const chip = window.monTekChipFilter || 'ALL';
+
+    let list = window._monTekCachedList || [];
+
+    // Filter Chip
+    if (chip === 'HIGH') {
+        list = list.filter(item => item.total >= 5);
+    } else if (chip === 'KENDALA') {
+        list = list.filter(item => !item.isValidInDb || item.nik === '-');
+    } else if (chip === 'LOS') {
+        list = list.filter(item => item.losCount > 0);
+    }
+
+    // Filter Search Query
+    if (query) {
+        list = list.filter(item => {
+            const matchNik = item.nik && item.nik.toUpperCase().includes(query);
+            const matchNama = item.nama && item.nama.toUpperCase().includes(query);
+            const matchSto = Object.keys(item.stos || {}).some(s => s.toUpperCase().includes(query));
+            return matchNik || matchNama || matchSto;
+        });
+    }
+
+    if (list.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 30px; color: var(--text-secondary);"><ion-icon name="checkmark-circle-outline" style="font-size: 32px; color: #10b981; display: block; margin: 0 auto 8px;"></ion-icon>Tidak ada antrean teknisi yang sesuai filter.</td></tr>`;
+        return;
+    }
+
+    let html = '';
+    list.forEach((item, idx) => {
+        const safeId = getSafeMonId(item.nik);
+        const rankClass = idx === 0 ? 'rank-1' : (idx === 1 ? 'rank-2' : (idx === 2 ? 'rank-3' : 'rank-other'));
+        const stoStr = Object.keys(item.stos).map(s => `<strong>${s}</strong> (${item.stos[s]})`).join(', ') || '-';
+
+        let dbStatusBadge = '';
+        if (item.nik === '-') {
+            dbStatusBadge = `<span style="font-size: 11px; padding: 2px 7px; border-radius: 4px; background: #fee2e2; color: #991b1b; font-weight: 700;">⚠️ Tanpa NIK</span>`;
+        } else if (!item.isValidInDb) {
+            dbStatusBadge = `<span style="font-size: 11px; padding: 2px 7px; border-radius: 4px; background: #fef3c7; color: #b45309; font-weight: 700;">⚠️ Kendala Assign</span>`;
+        } else {
+            dbStatusBadge = `<span style="font-size: 11px; padding: 2px 7px; border-radius: 4px; background: #dcfce7; color: #166534; font-weight: 700;">✓ Terdaftar DB</span>`;
+        }
+
+        let tgStatusBadge = '';
+        if (item.teleId && item.teleId !== '-') {
+            tgStatusBadge = `<span style="font-size: 11.5px; color: #0284c7; display: flex; align-items: center; gap: 4px;"><ion-icon name="paper-plane-outline"></ion-icon> <code>${item.teleId}</code></span>`;
+        } else {
+            tgStatusBadge = `<span style="font-size: 11px; color: var(--text-secondary); font-style: italic;">Belum /start</span>`;
+        }
+
+        // Master Row
+        html += `
+            <tr id="tekRow-${safeId}">
+                <td style="text-align: center;">
+                    <div class="mon-rank-num ${rankClass}" style="margin: 0 auto;">${idx + 1}</div>
+                </td>
+                <td>
+                    <div style="font-weight: 700; color: var(--text-primary); font-size: 13.5px;">${item.nama}</div>
+                    <div style="font-size: 11.5px; color: var(--text-secondary); margin-top: 3px; display: flex; align-items: center; gap: 8px;">
+                        <span>NIK: <code>${item.nik}</code></span>
+                        ${dbStatusBadge}
+                    </div>
+                </td>
+                <td>
+                    <div style="font-size: 12.5px; max-width: 200px;">${stoStr}</div>
+                </td>
+                <td style="text-align: center;">
+                    <span style="display: inline-block; padding: 4px 12px; border-radius: 12px; background: rgba(239, 68, 68, 0.15); color: #ef4444; font-weight: 800; font-size: 13px; border: 1px solid rgba(239, 68, 68, 0.3);">
+                        ${item.total} Tiket
+                    </span>
+                </td>
+                <td>
+                    <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                        ${item.losCount > 0 ? `<span style="font-size: 11px; padding: 2px 6px; border-radius: 4px; background: #fee2e2; color: #ef4444; font-weight: 700;">🔴 ${item.losCount} LOS</span>` : ''}
+                        ${item.highRxCount > 0 ? `<span style="font-size: 11px; padding: 2px 6px; border-radius: 4px; background: #fef3c7; color: #d97706; font-weight: 700;">🟡 ${item.highRxCount} &lt; -27 dBm</span>` : ''}
+                        ${item.normalCount > 0 ? `<span style="font-size: 11px; padding: 2px 6px; border-radius: 4px; background: #dcfce7; color: #16a34a; font-weight: 700;">🟢 ${item.normalCount} Normal</span>` : ''}
+                    </div>
+                </td>
+                <td>${tgStatusBadge}</td>
+                <td style="text-align: center;">
+                    <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
+                        <button class="btn-drawer" id="btnDrawerTek-${safeId}" onclick="window.toggleTeknisiDrawer('${safeId}')" title="Buka rincian tiket teknisi ini">
+                            <ion-icon name="list-outline"></ion-icon>
+                            <span id="lblDrawerTek-${safeId}">Rincian (${item.total})</span>
+                            <ion-icon name="chevron-down-outline" id="iconDrawerTek-${safeId}" style="transition: 0.2s;"></ion-icon>
+                        </button>
+                        <button class="btn-table-action" onclick="window.jumpToTeknisiFisik('${item.nik}')" title="Filter di Inbox GCU Fisik" style="padding: 5px 8px;">
+                            <ion-icon name="open-outline"></ion-icon>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+
+        // Drawer Row for Tickets Detail
+        let ticketsHtml = '';
+        item.tickets.forEach((t, tIdx) => {
+            let rxColor = '#10b981';
+            let rxNum = parseFloat(t.rx);
+            let rxUpper = (t.rx || '').toUpperCase();
+            if (rxUpper.includes('LOS') || (t.status || '').toUpperCase().includes('LOS')) {
+                rxColor = '#ef4444';
+            } else if (!isNaN(rxNum) && rxNum < -27) {
+                rxColor = '#f59e0b';
+            }
+
+            ticketsHtml += `
+                <tr>
+                    <td style="text-align: center; width: 40px; color: var(--text-secondary); font-weight: 600;">${tIdx + 1}</td>
+                    <td style="white-space: nowrap;">
+                        <span class="copy-badge" onclick="copyToClipboard('${t.incident}', 'Nomor Tiket', event)" title="Klik untuk copy tiket" style="font-weight: 800; color: #0284c7; background: rgba(2,132,199,0.1); padding: 3px 6px; border-radius: 4px; font-size: 12px; display: inline-flex; align-items: center; gap: 4px;">
+                            ${t.incident}
+                            <ion-icon name="copy-outline" style="font-size: 11px;"></ion-icon>
+                        </span>
+                    </td>
+                    <td>
+                        <div style="font-weight: 700; color: var(--text-primary);">${t.serviceNumber || "-"}</div>
+                        <div style="font-size: 11px; color: var(--text-secondary); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${t.customerName || "-"}</div>
+                    </td>
+                    <td>
+                        <span style="font-weight: 700; color: #06b6d4;">${t.sto || "-"}</span>
+                        <span style="font-size: 11px; color: var(--text-secondary); margin-left: 4px;">(${t.witel || "-"})</span>
+                    </td>
+                    <td>
+                        <span style="font-weight: 800; color: ${rxColor};">${t.rx || "-"}</span>
+                    </td>
+                    <td>
+                        <span style="font-size: 11px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.06); border: 1px solid var(--border); font-weight: 600;">${t.ticketStatus || t.status || "-"}</span>
+                    </td>
+                    <td style="text-align: center;">
+                        <button class="btn-table-action" onclick="window.selectTicket('${t.incident}', '${t.sto}')" style="padding: 4px 10px; font-size: 11.5px; border-radius: 6px; background: #0284c7; color: white; border: none; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">
+                            <ion-icon name="construct-outline"></ion-icon> Checklist Fisik
+                        </button>
+                    </td>
+                </tr>
+            `;
+        });
+
+        html += `
+            <tr class="drawer-row" id="tekDrawerRow-${safeId}" style="display: none;">
+                <td colspan="7" style="padding: 10px 16px;">
+                    <div class="drawer-content-box">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <div style="font-size: 13px; font-weight: 800; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
+                                <ion-icon name="layers-outline" style="color: #06b6d4; font-size: 16px;"></ion-icon>
+                                Daftar ${item.total} Tiket GCU Fisik: <span style="color: #06b6d4;">${item.nama}</span> (NIK: <code>${item.nik}</code>)
+                            </div>
+                            <button class="btn-drawer" onclick="window.jumpToTeknisiFisik('${item.nik}')" style="font-size: 11px; padding: 3px 8px;">
+                                <ion-icon name="open-outline"></ion-icon> Buka Seluruhnya di GCU Fisik
+                            </button>
+                        </div>
+                        <div style="max-height: 320px; overflow-y: auto;">
+                            <table class="nested-ticket-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 40px; text-align: center;">NO</th>
+                                        <th>INCIDENT</th>
+                                        <th>NO INTERNET / CUSTOMER</th>
+                                        <th>STO / WITEL</th>
+                                        <th>RX POWER</th>
+                                        <th>STATUS TIKET</th>
+                                        <th style="text-align: center; width: 140px;">AKSI</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${ticketsHtml}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        `;
+    });
+
+    tbody.innerHTML = html;
+};
+
+window.toggleTeknisiDrawer = function (safeId) {
+    const row = document.getElementById(`tekDrawerRow-${safeId}`);
+    const icon = document.getElementById(`iconDrawerTek-${safeId}`);
+    const lbl = document.getElementById(`lblDrawerTek-${safeId}`);
+    if (!row) return;
+
+    const isHidden = (row.style.display === 'none' || !row.style.display);
+    if (isHidden) {
+        row.style.display = 'table-row';
+        if (icon) icon.style.transform = 'rotate(180deg)';
+        if (lbl) lbl.innerText = 'Tutup';
+    } else {
+        row.style.display = 'none';
+        if (icon) icon.style.transform = 'rotate(0deg)';
+        const tek = (window._monTekCachedList || []).find(t => getSafeMonId(t.nik) === safeId);
+        if (lbl) lbl.innerText = `Rincian (${tek ? tek.total : ''})`;
+    }
+};
+
+// ==========================================
+// SUBSYSTEM: KONSELING TEKNISI PENYUMBANG GAUL
+// ==========================================
+window.konselingWitelFilterVal = 'ALL';
+window.konselingChipFilter = 'ALL';
+window._gaulCachedList = [];
+
+window.getKonselingLogs = function () {
+    try {
+        const d = localStorage.getItem('gencu_konseling_logs_v1');
+        return d ? JSON.parse(d) : {};
+    } catch (e) {
+        return {};
+    }
+};
+
+window.saveKonselingLogToDb = function (nik, logData) {
+    try {
+        const logs = window.getKonselingLogs();
+        logs[nik] = logData;
+        localStorage.setItem('gencu_konseling_logs_v1', JSON.stringify(logs));
+    } catch (e) {
+        console.error("Gagal simpan log konseling:", e);
+    }
+};
+
+window.showKonselingGaulView = function () {
+    state.activeView = 'konseling-gaul';
+
+    if (viewDashboard) viewDashboard.style.display = 'none';
+    if (viewWorkflow) viewWorkflow.style.display = 'none';
+    const viewMon = document.getElementById('view-monitoring');
+    if (viewMon) viewMon.style.display = 'none';
+    const vMonTek = document.getElementById('view-monitoring-teknisi');
+    if (vMonTek) vMonTek.style.display = 'none';
+    const vGaul = document.getElementById('view-konseling-gaul');
+    if (vGaul) vGaul.style.display = 'block';
+
+    // Sidebar Active State
+    document.querySelectorAll('.nav-links .nav-item').forEach(el => el.classList.remove('active'));
+    const menu = document.getElementById('menuKonselingGaul');
+    if (menu) menu.classList.add('active');
+
+    window.renderKonselingGaulDashboard();
+};
+
+window.onKonselingWitelChange = function () {
+    const sel = document.getElementById('konselingWitelFilter');
+    window.konselingWitelFilterVal = sel ? sel.value : 'ALL';
+    window.renderKonselingGaulDashboard();
+};
+
+window.setGaulFilterChip = function (chip) {
+    window.konselingChipFilter = chip;
+    document.querySelectorAll('#view-konseling-gaul .mon-chip').forEach(c => c.classList.remove('active'));
+    if (chip === 'ALL') {
+        const c = document.getElementById('gaulChipAll');
+        if (c) c.classList.add('active');
+    } else if (chip === 'PERLU') {
+        const c = document.getElementById('gaulChipPerlu');
+        if (c) c.classList.add('active');
+    } else if (chip === 'DONE') {
+        const c = document.getElementById('gaulChipDone');
+        if (c) c.classList.add('active');
+    }
+    window.filterKonselingGaulTable();
+};
+
+window.renderKonselingGaulDashboard = function () {
+    const allTickets = state.tickets || [];
+
+    // Populate WITEL Filter options in header
+    const monWitelEl = document.getElementById('konselingWitelFilter');
+    if (monWitelEl) {
+        let uniqueWITELs = [...new Set(allTickets.map(t => t.witel).filter(w => w && w !== "-"))];
+        uniqueWITELs.sort();
+        let curVal = monWitelEl.value || window.konselingWitelFilterVal || 'ALL';
+        monWitelEl.innerHTML = '<option value="ALL">Semua Witel</option>';
+        uniqueWITELs.forEach(w => {
+            let opt = document.createElement('option');
+            opt.value = w;
+            opt.innerText = w;
+            if (w === curVal) opt.selected = true;
+            monWitelEl.appendChild(opt);
+        });
+        if (window.konselingWitelFilterVal && window.konselingWitelFilterVal !== 'ALL') {
+            monWitelEl.value = window.konselingWitelFilterVal;
+        }
+    }
+
+    let tickets = allTickets;
+    if (window.konselingWitelFilterVal && window.konselingWitelFilterVal !== 'ALL') {
+        tickets = tickets.filter(t => t.witel === window.konselingWitelFilterVal);
+    }
+
+    // Hitung kemunculan repeat per nomor internet
+    const serviceCounts = new Map();
+    tickets.forEach(t => {
+        let sn = (t.serviceNumber || '').trim();
+        if (sn && sn !== '-' && sn !== 'Unknown') {
+            serviceCounts.set(sn, (serviceCounts.get(sn) || 0) + 1);
+        }
+    });
+
+    const logs = window.getKonselingLogs();
+    const gaulMap = new Map();
+    let totalKasusGaul = 0;
+
+    tickets.forEach(t => {
+        let sn = (t.serviceNumber || '').trim();
+        let isRepeatService = sn && (serviceCounts.get(sn) || 0) > 1;
+        let hasGaulFlag = (t.gaul && t.gaul > 0) || (t.lapul && t.lapul > 0);
+
+        if (hasGaulFlag || isRepeatService) {
+            let rawNik = (t.technician && t.technician !== "-" && t.technician !== "Unknown" && t.technician !== "null")
+                ? t.technician.toString().trim()
+                : "";
+
+            if (rawNik.toLowerCase().includes('assign') || rawNik.toLowerCase().includes('manually')) {
+                rawNik = "";
+            }
+
+            let groupKey = rawNik || "TANPA_NIK";
+            if (!gaulMap.has(groupKey)) {
+                let tInfo = rawNik ? window.getTeknisiInfo(rawNik) : null;
+                let isValid = rawNik ? window.isTeknisiValidInDb(rawNik) : false;
+                gaulMap.set(groupKey, {
+                    nik: rawNik || "-",
+                    nama: tInfo ? tInfo.nama : (rawNik ? (isValid ? rawNik : `⚠️ ${rawNik}`) : "⚠️ Belum Di-assign"),
+                    isValidInDb: isValid,
+                    count: 0,
+                    totalScore: 0,
+                    symptomMap: {},
+                    stos: {},
+                    witels: new Set(),
+                    tickets: []
+                });
+            }
+
+            let item = gaulMap.get(groupKey);
+            item.count++;
+            totalKasusGaul++;
+
+            let gScore = (t.gaul || 0) + (t.lapul || 0);
+            if (gScore === 0 && isRepeatService) gScore = 1;
+            item.totalScore += gScore;
+
+            item.tickets.push(t);
+
+            if (t.sto && t.sto !== '-') {
+                item.stos[t.sto] = (item.stos[t.sto] || 0) + 1;
+            }
+            if (t.witel && t.witel !== '-') {
+                item.witels.add(t.witel);
+            }
+
+            let sym = (t.symptom && t.symptom !== '-') ? t.symptom.trim() : null;
+            if (!sym && (t.status || '').toUpperCase().includes('LOS')) {
+                sym = 'LOS (Loss of Signal)';
+            }
+            if (!sym && t.rx && t.rx.toUpperCase().includes('LOS')) {
+                sym = 'LOS (Loss of Signal)';
+            }
+            if (sym) {
+                item.symptomMap[sym] = (item.symptomMap[sym] || 0) + 1;
+            }
+        }
+    });
+
+    let gaulList = Array.from(gaulMap.values());
+    gaulList.forEach(item => {
+        let log = item.nik !== '-' ? logs[item.nik] : null;
+        item.counselingLog = log || null;
+        if (log) {
+            item.counselingStatus = log.status || 'SELESAI';
+        } else {
+            item.counselingStatus = (item.count >= 3 || item.totalScore >= 5) ? 'PERLU' : 'PANTUAN';
+        }
+
+        let sortedSym = Object.entries(item.symptomMap).sort((a, b) => b[1] - a[1]);
+        item.topSymptoms = sortedSym.slice(0, 2).map(([s, cnt]) => `${s} (${cnt}x)`);
+    });
+
+    gaulList.sort((a, b) => (b.totalScore * 2 + b.count) - (a.totalScore * 2 + a.count));
+    window._gaulCachedList = gaulList;
+
+    // Update KPI Cards
+    const elKasus = document.getElementById('gaulKpiTotalKasus');
+    if (elKasus) elKasus.innerText = totalKasusGaul;
+    const elTek = document.getElementById('gaulKpiTotalTeknisi');
+    if (elTek) elTek.innerText = gaulList.filter(t => t.nik !== '-').length;
+    const elKonseling = document.getElementById('gaulKpiTotalKonseling');
+    if (elKonseling) elKonseling.innerText = Object.keys(logs).length;
+
+    window.filterKonselingGaulTable();
+};
+
+window.filterKonselingGaulTable = function () {
+    const tbody = document.getElementById('gaulTableBody');
+    if (!tbody) return;
+
+    const searchInput = document.getElementById('gaulSearchInput');
+    const query = searchInput ? searchInput.value.trim().toUpperCase() : '';
+    const chip = window.konselingChipFilter || 'ALL';
+
+    let list = window._gaulCachedList || [];
+
+    // Filter Chip
+    if (chip === 'PERLU') {
+        list = list.filter(item => item.counselingStatus === 'PERLU' || item.count >= 3 || item.totalScore >= 5);
+    } else if (chip === 'DONE') {
+        list = list.filter(item => item.counselingLog && (item.counselingLog.status === 'SELESAI' || item.counselingStatus === 'SELESAI'));
+    }
+
+    // Filter Search Query
+    if (query) {
+        list = list.filter(item => {
+            const matchNik = item.nik && item.nik.toUpperCase().includes(query);
+            const matchNama = item.nama && item.nama.toUpperCase().includes(query);
+            const matchSto = Object.keys(item.stos || {}).some(s => s.toUpperCase().includes(query));
+            return matchNik || matchNama || matchSto;
+        });
+    }
+
+    if (list.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 30px; color: var(--text-secondary);"><ion-icon name="shield-checkmark-outline" style="font-size: 32px; color: #10b981; display: block; margin: 0 auto 8px;"></ion-icon>Tidak ada teknisi penyumbang repeat trouble yang sesuai filter.</td></tr>`;
+        return;
+    }
+
+    let html = '';
+    list.forEach((item, idx) => {
+        const safeId = getSafeMonId(item.nik);
+        const rankClass = idx === 0 ? 'rank-1' : (idx === 1 ? 'rank-2' : (idx === 2 ? 'rank-3' : 'rank-other'));
+        const stoStr = Object.keys(item.stos).slice(0, 2).map(s => `<strong>${s}</strong> (${item.stos[s]})`).join(', ') || '-';
+        const symptomsStr = item.topSymptoms && item.topSymptoms.length > 0 ? item.topSymptoms.join('<br>') : '<span style="color: var(--text-secondary); font-style: italic;">Tidak ada catatan gejala</span>';
+
+        // Badge Status Konseling
+        let statusBadge = '';
+        if (item.counselingLog) {
+            let st = item.counselingLog.status;
+            let tgl = item.counselingLog.tanggal || '';
+            if (st === 'SELESAI') {
+                statusBadge = `<span class="badge-status-konseling badge-status-done" title="Konselor: ${item.counselingLog.konselor || '-'} • ${item.counselingLog.kategori || ''}">🟢 Selesai (${tgl})</span>`;
+            } else if (st === 'MONITORING') {
+                statusBadge = `<span class="badge-status-konseling badge-status-pantau" title="Dalam pantauan seminggu">🟡 Pantauan (${tgl})</span>`;
+            } else {
+                statusBadge = `<span class="badge-status-konseling badge-status-jadwal" title="Dijadwalkan ulang">🔵 Terjadwal</span>`;
+            }
+        } else if (item.count >= 3 || item.totalScore >= 5) {
+            statusBadge = `<span class="badge-status-konseling badge-status-perlu">🔴 Perlu Konseling</span>`;
+        } else {
+            statusBadge = `<span class="badge-status-konseling badge-status-pantau">🟡 Pantau Ringan</span>`;
+        }
+
+        html += `
+            <tr id="gaulRow-${safeId}">
+                <td style="text-align: center;">
+                    <div class="mon-rank-num ${rankClass}" style="margin: 0 auto;">${idx + 1}</div>
+                </td>
+                <td>
+                    <div style="font-weight: 700; color: var(--text-primary); font-size: 13.5px;">${item.nama}</div>
+                    <div style="font-size: 11.5px; color: var(--text-secondary); margin-top: 3px;">
+                        <span>NIK: <code>${item.nik}</code></span>
+                        ${!item.isValidInDb && item.nik !== '-' ? '<span style="color: #f59e0b; font-weight: 700; margin-left: 6px;">⚠️ Belum di DB</span>' : ''}
+                    </div>
+                </td>
+                <td>
+                    <div style="font-size: 12.5px;">${stoStr}</div>
+                </td>
+                <td style="text-align: center;">
+                    <span class="badge-gaul">
+                        <ion-icon name="flame"></ion-icon> ${item.count} Kasus
+                    </span>
+                </td>
+                <td style="text-align: center;">
+                    <span style="display: inline-block; padding: 3px 8px; border-radius: 6px; background: rgba(244, 63, 94, 0.1); color: #f43f5e; font-weight: 800; font-size: 12px;">
+                        Score ${item.totalScore}
+                    </span>
+                </td>
+                <td>
+                    <div style="font-size: 11.5px; line-height: 1.4; color: var(--text-primary);">${symptomsStr}</div>
+                </td>
+                <td>${statusBadge}</td>
+                <td style="text-align: center;">
+                    <div style="display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap;">
+                        <button class="btn-drawer" onclick="window.openKonselingModal('${item.nik}', ${item.count})" title="Catat evaluasi & konseling" style="background: rgba(244, 63, 94, 0.15); color: #f43f5e; border-color: rgba(244, 63, 94, 0.3);">
+                            <ion-icon name="clipboard-outline"></ion-icon> Catat
+                        </button>
+                        <button class="btn-drawer" id="btnDrawerGaul-${safeId}" onclick="window.toggleGaulDrawer('${safeId}')" title="Buka rincian tiket GAUL">
+                            <ion-icon name="list-outline"></ion-icon>
+                            <span id="lblDrawerGaul-${safeId}">Tiket (${item.count})</span>
+                            <ion-icon name="chevron-down-outline" id="iconDrawerGaul-${safeId}" style="transition: 0.2s;"></ion-icon>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+
+        // Drawer Row for GAUL Tickets
+        let ticketsHtml = '';
+        item.tickets.forEach((t, tIdx) => {
+            let rxColor = '#10b981';
+            let rxNum = parseFloat(t.rx);
+            let rxUpper = (t.rx || '').toUpperCase();
+            if (rxUpper.includes('LOS') || (t.status || '').toUpperCase().includes('LOS')) {
+                rxColor = '#ef4444';
+            } else if (!isNaN(rxNum) && rxNum < -27) {
+                rxColor = '#f59e0b';
+            }
+
+            ticketsHtml += `
+                <tr>
+                    <td style="text-align: center; width: 40px; color: var(--text-secondary); font-weight: 600;">${tIdx + 1}</td>
+                    <td style="white-space: nowrap;">
+                        <span class="copy-badge" onclick="copyToClipboard('${t.incident}', 'Nomor Tiket', event)" title="Klik untuk copy tiket" style="font-weight: 800; color: #f43f5e; background: rgba(244,63,94,0.1); padding: 3px 6px; border-radius: 4px; font-size: 12px; display: inline-flex; align-items: center; gap: 4px;">
+                            ${t.incident}
+                            <ion-icon name="copy-outline" style="font-size: 11px;"></ion-icon>
+                        </span>
+                    </td>
+                    <td>
+                        <div style="font-weight: 700; color: var(--text-primary);">${t.serviceNumber || "-"}</div>
+                        <div style="font-size: 11px; color: var(--text-secondary); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${t.customerName || "-"}</div>
+                    </td>
+                    <td>
+                        <span style="font-weight: 700; color: #f97316;">${t.sto || "-"}</span>
+                    </td>
+                    <td>
+                        <span style="font-weight: 800; color: ${rxColor};">${t.rx || "-"}</span>
+                    </td>
+                    <td>
+                        <span style="font-size: 11px; color: #ef4444; font-weight: 700;">GAUL: ${t.gaul || 0} | LAPUL: ${t.lapul || 0}</span>
+                    </td>
+                    <td>
+                        <div style="font-size: 11px; color: var(--text-secondary); max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${t.symptom || '-'}">
+                            ${t.symptom || "-"}
+                        </div>
+                    </td>
+                    <td style="text-align: center;">
+                        <button class="btn-table-action" onclick="window.selectTicket('${t.incident}', '${t.sto}')" style="padding: 4px 8px; font-size: 11px; border-radius: 6px; background: #e11d48; color: white; border: none; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">
+                            <ion-icon name="search-outline"></ion-icon> Detail
+                        </button>
+                    </td>
+                </tr>
+            `;
+        });
+
+        // Counseling Log Note Preview if exists
+        let logPreviewHtml = '';
+        if (item.counselingLog) {
+            logPreviewHtml = `
+                <div style="margin-bottom: 10px; padding: 10px 14px; border-radius: 8px; background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25); font-size: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <span style="font-weight: 700; color: #10b981;">📝 Hasil Konseling Terakhir (${item.counselingLog.tanggal}) - Konselor: ${item.counselingLog.konselor}</span>
+                        <span style="font-weight: 700; font-size: 11px; color: #059669;">Fokus: ${item.counselingLog.kategori}</span>
+                    </div>
+                    <div style="color: var(--text-primary); font-style: italic;">"${item.counselingLog.catatan}"</div>
+                </div>
+            `;
+        }
+
+        html += `
+            <tr class="drawer-row" id="gaulDrawerRow-${safeId}" style="display: none;">
+                <td colspan="8" style="padding: 10px 16px;">
+                    <div class="drawer-content-box" style="border-color: rgba(244, 63, 94, 0.3);">
+                        ${logPreviewHtml}
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <div style="font-size: 13px; font-weight: 800; color: #f43f5e; display: flex; align-items: center; gap: 6px;">
+                                <ion-icon name="flame" style="font-size: 16px;"></ion-icon>
+                                Rincian Kasus Gangguan Berulang (Repeat): <span style="color: var(--text-primary);">${item.nama}</span> (NIK: <code>${item.nik}</code>)
+                            </div>
+                            <button class="btn-drawer" onclick="window.openKonselingModal('${item.nik}', ${item.count})" style="font-size: 11px; padding: 4px 10px; background: #f43f5e; color: white; border: none;">
+                                <ion-icon name="create-outline"></ion-icon> Update Konseling
+                            </button>
+                        </div>
+                        <div style="max-height: 280px; overflow-y: auto;">
+                            <table class="nested-ticket-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 40px; text-align: center;">NO</th>
+                                        <th>INCIDENT</th>
+                                        <th>NO INTERNET / CUSTOMER</th>
+                                        <th>STO</th>
+                                        <th>RX POWER</th>
+                                        <th>STATUS REPEAT</th>
+                                        <th>GEJALA (SYMPTOM)</th>
+                                        <th style="text-align: center; width: 100px;">AKSI</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${ticketsHtml}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        `;
+    });
+
+    tbody.innerHTML = html;
+};
+
+window.toggleGaulDrawer = function (safeId) {
+    const row = document.getElementById(`gaulDrawerRow-${safeId}`);
+    const icon = document.getElementById(`iconDrawerGaul-${safeId}`);
+    const lbl = document.getElementById(`lblDrawerGaul-${safeId}`);
+    if (!row) return;
+
+    const isHidden = (row.style.display === 'none' || !row.style.display);
+    if (isHidden) {
+        row.style.display = 'table-row';
+        if (icon) icon.style.transform = 'rotate(180deg)';
+        if (lbl) lbl.innerText = 'Tutup';
+    } else {
+        row.style.display = 'none';
+        if (icon) icon.style.transform = 'rotate(0deg)';
+        const item = (window._gaulCachedList || []).find(t => getSafeMonId(t.nik) === safeId);
+        if (lbl) lbl.innerText = `Tiket (${item ? item.count : ''})`;
+    }
+};
+
+// ==========================================
+// MODAL & PERSISTENCE FOR KONSELING GAUL
+// ==========================================
+window.openKonselingModal = function (nik, totalGaul) {
+    const modal = document.getElementById('modalKonselingGaul');
+    if (!modal) return;
+
+    let tInfo = (nik && nik !== '-') ? window.getTeknisiInfo(nik) : null;
+    let nama = tInfo ? tInfo.nama : (nik || 'Teknisi');
+
+    const inputNik = document.getElementById('konselingNik');
+    const inputNama = document.getElementById('konselingNama');
+    const dispTek = document.getElementById('dispKonselingTeknisi');
+    const dispGaul = document.getElementById('dispKonselingTotalGaul');
+    const inputKonselor = document.getElementById('konselingKonselor');
+    const inputTanggal = document.getElementById('konselingTanggal');
+    const selKategori = document.getElementById('konselingKategori');
+    const txtCatatan = document.getElementById('konselingCatatan');
+    const selStatus = document.getElementById('konselingStatus');
+
+    if (inputNik) inputNik.value = nik;
+    if (inputNama) inputNama.value = nama;
+    if (dispTek) dispTek.innerText = `${nama} (NIK: ${nik})`;
+    if (dispGaul) dispGaul.innerText = `${totalGaul || 0} Kasus GAUL/Repeat`;
+
+    // Pre-fill existing data if already logged
+    const logs = window.getKonselingLogs();
+    const existingLog = (nik && nik !== '-') ? logs[nik] : null;
+
+    if (inputKonselor) inputKonselor.value = (existingLog && existingLog.konselor) ? existingLog.konselor : (state.userName || 'Korlap Assurance');
+    
+    // Default date to today (YYYY-MM-DD)
+    const today = new Date().toISOString().split('T')[0];
+    if (inputTanggal) inputTanggal.value = (existingLog && existingLog.tanggal) ? existingLog.tanggal : today;
+
+    if (existingLog) {
+        if (selKategori && existingLog.kategori) selKategori.value = existingLog.kategori;
+        if (txtCatatan && existingLog.catatan) txtCatatan.value = existingLog.catatan;
+        if (selStatus && existingLog.status) selStatus.value = existingLog.status;
+    } else {
+        if (selKategori) selKategori.selectedIndex = 0;
+        if (txtCatatan) txtCatatan.value = '';
+        if (selStatus) selStatus.value = 'SELESAI';
+    }
+
+    modal.style.display = 'flex';
+};
+
+window.closeKonselingModal = function () {
+    const modal = document.getElementById('modalKonselingGaul');
+    if (modal) modal.style.display = 'none';
+};
+
+window.saveKonselingLog = function (event) {
+    if (event) event.preventDefault();
+
+    const nik = document.getElementById('konselingNik') ? document.getElementById('konselingNik').value.trim() : '';
+    const nama = document.getElementById('konselingNama') ? document.getElementById('konselingNama').value.trim() : '';
+    const konselor = document.getElementById('konselingKonselor') ? document.getElementById('konselingKonselor').value.trim() : '';
+    const tanggal = document.getElementById('konselingTanggal') ? document.getElementById('konselingTanggal').value : '';
+    const kategori = document.getElementById('konselingKategori') ? document.getElementById('konselingKategori').value : '';
+    const catatan = document.getElementById('konselingCatatan') ? document.getElementById('konselingCatatan').value.trim() : '';
+    const status = document.getElementById('konselingStatus') ? document.getElementById('konselingStatus').value : 'SELESAI';
+
+    if (!nik || nik === '-') {
+        alert("⚠️ NIK teknisi tidak valid untuk pencatatan konseling.");
+        return;
+    }
+
+    const logEntry = {
+        nik: nik,
+        nama: nama,
+        konselor: konselor,
+        tanggal: tanggal,
+        kategori: kategori,
+        catatan: catatan,
+        status: status,
+        updatedAt: new Date().toISOString()
+    };
+
+    window.saveKonselingLogToDb(nik, logEntry);
+    window.closeKonselingModal();
+
+    if (window.showToast) {
+        window.showToast(`✅ Sesi konseling untuk <strong>${nama}</strong> berhasil disimpan!`, true);
+    } else {
+        alert(`✅ Sesi konseling untuk ${nama} berhasil disimpan!`);
+    }
+
+    window.renderKonselingGaulDashboard();
 };
 
 // === APPLICATION BOOTSTRAP ===
