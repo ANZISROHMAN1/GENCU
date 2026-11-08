@@ -1292,7 +1292,11 @@ function sendSummaryTicketsToTelegram(destChatId, tekName, nik, ticketsList) {
     var currentBatch = ticketsList.slice(b, b + batchSize);
     
     var textMsg = "👨‍🔧 <b>NEW ASSIGNMENT TICKET!</b>\n\n";
-    textMsg += "Halo <b>" + escapeHTML(displayName) + "</b>, Anda ditugaskan untuk tiket berikut:\n\n";
+    if (ticketsList.length > 1) {
+      textMsg += "Halo <b>" + escapeHTML(displayName) + "</b>, Anda ditugaskan untuk tiket berikut (Total: <b>" + ticketsList.length + " Tiket Aktif</b>):\n\n";
+    } else {
+      textMsg += "Halo <b>" + escapeHTML(displayName) + "</b>, Anda ditugaskan untuk tiket berikut:\n\n";
+    }
 
     var inlineKeyboard = [];
 
@@ -1344,8 +1348,8 @@ function sendSummaryTicketsToTelegram(destChatId, tekName, nik, ticketsList) {
         ]);
       } else {
         inlineKeyboard.push([
-          { "text": "🛠️ FISIK (" + t.ticketId + ")", "url": evidenceLink },
-          { "text": "💻 LOGIC (" + t.ticketId + ")", "url": logicLink }
+          { "text": "🛠️ GCU FISIK (" + t.ticketId + ")", "url": evidenceLink },
+          { "text": "💻 GCU LOGIC (" + t.ticketId + ")", "url": logicLink }
         ]);
       }
     }
@@ -2160,49 +2164,55 @@ function doPost(e) {
             Logger.log("Error updating assigned technician in sheet: " + eUpDb.message);
         }
 
-        // Gunakan SCRIPT_URL statis untuk mencegah error getUrl()
-        var webAppUrl = "https://script.google.com/macros/s/AKfycbzIbDSPLfWeZVLchBcW-1UV5K_wIsWf2yHXbm8Ip0RHEbkLMaedw3saxWA10oNzaz2G/exec";
-        try {
-            var sUrl = ScriptApp.getService().getUrl();
-            if (sUrl && sUrl.startsWith("http")) webAppUrl = sUrl;
-        } catch(e) {}
-        var evidenceLink = webAppUrl + "?action=form_evidence&ticket=" + encodeURIComponent(ticketId) + "&inet=" + encodeURIComponent(sNum) + "&rx=" + encodeURIComponent(rx) + "&tx=" + encodeURIComponent(tx);
-        var logicLink = webAppUrl + "?action=mark_gcu_logic&ticket=" + encodeURIComponent(ticketId);
-        
-        var textMsg = "👨‍🔧 <b>NEW ASSIGNMENT TICKET!</b>\n\n";
-        textMsg += "Halo <b>" + escapeHTML(teknisiName) + "</b>, Anda ditugaskan untuk tiket berikut:\n\n";
-        textMsg += "🎫 <b>INCIDENT:</b> <code>" + escapeHTML(ticketId) + "</code>\n";
-        textMsg += "🔌 <b>NO INET:</b> <code>" + escapeHTML(sNum) + "</code>\n";
-        textMsg += "👤 <b>CUSTOMER:</b> <code>" + escapeHTML(custName) + "</code>\n";
-        textMsg += "🏷️ <b>SERVICE:</b> <code>" + escapeHTML(svcType) + "</code>\n";
-        textMsg += "📊 <b>STATUS:</b> <code>" + escapeHTML(ticketStatus) + "</code>\n";
-        textMsg += "🏢 <b>STO:</b> <code>" + escapeHTML(sto) + "</code>\n";
-        textMsg += "🔴 <b>RX POWER:</b> <code>" + escapeHTML(rx) + "</code>\n";
-        textMsg += "🟢 <b>TX POWER:</b> <code>" + escapeHTML(tx) + "</code>\n\n";
-        
-        textMsg += "Silakan klik salah satu tombol di bawah sesuai dengan penanganan yang dilakukan!";
-        
-        var payloadTg = {
-            "chat_id": chatIdTg,
-            "text": textMsg,
-            "parse_mode": "HTML",
-            "reply_markup": {
-                "inline_keyboard": [
-                    [
-                        { "text": "🛠️ GCU FISIK", "url": evidenceLink },
-                        { "text": "💻 GCU LOGIC", "url": logicLink }
+        // Pastikan seluruh pembaruan database tersimpan sebelum membaca ulang daftar tugas aktif
+        SpreadsheetApp.flush();
+
+        // Kirimkan tiket yang baru di-assign BESERTA seluruh tiket tugas aktif yang belum dikerjakan sebelumnya
+        if (teknisiNIK && chatIdTg) {
+            sendActiveTicketsForTeknisi(teknisiNIK, chatIdTg, teknisiName);
+        } else {
+            // Fallback kirim single tiket jika NIK belum tersedia
+            var webAppUrl = "https://script.google.com/macros/s/AKfycbzIbDSPLfWeZVLchBcW-1UV5K_wIsWf2yHXbm8Ip0RHEbkLMaedw3saxWA10oNzaz2G/exec";
+            try {
+                var sUrl = ScriptApp.getService().getUrl();
+                if (sUrl && sUrl.startsWith("http")) webAppUrl = sUrl;
+            } catch(e) {}
+            var evidenceLink = webAppUrl + "?action=form_evidence&ticket=" + encodeURIComponent(ticketId) + "&inet=" + encodeURIComponent(sNum) + "&rx=" + encodeURIComponent(rx) + "&tx=" + encodeURIComponent(tx);
+            var logicLink = webAppUrl + "?action=mark_gcu_logic&ticket=" + encodeURIComponent(ticketId);
+            
+            var textMsg = "👨‍🔧 <b>NEW ASSIGNMENT TICKET!</b>\n\n";
+            textMsg += "Halo <b>" + escapeHTML(teknisiName) + "</b>, Anda ditugaskan untuk tiket berikut:\n\n";
+            textMsg += "🎫 <b>INCIDENT:</b> <code>" + escapeHTML(ticketId) + "</code>\n";
+            textMsg += "🔌 <b>NO INET:</b> <code>" + escapeHTML(sNum) + "</code>\n";
+            textMsg += "👤 <b>CUSTOMER:</b> <code>" + escapeHTML(custName) + "</code>\n";
+            textMsg += "🏷️ <b>SERVICE:</b> <code>" + escapeHTML(svcType) + "</code>\n";
+            textMsg += "📊 <b>STATUS:</b> <code>" + escapeHTML(ticketStatus) + "</code>\n";
+            textMsg += "🏢 <b>STO:</b> <code>" + escapeHTML(sto) + "</code>\n";
+            textMsg += "🔴 <b>RX POWER:</b> <code>" + escapeHTML(rx) + "</code>\n";
+            textMsg += "🟢 <b>TX POWER:</b> <code>" + escapeHTML(tx) + "</code>\n\n";
+            textMsg += "Silakan klik salah satu tombol di bawah sesuai dengan penanganan yang dilakukan!";
+            
+            var payloadTg = {
+                "chat_id": chatIdTg,
+                "text": textMsg,
+                "parse_mode": "HTML",
+                "reply_markup": {
+                    "inline_keyboard": [
+                        [
+                            { "text": "🛠️ GCU FISIK", "url": evidenceLink },
+                            { "text": "💻 GCU LOGIC", "url": logicLink }
+                        ]
                     ]
-                ]
-            }
-        };
-        
-        try {
-            UrlFetchApp.fetch("https://api.telegram.org/bot" + botTokenTg + "/sendMessage", {
-                "method": "post",
-                "contentType": "application/json",
-                "payload": JSON.stringify(payloadTg)
-            });
-        } catch(e) {}
+                }
+            };
+            try {
+                UrlFetchApp.fetch("https://api.telegram.org/bot" + botTokenTg + "/sendMessage", {
+                    "method": "post",
+                    "contentType": "application/json",
+                    "payload": JSON.stringify(payloadTg)
+                });
+            } catch(e) {}
+        }
         
         // Broadcast penugasan ke Grup Monitoring Helpdesk & Korlap
         try {
@@ -2217,7 +2227,7 @@ function doPost(e) {
                 groupAssignMsg += "👷 <b>TEKNISI:</b> <b>" + escapeHTML(teknisiName) + "</b> (NIK: <code>" + escapeHTML(teknisiNIK) + "</code>)\n";
                 groupAssignMsg += "📊 <b>STATUS:</b> <code>Ditugaskan ke GCU FISIK</code>\n";
                 groupAssignMsg += "🔴 <b>RX POWER:</b> <code>" + escapeHTML(rx) + "</code>\n\n";
-                groupAssignMsg += "<i>Tiket tugas telah dikirimkan ke Telegram pribadi teknisi.</i> 🫡";
+                groupAssignMsg += "<i>Tiket tugas telah dikirimkan ke Telegram pribadi teknisi beserta antrean tiket aktifnya.</i> 🫡";
                 sendTelegramRaw(groupChatId, groupAssignMsg);
             }
         } catch(eGrp) {}
@@ -2704,8 +2714,15 @@ function doPost(e) {
        }
        if (statusInfo) {
            var stUpper = statusInfo.toUpperCase();
-           if (stUpper.includes("CLOSED") || stUpper.includes("RESOLV") || stUpper.includes("FINALCHECK") || stUpper.includes("CANCEL") || stUpper.includes("SALAMSIM") || stUpper.includes("MEDIACARE")) {
+           if (stUpper.includes("CANCEL")) {
                isClosedOrInactive = true;
+           }
+           // Untuk source selain oss_all_ticket_canggih, anggap CLOSED sebagai tidak aktif
+           // Namun untuk oss_all_ticket_canggih (GENCU), tiket CLOSED/SALAMSIM/MEDIACARE OSS tetap aktif di GCU FISIK
+           if (dataObj.source !== 'oss_all_ticket_canggih') {
+               if (stUpper.includes("CLOSED") || stUpper.includes("RESOLV") || stUpper.includes("FINALCHECK") || stUpper.includes("SALAMSIM") || stUpper.includes("MEDIACARE")) {
+                   isClosedOrInactive = true;
+               }
            }
        }
 
@@ -2789,6 +2806,7 @@ function doPost(e) {
                }
                
                ticketsToAutoAssign.push({
+                   nik: tekNIK,
                    idTele: tInfo.idTele,
                    nama: tInfo.nama,
                    ticketId: ticketId,
@@ -2845,30 +2863,35 @@ function doPost(e) {
       assignByTelegram[item.idTele].push(item);
   }
 
+  // Pastikan seluruh tiket baru sudah ter-flush ke Spreadsheet sebelum membaca ulang antrean aktif teknisi
+  SpreadsheetApp.flush();
+
   for (var teleId in assignByTelegram) {
       try {
           var items = assignByTelegram[teleId];
-          if (items.length === 1) {
+          var tekNik = (items[0] && items[0].nik) ? items[0].nik : "";
+          var tekNama = (items[0] && items[0].nama) ? items[0].nama : "";
+
+          // Kirimkan tiket baru BESERTA seluruh tiket tugas aktif yang belum dikerjakan sebelumnya oleh teknisi ini
+          if (tekNik && teleId) {
+              sendActiveTicketsForTeknisi(tekNik, teleId, tekNama);
+          } else if (items.length === 1) {
               var it = items[0];
               autoAssignTicket(it.idTele, it.nama, it.ticketId, it.sNum, it.custName, it.sto, it.serviceType, it.statusInfo, it.rx, it.tx);
-          } else if (items.length > 1) {
-              sendSummaryTicketsToTelegram(teleId, items[0].nama, "", items);
-              
-              // Broadcast rekap penugasan ke Grup Monitoring Helpdesk & Korlap agar grup juga tidak kena spam
-              try {
-                  var groupChatId = getMonitoringGroupId();
-                  if (groupChatId && groupChatId.toString() !== teleId.toString()) {
-                      var grpMsg = "📢 <b>AUTO ASSIGN TIKET BARU (REKAP)!</b>\n\n";
-                      grpMsg += "👷 <b>TEKNISI:</b> <b>" + escapeHTML(items[0].nama) + "</b> (Total: " + items.length + " Tiket)\n\n";
-                      for (var m = 0; m < items.length; m++) {
-                          var itm = items[m];
-                          grpMsg += (m + 1) + ". 🎫 <code>" + escapeHTML(itm.ticketId) + "</code> | 🔌 <code>" + escapeHTML(itm.sNum) + "</code> | 🏢 " + escapeHTML(itm.sto) + "\n";
-                      }
-                      grpMsg += "\n<i>Semua tiket tugas telah dikirimkan ke Telegram pribadi teknisi dalam 1 pesan rangkuman.</i> 🫡";
-                      sendTelegramRaw(groupChatId, grpMsg);
-                  }
-              } catch(eGrpRecap) {}
+          } else {
+              sendSummaryTicketsToTelegram(teleId, tekNama, tekNik, items);
           }
+
+          // Broadcast rekap penugasan ke Grup Monitoring Helpdesk & Korlap agar grup juga tidak kena spam
+          try {
+              var groupChatId = getMonitoringGroupId();
+              if (groupChatId && groupChatId.toString() !== teleId.toString()) {
+                  var grpMsg = "📢 <b>AUTO ASSIGN TIKET BARU!</b>\n\n";
+                  grpMsg += "👷 <b>TEKNISI:</b> <b>" + escapeHTML(tekNama || tekNik) + "</b> (NIK: <code>" + escapeHTML(tekNik) + "</code>)\n";
+                  grpMsg += "📌 <i>Tiket baru ditugaskan dan telah dikirimkan ke Telegram teknisi beserta daftar tiket aktifnya yang belum selesai.</i> 🫡";
+                  sendTelegramRaw(groupChatId, grpMsg);
+              }
+          } catch(eGrpRecap) {}
       } catch(eAssign) {}
   }
   
