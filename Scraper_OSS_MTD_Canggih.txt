@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Scraping GENCU (Filter MTD Otomatis)
 // @namespace    http://tampermonkey.net/
-// @version      3.5
-// @description  Perbaikan bug infinite loop dan gagal baca header.
+// @version      3.6
+// @description  Filter tiket baru (CLOSED, FINALCHECK, MEDIACARE, SALAMSIM, RESOLVED & penambahan segmen INFRACO).
 // @author       You
 // @match        *://oss-incident.telkom.co.id/*
 // @grant        none
@@ -16,15 +16,17 @@
     // ==========================================
     // DAFTAR URL BOOKMARK FALLBACK
     // ==========================================
+    const TARGET_FILTER_URL = "https://oss-incident.telkom.co.id/jw/web/userview/ticketIncidentService/ticketIncidentService/_/allTicketList?d-5564009-fn_C_RELATED_TO_GAMAS=&d-5564009-fn_C_PERANGKAT=&d-5564009-fn_C_CUSTOMER_SEGMENT=RBS%2CDGS%2CDDS%2CDES%2CDBS%2CDSS%2CREG%2CDPS%2CDWS%2CFTTH_OLO%2CTELKOM+INFRACO%2CINFRANEXIA&d-5564009-fn_reported_date_filter=&d-5564009-fn_reported_date_filter=&d-5564009-fn_C_CONTACT_NAME=&d-5564009-fn_C_TICKET_ID_GAMAS=&d-5564009-fn_C_PIPE_NAME=&d-5564009-fn_C_GUARANTE_STATUS=&d-5564009-fn_C_CLASSIFICATION_CATEGORY=&d-5564009-fn_C_CLASSIFICATION_PATH=&d-5564009-fn_C_EXTERNAL_TICKETID=&d-5564009-s=13&d-5564009-fn_C_CHANNEL=&d-5564009-fn_C_SLG=&d-5564009-p=1&d-5564009-o=1&d-5564009-fn_C_WORK_ZONE=BOO%2CPAG%2CCPS%2CCWI%2CCSR%2CCRI%2CCJU%2CTJH%2CCBI%2CBJD%2CJGL%2CCLS%2CCAU%2CLWL%2CLBI%2CJSA%2CDMG%2CCGD%2CGPI%2CCSN%2CKHL%2CSPL%2CPAR%2CCSE%2CSTL%2CPMU%2CCTR%2CPLR%2CKLU%2CJPK%2CCKB%2CCCR%2CCBD%2CBGL%2CSKB%2CSGN%2CNLD%2CCMO&d-5564009-ps=100&d-5564009-fn_status_date_filter=&d-5564009-fn_status_date_filter=&d-5564009-fn_C_TICKET_STATUS=CLOSED%2CFINALCHECK%2CMEDIACARE%2CSALAMSIM%2CRESOLVED&d-5564009-fn_C_ACTUAL_SOLUTION=&d-5564009-fn_C_REGION=&d-5564009-fn_C_CUSTOMER_ID=&d-5564009-fn_C_ID_TICKET=&d-5564009-fn_C_REPORTED_PRIORITY=&d-5564009-fn_DATEMODIFIED=&d-5564009-fn_C_SERVICE_TYPE=&d-5564009-fn_C_CLOSED_BY=&d-5564009-fn_C_SERVICE_ID=&d-5564009-fn_C_INCIDENT_DOMAIN=&d-5564009-fn_C_OWNER_GROUP=&d-5564009-fn_C_SOURCE_TICKET=&d-5564009-fn_C_REALM=&d-5564009-fn_C_SERVICE_NO=&d-5564009-fn_C_DESCRIPTION_ASSIGMENT=&d-5564009-fn_C_DESCRIPTION_CUSTOMERID=&d-5564009-fn_C_OWNER=&d-5564009-fn_C_WITEL=&d-5564009-fn_C_CUSTOMER_TYPE=&d-5564009-fn_C_KODE_PRODUK=";
+
     const BOOKMARK_URLS = [
-        "https://oss-incident.telkom.co.id/jw/web/userview/ticketIncidentService/ticketIncidentService/_/allTicketList?d-5564009-fn_C_RELATED_TO_GAMAS=&d-5564009-fn_C_PERANGKAT=&d-5564009-fn_C_CUSTOMER_SEGMENT=RBS%2CDGS%2CDDS%2CDES%2CDBS%2CDSS%2CREG%2CDPS%2CDWS%2CFTTH_OLO&d-5564009-fn_reported_date_filter=&d-5564009-fn_reported_date_filter=&d-5564009-fn_C_CONTACT_NAME=&d-5564009-fn_C_TICKET_ID_GAMAS=&d-5564009-fn_C_PIPE_NAME=&d-5564009-fn_C_GUARANTE_STATUS=&d-5564009-fn_C_CLASSIFICATION_CATEGORY=&d-5564009-fn_C_CLASSIFICATION_PATH=&d-5564009-fn_C_EXTERNAL_TICKETID=&d-5564009-s=13&d-5564009-fn_C_CHANNEL=&d-5564009-fn_C_SLG=&d-5564009-p=1&d-5564009-o=1&d-5564009-fn_C_WORK_ZONE=BOO%2CPAG%2CCPS%2CCWI%2CCSR%2CCRI%2CCJU%2CTJH%2CCBI%2CBJD%2CJGL%2CCLS%2CCAU%2CLWL%2CLBI%2CJSA%2CDMG%2CCGD%2CGPI%2CCSN%2CKHL%2CSPL%2CPAR%2CCSE%2CSTL%2CPMU%2CCTR%2CPLR%2CKLU%2CJPK%2CCKB%2CCCR%2CCBD%2CBGL%2CSKB%2CSGN%2CNLD%2CCMO&d-5564009-ps=100&d-5564009-fn_status_date_filter=&d-5564009-fn_status_date_filter=&d-5564009-fn_C_TICKET_STATUS=&d-5564009-fn_C_ACTUAL_SOLUTION=&d-5564009-fn_C_REGION=&d-5564009-fn_C_CUSTOMER_ID=&d-5564009-fn_C_ID_TICKET=&d-5564009-fn_C_REPORTED_PRIORITY=&d-5564009-fn_DATEMODIFIED=&d-5564009-fn_C_SERVICE_TYPE=&d-5564009-fn_C_CLOSED_BY=&d-5564009-fn_C_SERVICE_ID=&d-5564009-fn_C_INCIDENT_DOMAIN=&d-5564009-fn_C_OWNER_GROUP=&d-5564009-fn_C_SOURCE_TICKET=&d-5564009-fn_C_REALM=&d-5564009-fn_C_SERVICE_NO=&d-5564009-fn_C_DESCRIPTION_ASSIGMENT=&d-5564009-fn_C_DESCRIPTION_CUSTOMERID=&d-5564009-fn_C_OWNER=&d-5564009-fn_C_WITEL=&d-5564009-fn_C_CUSTOMER_TYPE=&d-5564009-fn_C_KODE_PRODUK"
+        "https://oss-incident.telkom.co.id/jw/web/userview/ticketIncidentService/ticketIncidentService/_/allTicketList?d-5564009-fn_C_RELATED_TO_GAMAS=&d-5564009-fn_C_PERANGKAT=&d-5564009-fn_C_CUSTOMER_SEGMENT=RBS%2CDGS%2CDDS%2CDES%2CDBS%2CDSS%2CREG%2CDPS%2CDWS%2CFTTH_OLO%2CTELKOM+INFRACO%2CINFRANEXIA&d-5564009-fn_reported_date_filter=&d-5564009-fn_reported_date_filter=&d-5564009-fn_C_CONTACT_NAME=&d-5564009-fn_C_TICKET_ID_GAMAS=&d-5564009-fn_C_PIPE_NAME=&d-5564009-fn_C_GUARANTE_STATUS=&d-5564009-fn_C_CLASSIFICATION_CATEGORY=&d-5564009-fn_C_CLASSIFICATION_PATH=&d-5564009-fn_C_EXTERNAL_TICKETID=&d-5564009-s=13&d-5564009-fn_C_CHANNEL=&d-5564009-fn_C_SLG=&d-5564009-p=1&d-5564009-o=1&d-5564009-fn_C_WORK_ZONE=BOO%2CPAG%2CCPS%2CCWI%2CCSR%2CCRI%2CCJU%2CTJH%2CCBI%2CBJD%2CJGL%2CCLS%2CCAU%2CLWL%2CLBI%2CJSA%2CDMG%2CCGD%2CGPI%2CCSN%2CKHL%2CSPL%2CPAR%2CCSE%2CSTL%2CPMU%2CCTR%2CPLR%2CKLU%2CJPK%2CCKB%2CCCR%2CCBD%2CBGL%2CSKB%2CSGN%2CNLD%2CCMO&d-5564009-ps=100&d-5564009-fn_status_date_filter=&d-5564009-fn_status_date_filter=&d-5564009-fn_C_TICKET_STATUS=CLOSED%2CFINALCHECK%2CMEDIACARE%2CSALAMSIM%2CRESOLVED&d-5564009-fn_C_ACTUAL_SOLUTION=&d-5564009-fn_C_REGION=&d-5564009-fn_C_CUSTOMER_ID=&d-5564009-fn_C_ID_TICKET=&d-5564009-fn_C_REPORTED_PRIORITY=&d-5564009-fn_DATEMODIFIED=&d-5564009-fn_C_SERVICE_TYPE=&d-5564009-fn_C_CLOSED_BY=&d-5564009-fn_C_SERVICE_ID=&d-5564009-fn_C_INCIDENT_DOMAIN=&d-5564009-fn_C_OWNER_GROUP=&d-5564009-fn_C_SOURCE_TICKET=&d-5564009-fn_C_REALM=&d-5564009-fn_C_SERVICE_NO=&d-5564009-fn_C_DESCRIPTION_ASSIGMENT=&d-5564009-fn_C_DESCRIPTION_CUSTOMERID=&d-5564009-fn_C_OWNER=&d-5564009-fn_C_WITEL=&d-5564009-fn_C_CUSTOMER_TYPE=&d-5564009-fn_C_KODE_PRODUK="
     ];
     
     let currentBmkIdx = 0;
 
-    // Fungsi cerdas untuk mengunci dan mengingat URL filter aktif (misal: GENCU FIX)
+    // Fungsi cerdas untuk mengunci dan mengingat URL filter aktif (GENCU FIX)
     function getCleanPage1Url() {
-        if (window.location.href.includes('allTicketList')) {
+        if (window.location.href.includes('allTicketList') && !window.location.href.includes('allTicketListRepo')) {
             try {
                 let u = new URL(window.location.href);
                 for (let k of Array.from(u.searchParams.keys())) {
@@ -33,13 +35,21 @@
                     }
                 }
                 let cleanUrl = u.toString();
+                // Jika URL belum memiliki filter baru, paksa ke TARGET_FILTER_URL
+                if (!cleanUrl.includes('CLOSED') || (!cleanUrl.includes('TELKOM+INFRACO') && !cleanUrl.includes('TELKOM%2BINFRACO') && !cleanUrl.includes('TELKOM INFRACO'))) {
+                    cleanUrl = TARGET_FILTER_URL;
+                }
                 localStorage.setItem('oss_active_filter_url', cleanUrl);
                 return cleanUrl;
             } catch(e) {
-                return window.location.href;
+                return TARGET_FILTER_URL;
             }
         }
-        return localStorage.getItem('oss_active_filter_url') || (BOOKMARK_URLS.length > 0 ? BOOKMARK_URLS[0] : window.location.href);
+        let saved = localStorage.getItem('oss_active_filter_url');
+        if (saved && (saved.includes('CLOSED') || saved.includes('RESOLVED'))) {
+            return saved;
+        }
+        return TARGET_FILTER_URL;
     }
 
     // Deteksi halaman saat ini berdasarkan URL
@@ -355,6 +365,20 @@
         setTimeout(() => {
             initUI();
             
+            // Cek apakah halaman allTicketList saat ini belum memakai filter status / segmen baru
+            if (window.location.href.includes('allTicketList') && !window.location.href.includes('allTicketListRepo')) {
+                let currentUrl = window.location.href;
+                let hasClosedStatus = currentUrl.includes('CLOSED') || currentUrl.includes('RESOLVED');
+                let hasInfraco = currentUrl.includes('TELKOM+INFRACO') || currentUrl.includes('TELKOM%2BINFRACO') || currentUrl.includes('TELKOM INFRACO');
+                if (!hasClosedStatus || !hasInfraco) {
+                    setStatus("🔄 Mendeteksi filter belum diperbarui. Mengarahkan ke URL filter baru...");
+                    setTimeout(() => {
+                        window.location.href = TARGET_FILTER_URL;
+                    }, 1200);
+                    return;
+                }
+            }
+
             let isEmpty = false;
             let pageText = document.body.innerText;
             if (pageText.includes('Nothing found') || pageText.includes('No items found') || pageText.includes('Please Submit Filters')) {

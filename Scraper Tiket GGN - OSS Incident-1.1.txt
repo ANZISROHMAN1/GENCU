@@ -1,0 +1,459 @@
+// ==UserScript==
+// @name         Scraping GENCU (Filter MTD Otomatis)
+// @namespace    http://tampermonkey.net/
+// @version      3.6
+// @description  Filter tiket baru (CLOSED, FINALCHECK, MEDIACARE, SALAMSIM, RESOLVED & penambahan segmen INFRACO).
+// @author       You
+// @match        *://oss-incident.telkom.co.id/*
+// @grant        none
+// ==/UserScript==
+
+(function() {
+    'use strict';
+
+    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzIbDSPLfWeZVLchBcW-1UV5K_wIsWf2yHXbm8Ip0RHEbkLMaedw3saxWA10oNzaz2G/exec';
+    
+    // ==========================================
+    // DAFTAR URL BOOKMARK FALLBACK
+    // ==========================================
+    const TARGET_FILTER_URL = "https://oss-incident.telkom.co.id/jw/web/userview/ticketIncidentService/ticketIncidentService/_/allTicketList?d-5564009-fn_C_RELATED_TO_GAMAS=&d-5564009-fn_C_PERANGKAT=&d-5564009-fn_C_CUSTOMER_SEGMENT=RBS%2CDGS%2CDDS%2CDES%2CDBS%2CDSS%2CREG%2CDPS%2CDWS%2CFTTH_OLO%2CTELKOM+INFRACO%2CINFRANEXIA&d-5564009-fn_reported_date_filter=&d-5564009-fn_reported_date_filter=&d-5564009-fn_C_CONTACT_NAME=&d-5564009-fn_C_TICKET_ID_GAMAS=&d-5564009-fn_C_PIPE_NAME=&d-5564009-fn_C_GUARANTE_STATUS=&d-5564009-fn_C_CLASSIFICATION_CATEGORY=&d-5564009-fn_C_CLASSIFICATION_PATH=&d-5564009-fn_C_EXTERNAL_TICKETID=&d-5564009-s=13&d-5564009-fn_C_CHANNEL=&d-5564009-fn_C_SLG=&d-5564009-p=1&d-5564009-o=1&d-5564009-fn_C_WORK_ZONE=BOO%2CPAG%2CCPS%2CCWI%2CCSR%2CCRI%2CCJU%2CTJH%2CCBI%2CBJD%2CJGL%2CCLS%2CCAU%2CLWL%2CLBI%2CJSA%2CDMG%2CCGD%2CGPI%2CCSN%2CKHL%2CSPL%2CPAR%2CCSE%2CSTL%2CPMU%2CCTR%2CPLR%2CKLU%2CJPK%2CCKB%2CCCR%2CCBD%2CBGL%2CSKB%2CSGN%2CNLD%2CCMO&d-5564009-ps=100&d-5564009-fn_status_date_filter=&d-5564009-fn_status_date_filter=&d-5564009-fn_C_TICKET_STATUS=CLOSED%2CFINALCHECK%2CMEDIACARE%2CSALAMSIM%2CRESOLVED&d-5564009-fn_C_ACTUAL_SOLUTION=&d-5564009-fn_C_REGION=&d-5564009-fn_C_CUSTOMER_ID=&d-5564009-fn_C_ID_TICKET=&d-5564009-fn_C_REPORTED_PRIORITY=&d-5564009-fn_DATEMODIFIED=&d-5564009-fn_C_SERVICE_TYPE=&d-5564009-fn_C_CLOSED_BY=&d-5564009-fn_C_SERVICE_ID=&d-5564009-fn_C_INCIDENT_DOMAIN=&d-5564009-fn_C_OWNER_GROUP=&d-5564009-fn_C_SOURCE_TICKET=&d-5564009-fn_C_REALM=&d-5564009-fn_C_SERVICE_NO=&d-5564009-fn_C_DESCRIPTION_ASSIGMENT=&d-5564009-fn_C_DESCRIPTION_CUSTOMERID=&d-5564009-fn_C_OWNER=&d-5564009-fn_C_WITEL=&d-5564009-fn_C_CUSTOMER_TYPE=&d-5564009-fn_C_KODE_PRODUK=";
+
+    const BOOKMARK_URLS = [
+        "https://oss-incident.telkom.co.id/jw/web/userview/ticketIncidentService/ticketIncidentService/_/allTicketList?d-5564009-fn_C_RELATED_TO_GAMAS=&d-5564009-fn_C_PERANGKAT=&d-5564009-fn_C_CUSTOMER_SEGMENT=RBS%2CDGS%2CDDS%2CDES%2CDBS%2CDSS%2CREG%2CDPS%2CDWS%2CFTTH_OLO%2CTELKOM+INFRACO%2CINFRANEXIA&d-5564009-fn_reported_date_filter=&d-5564009-fn_reported_date_filter=&d-5564009-fn_C_CONTACT_NAME=&d-5564009-fn_C_TICKET_ID_GAMAS=&d-5564009-fn_C_PIPE_NAME=&d-5564009-fn_C_GUARANTE_STATUS=&d-5564009-fn_C_CLASSIFICATION_CATEGORY=&d-5564009-fn_C_CLASSIFICATION_PATH=&d-5564009-fn_C_EXTERNAL_TICKETID=&d-5564009-s=13&d-5564009-fn_C_CHANNEL=&d-5564009-fn_C_SLG=&d-5564009-p=1&d-5564009-o=1&d-5564009-fn_C_WORK_ZONE=BOO%2CPAG%2CCPS%2CCWI%2CCSR%2CCRI%2CCJU%2CTJH%2CCBI%2CBJD%2CJGL%2CCLS%2CCAU%2CLWL%2CLBI%2CJSA%2CDMG%2CCGD%2CGPI%2CCSN%2CKHL%2CSPL%2CPAR%2CCSE%2CSTL%2CPMU%2CCTR%2CPLR%2CKLU%2CJPK%2CCKB%2CCCR%2CCBD%2CBGL%2CSKB%2CSGN%2CNLD%2CCMO&d-5564009-ps=100&d-5564009-fn_status_date_filter=&d-5564009-fn_status_date_filter=&d-5564009-fn_C_TICKET_STATUS=CLOSED%2CFINALCHECK%2CMEDIACARE%2CSALAMSIM%2CRESOLVED&d-5564009-fn_C_ACTUAL_SOLUTION=&d-5564009-fn_C_REGION=&d-5564009-fn_C_CUSTOMER_ID=&d-5564009-fn_C_ID_TICKET=&d-5564009-fn_C_REPORTED_PRIORITY=&d-5564009-fn_DATEMODIFIED=&d-5564009-fn_C_SERVICE_TYPE=&d-5564009-fn_C_CLOSED_BY=&d-5564009-fn_C_SERVICE_ID=&d-5564009-fn_C_INCIDENT_DOMAIN=&d-5564009-fn_C_OWNER_GROUP=&d-5564009-fn_C_SOURCE_TICKET=&d-5564009-fn_C_REALM=&d-5564009-fn_C_SERVICE_NO=&d-5564009-fn_C_DESCRIPTION_ASSIGMENT=&d-5564009-fn_C_DESCRIPTION_CUSTOMERID=&d-5564009-fn_C_OWNER=&d-5564009-fn_C_WITEL=&d-5564009-fn_C_CUSTOMER_TYPE=&d-5564009-fn_C_KODE_PRODUK="
+    ];
+    
+    let currentBmkIdx = 0;
+
+    // Fungsi cerdas untuk mengunci dan mengingat URL filter aktif (GENCU FIX)
+    function getCleanPage1Url() {
+        if (window.location.href.includes('allTicketList') && !window.location.href.includes('allTicketListRepo')) {
+            try {
+                let u = new URL(window.location.href);
+                for (let k of Array.from(u.searchParams.keys())) {
+                    if (k.endsWith('-p')) {
+                        u.searchParams.set(k, '1');
+                    }
+                }
+                let cleanUrl = u.toString();
+                // Jika URL belum memiliki filter baru, paksa ke TARGET_FILTER_URL
+                if (!cleanUrl.includes('CLOSED') || (!cleanUrl.includes('TELKOM+INFRACO') && !cleanUrl.includes('TELKOM%2BINFRACO') && !cleanUrl.includes('TELKOM INFRACO'))) {
+                    cleanUrl = TARGET_FILTER_URL;
+                }
+                localStorage.setItem('oss_active_filter_url', cleanUrl);
+                return cleanUrl;
+            } catch(e) {
+                return TARGET_FILTER_URL;
+            }
+        }
+        let saved = localStorage.getItem('oss_active_filter_url');
+        if (saved && (saved.includes('CLOSED') || saved.includes('RESOLVED'))) {
+            return saved;
+        }
+        return TARGET_FILTER_URL;
+    }
+
+    // Deteksi halaman saat ini berdasarkan URL
+    let currentSource = 'oss_all_ticket_canggih';
+    let pageName = 'ALL TICKET (GENCU FIX)';
+    let isTargetPage = false;
+    
+    if (window.location.href.includes('allTicketListRepo')) {
+        currentSource = 'oss_closed_ticket_canggih';
+        pageName = 'CLOSED TICKET';
+        isTargetPage = true;
+    } else if (window.location.href.includes('allTicketList')) {
+        currentSource = 'oss_all_ticket_canggih';
+        pageName = 'ALL TICKET (GENCU FIX)';
+        isTargetPage = true;
+        // Simpan URL filter aktif yang sedang dibuka
+        try {
+            getCleanPage1Url();
+        } catch(e) {}
+    }
+
+    let now = new Date();
+    const CURRENT_YYYY_MM = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, '0');
+    const CURRENT_DATE = CURRENT_YYYY_MM + "-" + String(now.getDate()).padStart(2, '0');
+
+    let isRunning = false;
+    let scrapedData = [];
+    let headers = [];
+    let reportedDateIdx = -1;
+    
+    function initUI() {
+        if (document.getElementById('oss-canggih-panel')) return;
+
+        let panel = document.createElement('div');
+        panel.id = 'oss-canggih-panel';
+        panel.style.cssText = `position: fixed; top: 20px; right: 20px; width: 340px; background: #ffffff; border: 2px solid #0ea5e9; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); z-index: 999999; font-family: Arial, sans-serif; padding: 15px; color: #333;`;
+
+        let title = document.createElement('h3');
+        let logoBase64 = "data:image/jpeg;base64,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";
+        title.innerHTML = `<img src="${logoBase64}" style="width:20px; height:20px; vertical-align:text-bottom; margin-right:6px; border-radius:4px;"> SCRAPING GENCU (FILTER HARI INI)`;
+        title.style.cssText = 'margin: 0 0 10px 0; font-size: 14px; color: #0284c7; text-align: center; font-weight: 900;';
+        panel.appendChild(title);
+
+        let info = document.createElement('div');
+        info.innerHTML = `Mode: Otomatis Tarik Data <b>${CURRENT_DATE}</b><br>Halaman: <b>${pageName}</b><br>Maksimal 3-4 menit.`;
+        info.style.cssText = 'font-size: 11px; margin-bottom: 12px; color: #64748b; text-align: center; line-height: 1.4;';
+        panel.appendChild(info);
+
+        let statusText = document.createElement('div');
+        statusText.id = 'robot-canggih-status';
+        statusText.innerHTML = 'Status: Menunggu instruksi...';
+        statusText.style.cssText = 'font-size: 13px; margin-bottom: 15px; color: #0f172a; font-weight: bold; background: #f1f5f9; padding: 8px; border-radius: 6px; text-align: center;';
+        panel.appendChild(statusText);
+
+        let btnStart = document.createElement('button');
+        btnStart.innerHTML = '▶️ MULAI PENCARIAN HARI INI';
+        btnStart.style.cssText = `width: 100%; padding: 12px; background: #10b981; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 6px rgba(16,185,129,0.3); font-size: 14px;`;
+        
+        btnStart.addEventListener('click', () => {
+            if (isRunning) return;
+            btnStart.disabled = true;
+            btnStart.style.background = '#94a3b8';
+            startCrawling();
+        });
+        panel.appendChild(btnStart);
+        document.body.appendChild(panel);
+    }
+
+    function setStatus(msg) {
+        let el = document.getElementById('robot-canggih-status');
+        if (el) el.innerHTML = msg;
+    }
+
+    async function startCrawling() {
+        isRunning = true;
+        scrapedData = [];
+        setStatus("⏳ Menganalisa Halaman 1...");
+
+        let tables = document.querySelectorAll('table');
+        let targetTable = null;
+        let maxRows = 0;
+        
+        tables.forEach(t => {
+            let trs = t.querySelectorAll('tr');
+            let firstRow = trs[0] ? trs[0].innerText.toUpperCase() : "";
+            // Pastikan ini adalah tabel data tiket (mengandung kata INCIDENT atau DATE)
+            if(trs.length > 0 && (firstRow.includes('INCIDENT') || firstRow.includes('TTR') || firstRow.includes('DATE') || firstRow.includes('TICKET'))) {
+                if(trs.length > maxRows) {
+                    maxRows = trs.length; 
+                    targetTable = t; 
+                }
+            }
+        });
+
+        if (!targetTable) {
+            let delayMs = (currentBmkIdx === 1) ? 10000 : 120000;
+            let delayStr = (currentBmkIdx === 1) ? "10 detik" : "2 menit";
+            setStatus(`⚠️ Data kosong atau tabel tiket tidak ditemukan.<br>Melanjutkan ke bookmark berikutnya dalam ${delayStr}...`);
+            isRunning = false;
+            
+            setTimeout(() => {
+                window.location.href = getCleanPage1Url();
+            }, delayMs);
+            return;
+        }
+
+        let headerCells = targetTable.querySelectorAll('tr')[0].querySelectorAll('th, td');
+        // Bersihkan header dari enter (\n) yang bikin gagal deteksi
+        headers = Array.from(headerCells).map(c => c.innerText.trim().replace(/\s+/g, ' '));
+        
+        if (window.location.href.includes('allTicketListRepo')) {
+            // CLOSED TICKET: Prioritaskan STATUS DATE
+            reportedDateIdx = headers.findIndex(h => h.includes('STATUS DATE') || h.includes('STATUSDATE'));
+            if(reportedDateIdx === -1) {
+                reportedDateIdx = headers.findIndex(h => h.includes('REPORTED DATE'));
+            }
+        } else {
+            // ALL TICKET: Prioritaskan STATUS DATE agar sinkron dengan sorting user
+            reportedDateIdx = headers.findIndex(h => h.includes('STATUS DATE') || h.includes('STATUSDATE'));
+            if(reportedDateIdx === -1) {
+                reportedDateIdx = headers.findIndex(h => h.includes('REPORTED DATE') || h.includes('REPORTEDDATE'));
+            }
+        }
+        
+        // Jika masih tidak ada, cari yang ada kata DATE
+        if(reportedDateIdx === -1) {
+            reportedDateIdx = headers.findIndex(h => h.includes('DATE'));
+        }
+
+        if(reportedDateIdx === -1) {
+            let delayMs = (currentBmkIdx === 1) ? 10000 : 120000;
+            let delayStr = (currentBmkIdx === 1) ? "10 detik" : "2 menit";
+            setStatus(`⚠️ Kolom Date tidak ditemukan di header!<br>Melanjutkan ke bookmark berikutnya dalam ${delayStr}...`);
+            isRunning = false;
+            
+            setTimeout(() => {
+                window.location.href = getCleanPage1Url();
+            }, delayMs);
+            return;
+        }
+
+        scrapedData.push(headers); 
+        extractAndFilterRows(targetTable); // Selalu lanjut untuk mengecek/mengambil halaman 2
+        
+        let pagelinks = document.querySelector('.pagelinks a') || document.querySelector('a[href*="d-"]');
+        let paramPrefix = "";
+        
+        if (pagelinks) {
+            let href = pagelinks.getAttribute('href');
+            let match = href.match(/(d-\d+-)/);
+            if (match) paramPrefix = match[1];
+        }
+        
+        // Fallback: cari dari URL saat ini (contoh: url?d-5564009-p=1)
+        if (!paramPrefix) {
+            let urlMatch = window.location.href.match(/(d-\d+-)/);
+            if (urlMatch) {
+                paramPrefix = urlMatch[1];
+            } else {
+                sendToGoogleSheet();
+                return;
+            }
+        }
+
+        let baseUrl = window.location.href; 
+        let currentPageNum = 2; 
+        let totalHalaman = 2; // BATASI MAKSIMAL 2 HALAMAN SECARA OTOMATIS
+
+        // Baca jumlah info (Contoh: "26,220 items found")
+        try {
+            let infoDiv = document.querySelector('.pagelinks') ? document.querySelector('.pagelinks').parentNode.innerText : document.body.innerText;
+            let totalItemsMatch = infoDiv.match(/([\d,]+)\s+items found/);
+            if(totalItemsMatch) {
+                let total = parseInt(totalItemsMatch[1].replace(/,/g, ''));
+                let realTotalHalaman = Math.ceil(total / 100);
+                if (realTotalHalaman < 2) {
+                    totalHalaman = realTotalHalaman; // Jika cuma 1 halaman, ya 1 halaman saja
+                }
+            }
+        } catch(e) {
+            console.log("Gagal membaca total halaman, menggunakan default 2 halaman", e);
+        }
+
+        while (currentPageNum <= totalHalaman) {
+            setStatus(`⏳ Mengekstrak Halaman <b>${currentPageNum}</b> dari <b>${totalHalaman}</b>...<br>Tiket Hari Ini ditemukan: <b>${scrapedData.length - 1}</b>`);
+            
+            let targetUrl = new URL(baseUrl);
+            targetUrl.searchParams.set(paramPrefix + 'p', currentPageNum);
+            targetUrl.searchParams.set(paramPrefix + 'ps', '100'); 
+
+            try {
+                let response = await fetch(targetUrl.toString());
+                let htmlText = await response.text();
+                
+                let doc = new DOMParser().parseFromString(htmlText, 'text/html');
+                let shadowTables = doc.querySelectorAll('table');
+                let shadowTarget = null;
+                let shadowMax = 0;
+                
+                shadowTables.forEach(t => {
+                    let trs = t.querySelectorAll('tr');
+                    if(trs.length > shadowMax) { shadowMax = trs.length; shadowTarget = t; }
+                });
+
+                if (!shadowTarget || shadowMax < 2) {
+                    break; 
+                }
+
+                let isEmpty = extractAndFilterRows(shadowTarget);
+                
+                if (isEmpty) {
+                    setStatus(`⚠️ Tabel kosong ditemukan. Menghentikan pencarian halaman.`);
+                    break;
+                }
+
+                currentPageNum++;
+                await new Promise(r => setTimeout(r, 400)); 
+            } catch (err) {
+                setStatus(`❌ Error di hal ${currentPageNum}. Melompat ke pengiriman...`);
+                break;
+            }
+        }
+
+        sendToGoogleSheet();
+    }
+
+    function extractAndFilterRows(tableElem) {
+        let rows = tableElem.querySelectorAll('tr');
+        
+        for (let i = 1; i < rows.length; i++) {
+            let cells = rows[i].querySelectorAll('td');
+            if(cells.length > 0) {
+                let rowData = Array.from(cells).map(c => c.innerText.trim());
+                
+                // Jika tabel benar-benar kosong, hentikan pencarian halaman berikutnya
+                if(rowData.length === 1 && (rowData[0].includes('Nothing found') || rowData[0].includes('No items found'))) {
+                    return true; 
+                }
+                
+                // Filter STO yang dikecualikan (DEP, SKJ, PCM, CNE, CSL)
+                const EXCLUDED_STO = ["DEP", "SKJ", "PCM", "CNE", "CSL"];
+                let isExcludedSto = rowData.some(val => EXCLUDED_STO.includes(val.trim().toUpperCase()));
+                if (isExcludedSto) {
+                    continue; // Jangan ambil tiket dari STO non-area ini
+                }
+                
+                // Ambil row yang valid
+                scrapedData.push(rowData);
+            }
+        }
+        return false;
+    }
+
+    function sendToGoogleSheet() {
+        if(scrapedData.length <= 1) {
+            setStatus("⚠️ Tidak ada tiket Hari Ini yang ditemukan.<br>Melanjutkan ke bookmark berikutnya...");
+            
+            setTimeout(() => {
+                window.location.href = getCleanPage1Url();
+            }, 5000);
+            return;
+        }
+        setStatus(`🚀 Mengirim <b>${scrapedData.length - 1}</b> tiket Hari Ini ke Google Sheet...`);
+
+        let payload = {
+            action: 'update_oss_incident_bulk',
+            source: currentSource,
+            data: scrapedData
+        };
+
+        fetch(SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify(payload)
+        }).then(() => {
+            let waitTime = (currentBmkIdx === 1) ? 10 : 120; // 10s if All Ticket, 120s (2m) if Closed Ticket
+            let timerInterval = setInterval(() => {
+                let m = Math.floor(waitTime / 60);
+                let s = waitTime % 60;
+                let timeStr = waitTime >= 60 ? `${m}m ${s}s` : `${s}s`;
+                setStatus(`🎉 <b>SUKSES!</b> Data terkirim.<br>Mengulang scraping filter GENCU FIX dalam <b>${timeStr}</b>...`);
+                waitTime--;
+                if(waitTime < 0) {
+                    clearInterval(timerInterval);
+                    window.location.href = getCleanPage1Url();
+                }
+            }, 1000);
+        }).catch(err => {
+            let delayMs = (currentBmkIdx === 1) ? 10000 : 120000;
+            let delayStr = (currentBmkIdx === 1) ? "10 detik" : "2 menit";
+            setStatus(`❌ Gagal mengirim data ke Google Sheet.<br>Mengulang scraping dalam ${delayStr}...`);
+            setTimeout(() => {
+                window.location.href = getCleanPage1Url();
+            }, delayMs);
+        });
+    }
+
+    function runMain() {
+        // Jika sedang di halaman utama atau sembarang halaman setelah login
+        if (!isTargetPage) {
+            let container = document.createElement('div');
+            container.style.cssText = `position: fixed; top: 20px; right: 20px; background: #0284c7; color: white; padding: 15px; border-radius: 8px; z-index: 999999; box-shadow: 0 4px 15px rgba(0,0,0,0.2); font-family: Arial; text-align: center;`;
+            container.innerHTML = `🚀 <b>GENCU SCRAPER AKTIF</b><br><small>Sistem akan melompat ke bookmark target dalam 5 detik...</small>`;
+            document.body.appendChild(container);
+            
+            setTimeout(() => {
+                window.location.href = getCleanPage1Url();
+            }, 5000);
+            return;
+        }
+
+        setTimeout(() => {
+            initUI();
+            
+            // Cek apakah halaman allTicketList saat ini belum memakai filter status / segmen baru
+            if (window.location.href.includes('allTicketList') && !window.location.href.includes('allTicketListRepo')) {
+                let currentUrl = window.location.href;
+                let hasClosedStatus = currentUrl.includes('CLOSED') || currentUrl.includes('RESOLVED');
+                let hasInfraco = currentUrl.includes('TELKOM+INFRACO') || currentUrl.includes('TELKOM%2BINFRACO') || currentUrl.includes('TELKOM INFRACO');
+                if (!hasClosedStatus || !hasInfraco) {
+                    setStatus("🔄 Mendeteksi filter belum diperbarui. Mengarahkan ke URL filter baru...");
+                    setTimeout(() => {
+                        window.location.href = TARGET_FILTER_URL;
+                    }, 1200);
+                    return;
+                }
+            }
+
+            let isEmpty = false;
+            let pageText = document.body.innerText;
+            if (pageText.includes('Nothing found') || pageText.includes('No items found') || pageText.includes('Please Submit Filters')) {
+                isEmpty = true;
+            }
+
+            // AUTO-FILTER KHUSUS HALAMAN CLOSED TICKET
+            if (window.location.href.includes('allTicketListRepo') && isEmpty && !sessionStorage.getItem('oss_auto_filtered')) {
+                setStatus("Mencoba filter otomatis untuk Hari Ini...");
+                sessionStorage.setItem('oss_auto_filtered', 'true');
+
+                let filterApplied = false;
+                
+                // Cari input tanggal berdasarkan icon kalender di sebelahnya
+                let dateInputs = Array.from(document.querySelectorAll('input[type="text"]')).filter(input => {
+                    let nextEl = input.nextElementSibling;
+                    return (nextEl && nextEl.tagName === 'IMG' && nextEl.src.toLowerCase().includes('calendar'));
+                });
+                
+                // Jika ketemu 4 (Reported From-To, Status From-To), isi yang Status saja
+                if (dateInputs.length >= 4) {
+                    dateInputs[2].value = CURRENT_DATE;
+                    dateInputs[3].value = CURRENT_DATE;
+                    filterApplied = true;
+                } else if (dateInputs.length > 0) {
+                    // Fallback, isi semuanya
+                    dateInputs.forEach(i => i.value = CURRENT_DATE);
+                    filterApplied = true;
+                } else {
+                    // Fallback super darurat
+                    let allDateInputs = Array.from(document.querySelectorAll('input[type="text"]')).filter(i => 
+                        (i.placeholder && (i.placeholder.includes('From') || i.placeholder.includes('To')))
+                    );
+                    if (allDateInputs.length >= 4) {
+                        allDateInputs[2].value = CURRENT_DATE;
+                        allDateInputs[3].value = CURRENT_DATE;
+                        filterApplied = true;
+                    }
+                }
+
+                if (filterApplied) {
+                    let showBtn = Array.from(document.querySelectorAll('input, button')).find(el => 
+                        (el.value && el.value.toLowerCase() === 'show') || 
+                        (el.innerText && el.innerText.toLowerCase().trim() === 'show')
+                    );
+
+                    if (showBtn) {
+                        setStatus("Filter diisi. Mengklik 'show'...");
+                        setTimeout(() => showBtn.click(), 1000);
+                        return; // Stop eksekusi, biarkan halaman reload
+                    }
+                }
+            }
+
+            // Jika kita ada di ALL TICKET, atau tabel tidak kosong, reset flag
+            if (!isEmpty || window.location.href.includes('allTicketList')) {
+                if (!window.location.href.includes('allTicketListRepo')) {
+                    sessionStorage.removeItem('oss_auto_filtered');
+                }
+            }
+
+            // FITUR AUTO START (Akan jalan meskipun tabel kosong, supaya dia bisa melompat ke bookmark berikutnya)
+            let btn = document.querySelector('#oss-canggih-panel button');
+            if (btn && !isRunning) {
+                setStatus("Sistem siap. Otomatis memulai dalam 5 detik...");
+                setTimeout(() => {
+                    btn.click();
+                }, 5000);
+            }
+        }, 1500);
+    }
+
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        runMain();
+    } else {
+        window.addEventListener('DOMContentLoaded', runMain);
+    }
+})();
