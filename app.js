@@ -2564,18 +2564,59 @@ window.assignTicketToTelegram = function (btn) {
 // 2. TEKNISI FLOW
 function renderTeknisiFlow() {
     const ticket = state.tickets.find(t => t.incident === state.activeTicketId);
+    if (!ticket) return;
 
-    if (ticket && ticket.category === 'GCU FISIK') {
+    const parsedEv = window.getParsedEvidence(ticket);
+    const actionHist = (ticket.actionHistory || '').toUpperCase();
+    const isRework = actionHist.includes('DIKEMBALIKAN KE GCU FISIK') || 
+                     actionHist.includes('[BUTUH FISIK') || 
+                     actionHist.includes('REWORK FISIK') || 
+                     actionHist.includes('REJECT KE GCU FISIK');
+
+    // Jika tiket sudah pernah disubmit GCU Fisik dan BUKAN rework:
+    if (!isRework && (ticket.category === 'GCU LOGIC' || ticket.category === 'APPROVAL KORLAP' || ticket.category === 'COMPLETED' || parsedEv.hasFisik)) {
+        let badgeColor = ticket.category === 'COMPLETED' ? '#10b981' : (ticket.category === 'APPROVAL KORLAP' ? '#8b5cf6' : '#3b82f6');
+        let cardContent = `
+            <div style="background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 12px; padding: 20px; margin-bottom: 16px; box-shadow: 0 2px 10px rgba(34, 197, 94, 0.08);">
+                <div style="display: flex; align-items: flex-start; gap: 14px;">
+                    <div style="font-size: 32px; line-height: 1;">✅</div>
+                    <div style="flex: 1;">
+                        <h4 style="margin: 0 0 6px 0; color: #15803d; font-size: 16px; font-weight: 800;">Tiket Sudah Di-GCU Fisik!</h4>
+                        <p style="margin: 0 0 12px 0; color: #166534; font-size: 13px; line-height: 1.5;">
+                            Pekerjaan check up fisik untuk nomor tiket <b>${ticket.incident}</b> sudah pernah diselesaikan dan disimpan ke sistem.
+                        </p>
+                        <div style="background: white; border: 1px solid #bbf7d0; border-radius: 8px; padding: 10px 14px; font-size: 12.5px; color: #374151; display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                            <div><b>No. Layanan:</b> ${ticket.serviceNumber || '-'}</div>
+                            <div><b>Pelanggan:</b> ${ticket.customerName || '-'}</div>
+                            <div><b>Status Alur:</b> <span style="background: ${badgeColor}22; color: ${badgeColor}; padding: 2px 8px; border-radius: 4px; font-weight: 700;">${ticket.category}</span></div>
+                            <div><b>Teknisi:</b> ${ticket.technician || '-'}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            ${parsedEv.hasFisik ? `
+                <div style="background: var(--bg-surface); padding: 15px; border-radius: 10px; border: 1px solid var(--border); margin-bottom: 15px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <strong style="font-size: 13px; color: var(--primary);">📋 Riwayat Evidence Fisik Tersimpan</strong>
+                        <button class="btn btn-outline" style="font-size: 11px; padding: 4px 8px; cursor: pointer;" onclick="window.showEvidenceModal('fisik')">🔍 Layar Penuh</button>
+                    </div>
+                    <div style="font-size: 13px; max-height: 250px; overflow-y: auto;">
+                        ${parsedEv.evidenceFisik}
+                    </div>
+                </div>
+            ` : ''}
+        `;
+        workflowContainer.innerHTML = '';
+        workflowContainer.appendChild(createStep('step-t-done', 'Status Pekerjaan Lapangan', cardContent));
+        return;
+    }
+
+    if (ticket.category === 'GCU FISIK') {
         let hasTeknisi = (ticket.technician && ticket.technician !== "-") || state.workflowState.assigned;
         if (!hasTeknisi) {
             workflowContainer.innerHTML = `<p style="color: var(--danger); font-weight: 500;">❌ Tiket belum di-assign oleh Korlap.</p>`;
             return;
         }
-    }
-
-    if (ticket && (ticket.category === 'APPROVAL KORLAP' || ticket.category === 'COMPLETED')) {
-        workflowContainer.innerHTML = `<p style="color: var(--success); font-weight: 500;">✅ Pekerjaan fisik telah selesai disubmit.</p>`;
-        return;
     }
 
     let contentEvidence = `
@@ -3048,6 +3089,20 @@ window.requestApprovalBackend = async function (event) {
 };
 
 window.submitTeknisiEvidence = async function (event) {
+    const ticket = state.tickets.find(t => t.incident === state.activeTicketId);
+    if (ticket) {
+        const parsedEv = window.getParsedEvidence(ticket);
+        const actionHist = (ticket.actionHistory || '').toUpperCase();
+        const isRework = actionHist.includes('DIKEMBALIKAN KE GCU FISIK') || 
+                         actionHist.includes('[BUTUH FISIK') || 
+                         actionHist.includes('REWORK FISIK') || 
+                         actionHist.includes('REJECT KE GCU FISIK');
+        if (!isRework && (ticket.category !== 'GCU FISIK' || parsedEv.hasFisik)) {
+            alert(`⚠️ PERINGATAN:\nNomor tiket ${ticket.incident} sudah pernah disubmit GCU Fisik sebelumnya!\nStatus saat ini: ${ticket.category}.\nTiket tidak dapat disubmit ulang.`);
+            return;
+        }
+    }
+
     const btn = event.target;
     const oldText = btn.innerText;
     btn.innerText = "Mengirim...";

@@ -1,3 +1,289 @@
+// === HELPER DETEKSI APAKAH TIKET SUDAH PERNAH DI-SUBMIT GCU FISIK ===
+function checkIsTicketAlreadyGcuFisik(ticketId) {
+    if (!ticketId) return { already: false, reason: "No ticket ID" };
+    try {
+        var ss = SpreadsheetApp.getActiveSpreadsheet();
+        var targetSheetNames = ["DATABASE ALL TICKET", "DATABASE", "ALL TICKET INSERA", "SCRAPING INSERA"];
+        var cleanTicket = ticketId.toString().trim().toUpperCase();
+
+        for (var s = 0; s < targetSheetNames.length; s++) {
+            var sheet = ss.getSheetByName(targetSheetNames[s]);
+            if (!sheet || sheet.getLastRow() < 2) continue;
+
+            var data = sheet.getDataRange().getValues();
+            if (data.length <= 1) continue;
+
+            var headers = data[0].map(function(h) { return (h || "").toString().toUpperCase().trim(); });
+            var incIdx = -1;
+            for (var c = 0; c < headers.length; c++) {
+                var h = headers[c];
+                if (h === "INCIDENT" || h === "ID TICKET" || h === "TICKET ID" || (h.indexOf("INCIDENT") !== -1 && h.indexOf("PARENT") === -1 && h.indexOf("DOMAIN") === -1 && h.indexOf("RELATED") === -1)) {
+                    incIdx = c;
+                    break;
+                }
+            }
+            if (incIdx === -1) incIdx = 3;
+
+            var actIdx = headers.indexOf("ACTION");
+            var evFisikIdx = headers.indexOf("EVIDENCE FISIK");
+            var sNoIdx = -1;
+            for (var c = 0; c < headers.length; c++) {
+                var clean = headers[c].replace(/[^A-Z0-9]/g, "");
+                if (clean === "SERVICENO" || clean === "NOINET" || clean === "NOINTERNET" || clean === "SERVICENUMBER" || clean === "ND") {
+                    sNoIdx = c;
+                    break;
+                }
+            }
+            var custNameIdx = -1;
+            for (var c = 0; c < headers.length; c++) {
+                var h = headers[c];
+                if (h === "CUSTOMER NAME" || h === "CONTACT NAME" || h === "CUSTOMER") {
+                    custNameIdx = c;
+                    break;
+                }
+            }
+
+            for (var r = 1; r < data.length; r++) {
+                var rowInc = (data[r][incIdx] || "").toString().trim().toUpperCase();
+                if (rowInc === cleanTicket) {
+                    var actionText = (actIdx !== -1 && data[r][actIdx]) ? data[r][actIdx].toString() : "";
+                    var evFisikText = (evFisikIdx !== -1 && data[r][evFisikIdx]) ? data[r][evFisikIdx].toString() : "";
+                    var combinedText = (actionText + "\n" + evFisikText).trim();
+
+                    if (!combinedText) {
+                        return { already: false, ticketId: cleanTicket };
+                    }
+
+                    var blocks = combinedText.split(/=== SEBELUMNYA ===/i);
+                    var latestBlock = blocks[0].toUpperCase();
+
+                    // PENTING: Jika tiket DIKEMBALIKAN KE GCU FISIK oleh Korlap/Helpdesk (rework),
+                    // teknisi tetap BOLEH submit ulang evidence fisik!
+                    if (latestBlock.indexOf("DIKEMBALIKAN KE GCU FISIK") !== -1 ||
+                        latestBlock.indexOf("[BUTUH FISIK") !== -1 ||
+                        latestBlock.indexOf("REWORK FISIK") !== -1 ||
+                        latestBlock.indexOf("REJECT KE GCU FISIK") !== -1) {
+                        return { already: false, isRework: true, ticketId: cleanTicket };
+                    }
+
+                    var isSubmitted = false;
+                    var currentStage = "GCU LOGIC";
+
+                    if (latestBlock.indexOf("EVIDENCE FISIK SUBMITTED") !== -1 || 
+                        latestBlock.indexOf("GCU FISIK SUBMITTED") !== -1 ||
+                        (evFisikText.trim() !== "" && evFisikText.trim() !== "-")) {
+                        isSubmitted = true;
+                        currentStage = "GCU LOGIC (Validasi Helpdesk)";
+                    }
+
+                    if (latestBlock.indexOf("[COMPLETED]") !== -1 || combinedText.toUpperCase().indexOf("[COMPLETED]") !== -1) {
+                        isSubmitted = true;
+                        currentStage = "COMPLETED (Tiket Selesai)";
+                    } else if (latestBlock.indexOf("APPROVAL KORLAP") !== -1 || latestBlock.indexOf("WAITING APPROVAL KORLAP") !== -1) {
+                        isSubmitted = true;
+                        currentStage = "APPROVAL KORLAP";
+                    } else if (latestBlock.indexOf("SOLVED VIA GCU LOGIC") !== -1) {
+                        isSubmitted = true;
+                        currentStage = "SOLVED VIA GCU LOGIC";
+                    }
+
+                    if (isSubmitted) {
+                        var timeMatch = combinedText.match(/\[(\d{2}\/\d{2}(?:\s+\d{2}:\d{2})?)\]/);
+                        var submitTime = timeMatch ? timeMatch[1] : "";
+                        var serviceNo = (sNoIdx !== -1 && data[r][sNoIdx]) ? data[r][sNoIdx].toString().trim() : "";
+                        var custName = (custNameIdx !== -1 && data[r][custNameIdx]) ? data[r][custNameIdx].toString().trim() : "";
+
+                        return {
+                            already: true,
+                            ticketId: cleanTicket,
+                            serviceNo: serviceNo,
+                            custName: custName,
+                            submitTime: submitTime,
+                            currentStage: currentStage,
+                            summarySnippet: latestBlock.substring(0, 150)
+                        };
+                    }
+
+                    return { already: false, ticketId: cleanTicket };
+                }
+            }
+        }
+        return { already: false, ticketId: cleanTicket };
+    } catch(err) {
+        return { already: false, error: err.message };
+    }
+}
+
+// === TAMPILAN HALAMAN NOTIFIKASI TIKET SUDAH DI-GCU FISIK ===
+function renderTicketAlreadyGcuFisikHtml(ticketId, inet, checkStatus) {
+    var sNo = (checkStatus && checkStatus.serviceNo) ? checkStatus.serviceNo : (inet || "-");
+    var cust = (checkStatus && checkStatus.custName) ? checkStatus.custName : "-";
+    var stage = (checkStatus && checkStatus.currentStage) ? checkStatus.currentStage : "GCU LOGIC";
+    var time = (checkStatus && checkStatus.submitTime) ? checkStatus.submitTime : "Sudah tersimpan";
+
+    var html = "<!DOCTYPE html>" +
+    "<html>" +
+    "<head>" +
+        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0\">" +
+        "<title>GENCU - Tiket Sudah di-GCU Fisik</title>" +
+        "<link href=\"https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap\" rel=\"stylesheet\">" +
+        "<script src=\"https://telegram.org/js/telegram-web-app.js\"></script>" +
+        "<style>" +
+            "* { box-sizing: border-box; }" +
+            "body {" +
+                "font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;" +
+                "background: #f1f5f9;" +
+                "margin: 0;" +
+                "padding: 24px 16px;" +
+                "color: #1e293b;" +
+                "display: flex;" +
+                "align-items: center;" +
+                "justify-content: center;" +
+                "min-height: 100vh;" +
+            "}" +
+            ".card {" +
+                "background: white;" +
+                "border-radius: 20px;" +
+                "padding: 28px 22px;" +
+                "box-shadow: 0 10px 30px rgba(0,0,0,0.06);" +
+                "border: 1px solid #e2e8f0;" +
+                "text-align: center;" +
+                "width: 100%;" +
+                "max-width: 440px;" +
+            "}" +
+            ".icon-badge {" +
+                "width: 72px;" +
+                "height: 72px;" +
+                "background: linear-gradient(135deg, #ecfdf5, #d1fae5);" +
+                "border: 2px solid #86efac;" +
+                "border-radius: 50%;" +
+                "display: flex;" +
+                "align-items: center;" +
+                "justify-content: center;" +
+                "margin: 0 auto 16px;" +
+                "font-size: 34px;" +
+                "box-shadow: 0 6px 16px rgba(16, 185, 129, 0.15);" +
+            "}" +
+            "h2 {" +
+                "margin: 0 0 6px 0;" +
+                "color: #065f46;" +
+                "font-size: 20px;" +
+                "font-weight: 800;" +
+            "}" +
+            "p.subtext {" +
+                "margin: 0 0 20px 0;" +
+                "color: #64748b;" +
+                "font-size: 13.5px;" +
+                "line-height: 1.5;" +
+            "}" +
+            ".info-box {" +
+                "background: #f8fafc;" +
+                "border: 1px solid #e2e8f0;" +
+                "border-radius: 14px;" +
+                "padding: 14px 16px;" +
+                "text-align: left;" +
+                "margin-bottom: 18px;" +
+            "}" +
+            ".info-row {" +
+                "display: flex;" +
+                "justify-content: space-between;" +
+                "align-items: center;" +
+                "padding: 8px 0;" +
+                "border-bottom: 1px dashed #e2e8f0;" +
+                "font-size: 13px;" +
+            "}" +
+            ".info-row:last-child { border-bottom: none; }" +
+            ".info-label { color: #64748b; font-weight: 500; }" +
+            ".info-val { color: #0f172a; font-weight: 700; text-align: right; }" +
+            ".badge-stage {" +
+                "display: inline-block;" +
+                "background: linear-gradient(135deg, #dbeafe, #eff6ff);" +
+                "color: #1d4ed8;" +
+                "padding: 3px 9px;" +
+                "border-radius: 6px;" +
+                "font-weight: 700;" +
+                "font-size: 12px;" +
+                "border: 1px solid #bfdbfe;" +
+            "}" +
+            ".alert-note {" +
+                "background: #eff6ff;" +
+                "border: 1px solid #bfdbfe;" +
+                "border-radius: 12px;" +
+                "padding: 12px 14px;" +
+                "text-align: left;" +
+                "font-size: 12.5px;" +
+                "color: #1e40af;" +
+                "line-height: 1.5;" +
+                "margin-bottom: 22px;" +
+            "}" +
+            ".btn-close {" +
+                "width: 100%;" +
+                "padding: 15px;" +
+                "background: linear-gradient(135deg, #2563eb, #1d4ed8);" +
+                "color: white;" +
+                "border: none;" +
+                "border-radius: 12px;" +
+                "font-size: 15px;" +
+                "font-weight: 700;" +
+                "cursor: pointer;" +
+                "box-shadow: 0 4px 14px rgba(37, 99, 235, 0.25);" +
+                "transition: opacity 0.2s;" +
+            "}" +
+            ".btn-close:active { opacity: 0.85; }" +
+        "</style>" +
+    "</head>" +
+    "<body>" +
+        "<div class=\"card\">" +
+            "<div class=\"icon-badge\">✅</div>" +
+            "<h2>Tiket Sudah di-GCU Fisik!</h2>" +
+            "<p class=\"subtext\">Nomor tiket ini sudah pernah diselesaikan check up fisiknya dan tersimpan ke database.</p>" +
+            "<div class=\"info-box\">" +
+                "<div class=\"info-row\">" +
+                    "<span class=\"info-label\">No. Incident</span>" +
+                    "<span class=\"info-val\" style=\"color: #2563eb;\">" + escapeHTML(ticketId) + "</span>" +
+                "</div>" +
+                "<div class=\"info-row\">" +
+                    "<span class=\"info-label\">No. Layanan / ND</span>" +
+                    "<span class=\"info-val\">" + escapeHTML(sNo) + "</span>" +
+                "</div>" +
+                "<div class=\"info-row\">" +
+                    "<span class=\"info-label\">Pelanggan</span>" +
+                    "<span class=\"info-val\">" + escapeHTML(cust) + "</span>" +
+                "</div>" +
+                "<div class=\"info-row\">" +
+                    "<span class=\"info-label\">Tahap Saat Ini</span>" +
+                    "<span class=\"info-val\"><span class=\"badge-stage\">" + escapeHTML(stage) + "</span></span>" +
+                "</div>" +
+                "<div class=\"info-row\">" +
+                    "<span class=\"info-label\">Waktu Submit</span>" +
+                    "<span class=\"info-val\">" + escapeHTML(time) + "</span>" +
+                "</div>" +
+            "</div>" +
+            "<div class=\"alert-note\">" +
+                "💡 <b>Pemberitahuan:</b> Anda tidak perlu lagi melakukan General Check Up Fisik untuk tiket ini. Jika di kemudian hari masih ada kendala dan memerlukan perbaikan lapangan, Helpdesk atau Korlap akan me-rework tiket kembali ke antrean Anda." +
+            "</div>" +
+            "<button class=\"btn-close\" onclick=\"closeForm()\">Tutup Halaman</button>" +
+        "</div>" +
+        "<script>" +
+            "function closeForm() {" +
+                "try {" +
+                    "if (window.Telegram && window.Telegram.WebApp) {" +
+                        "window.Telegram.WebApp.close();" +
+                        "return;" +
+                    "}" +
+                "} catch(e) {}" +
+                "window.close();" +
+            "}" +
+        "</script>" +
+    "</body>" +
+    "</html>";
+
+    return HtmlService.createHtmlOutput(html)
+        .setTitle("GCU FISIK - Sudah Disubmit")
+        .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+        .addMetaTag("viewport", "width=device-width, initial-scale=1");
+}
+
 function doGet(e) {
   // NEW: Handle action register_user
   if (e && e.parameter && e.parameter.action === 'register_user') {
@@ -77,6 +363,10 @@ function doGet(e) {
   // Handle action mark_gcu_logic (langsung selesai via logic)
   if (e && e.parameter && e.parameter.action === 'mark_gcu_logic') {
       var ticketId = e.parameter.ticket || "";
+      var checkStatus = checkIsTicketAlreadyGcuFisik(ticketId);
+      if (checkStatus && checkStatus.already) {
+          return renderTicketAlreadyGcuFisikHtml(ticketId, "", checkStatus);
+      }
       try {
           submitEvidenceDariWeb(ticketId, "[EVIDENCE FISIK SUBMITTED] - Solved via GCU LOGIC", "", "EVIDENCE LOGIC");
           var successHtml = `
@@ -108,6 +398,12 @@ function doGet(e) {
       var inet = e.parameter.inet || "";
       var rx = e.parameter.rx || "";
       var tx = e.parameter.tx || "";
+
+      // Guard: Cek apakah tiket sudah pernah disubmit GCU Fisik sebelumnya
+      var checkStatus = checkIsTicketAlreadyGcuFisik(ticketId);
+      if (checkStatus && checkStatus.already) {
+          return renderTicketAlreadyGcuFisikHtml(ticketId, inet, checkStatus);
+      }
       
       var html = `
       <!DOCTYPE html>
@@ -613,6 +909,9 @@ function doGet(e) {
                       var runner = google.script.run.withSuccessHandler(function(res) {
                           if (res === "OK") {
                               document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;min-height:80vh;"><div class="card" style="text-align:center;"><h2 style="color: #10b981; font-size:40px; margin-bottom:10px;">✅</h2><h3 style="color: #374151;">Berhasil Terkirim!</h3><p style="color: #6b7280; font-size:14px;">Laporan evidence dan foto telah tersimpan ke sistem.</p></div></div>';
+                          } else if (res && res.indexOf("TIKET_SUDAH_GCU_FISIK") !== -1) {
+                              alert("⚠️ PERINGATAN:\n" + res.replace("TIKET_SUDAH_GCU_FISIK: ", ""));
+                              window.location.reload();
                           } else {
                               showMsg('❌ Gagal: ' + res, 'error');
                               document.querySelector('button').innerText = 'Submit Evidence';
@@ -838,6 +1137,13 @@ function doGet(e) {
 }
 
 function submitFisikBase64(payload) {
+    var ticketId = (payload && payload.ticketId ? payload.ticketId : "").toString().trim();
+    // Guard: Cek apakah tiket sudah pernah disubmit GCU Fisik sebelumnya
+    var checkStatus = checkIsTicketAlreadyGcuFisik(ticketId);
+    if (checkStatus && checkStatus.already) {
+        return "TIKET_SUDAH_GCU_FISIK: Nomor tiket " + ticketId + " sudah pernah disubmit GCU Fisik sebelumnya (" + checkStatus.currentStage + "). Tidak dapat disubmit ulang.";
+    }
+
     var lock = LockService.getScriptLock();
     try {
         lock.waitLock(30000); // Tunggu antrean sampai 30 detik
@@ -956,6 +1262,12 @@ function submitFisikBase64(payload) {
 
 function submitFisikToGAS(formObject) {
     try {
+        var ticketIdRaw = Array.isArray(formObject.ticketId) ? formObject.ticketId[0] : formObject.ticketId;
+        var ticketId = (ticketIdRaw || "").toString().trim();
+        var checkStatus = checkIsTicketAlreadyGcuFisik(ticketId);
+        if (checkStatus && checkStatus.already) {
+            return "TIKET_SUDAH_GCU_FISIK: Nomor tiket " + ticketId + " sudah pernah disubmit GCU Fisik sebelumnya (" + checkStatus.currentStage + ").";
+        }
         var baseSummaryRaw = Array.isArray(formObject.baseSummary) ? formObject.baseSummary[formObject.baseSummary.length - 1] : formObject.baseSummary;
         var summary = (baseSummaryRaw || "").toString().replace(/\\n/g, "\n");
         
@@ -1488,10 +1800,15 @@ function sendActiveTicketsForTeknisi(nik, chatId, tekName) {
       var rowAction = (actionIdx !== -1 && row[actionIdx]) ? row[actionIdx].toString().toUpperCase() : "";
       var rowText = row.join(" ").toUpperCase();
       
-      // HANYA Lewati jika tiket SUDAH BENAR-BENAR SELESAI (COMPLETED OLEH KORLAP) atau PENDING
-      // JANGAN skip tiket hanya karena status OSS bertuliskan CLOSED/MEDIACARE/SALAMSIM, karena di Dashboard GENCU tiket ini masih aktif di GCU FISIK!
-      if (rowAction.includes("[COMPLETED]") || rowText.includes("[COMPLETED]") || rowAction.includes("[PENDING]")) {
-        continue;
+      // HANYA Lewati jika tiket SUDAH BENAR-BENAR SELESAI (COMPLETED OLEH KORLAP), PENDING, atau SUDAH SUBMIT EVIDENCE FISIK (kecuali rework)
+      var isRework = rowAction.indexOf("DIKEMBALIKAN KE GCU FISIK") !== -1 || rowAction.indexOf("[BUTUH FISIK") !== -1 || rowAction.indexOf("REWORK FISIK") !== -1 || rowAction.indexOf("REJECT KE GCU FISIK") !== -1;
+      if (!isRework) {
+        if (rowAction.indexOf("[COMPLETED]") !== -1 || rowText.indexOf("[COMPLETED]") !== -1 || rowAction.indexOf("[PENDING]") !== -1) {
+          continue;
+        }
+        if (rowAction.indexOf("EVIDENCE FISIK SUBMITTED") !== -1 || rowAction.indexOf("SOLVED VIA GCU LOGIC") !== -1 || rowAction.indexOf("WAITING APPROVAL KORLAP") !== -1) {
+          continue;
+        }
       }
       
       // Pencocokan NIK Teknisi yang komprehensif
@@ -1795,6 +2112,10 @@ function doPost(e) {
   // NEW: Handle submit_evidence_fisik action dari Web Dashboard (Teknisi -> Helpdesk)
   if (dataObj.action === 'submit_evidence_fisik') {
       try {
+          var checkStatus = checkIsTicketAlreadyGcuFisik(dataObj.ticketId);
+          if (checkStatus && checkStatus.already) {
+              return ContentService.createTextOutput("TIKET_SUDAH_GCU_FISIK: Nomor tiket " + dataObj.ticketId + " sudah pernah disubmit GCU Fisik sebelumnya (" + checkStatus.currentStage + ").").setMimeType(ContentService.MimeType.TEXT);
+          }
           var sumTextFisik = dataObj.summaryText || "[GCU LOGIC] - EVIDENCE FISIK SUBMITTED";
           
           if (dataObj.photoBase64) {
