@@ -758,12 +758,14 @@ function processData(rows, isBackground = false) {
             }
         }
         
-        for (let c = 0; c < row.length; c++) {
-            let val = (row[c] || "").toString().trim();
-            let rkMatch = val.match(/OD[CP]-([A-Z]{3})-/i);
-            if (rkMatch) {
-                sto = rkMatch[1].toUpperCase();
-                break;
+        if (sto === "-") {
+            for (let c = 0; c < row.length; c++) {
+                let val = (row[c] || "").toString().trim();
+                let rkMatch = val.match(/OD[CP]-([A-Z]{3})-/i);
+                if (rkMatch) {
+                    sto = rkMatch[1].toUpperCase();
+                    break;
+                }
             }
         }
         
@@ -826,16 +828,19 @@ function processData(rows, isBackground = false) {
             }
         }
 
-        // Ekstrak RX dan TX fallback (Scan dari belakang)
-        for (let c = row.length - 1; c >= 0; c--) {
-            let val = (row[c] || "").toString().trim();
-            let numMatch = val.match(/^-?\d+([.,]\d+)?(\s?dBm)?$/i);
-            if (numMatch) {
-                let num = parseFloat(val.replace(',', '.').replace(/dBm/i, '').trim());
-                if (!isNaN(num)) {
-                    if (num < -5 && num > -45 && rx === "") rx = val;
-                    if (num >= 0.5 && num <= 8.0 && tx === "") tx = val;
+        // Ekstrak RX dan TX fallback (Scan dari belakang HANYA jika rx atau tx belum ada)
+        if (rx === "" || tx === "") {
+            for (let c = row.length - 1; c >= 0; c--) {
+                let val = (row[c] || "").toString().trim();
+                let numMatch = val.match(/^-?\d+([.,]\d+)?(\s?dBm)?$/i);
+                if (numMatch) {
+                    let num = parseFloat(val.replace(',', '.').replace(/dBm/i, '').trim());
+                    if (!isNaN(num)) {
+                        if (num < -5 && num > -45 && rx === "") rx = val;
+                        if (num >= 0.5 && num <= 8.0 && tx === "") tx = val;
+                    }
                 }
+                if (rx !== "" && tx !== "") break;
             }
         }
 
@@ -1417,7 +1422,10 @@ function renderTable() {
     let countLos = 0;
     // let countDying = 0;
 
-    displayTickets.forEach(ticket => {
+    const renderLimit = state.tableRenderLimit || 100;
+    const ticketsToRender = displayTickets.slice(0, renderLimit);
+
+    ticketsToRender.forEach(ticket => {
         let st = (ticket.status || "").toUpperCase();
         if (st === 'ONLINE' || st.match(/\bONLINE\b/)) countOnline++;
         else if (st === 'LOS' || st.match(/\bLOS\b/)) countLos++;
@@ -2633,8 +2641,13 @@ function renderTeknisiFlow() {
             </div>
         </div>
 
-        <label class="block text-sm font-medium text-gray-700 mb-1">Upload Foto Evidence (Dari Galeri/Kamera)</label>
-        <input type="file" id="tekPhoto" accept="image/*" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 10px; background: white;">
+        <label class="block text-sm font-medium text-gray-700 mb-1" style="display: block; font-size: 12.5px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px;">
+            📸 Upload Foto Evidence Fisik <span style="color: #dc2626; font-weight: 800;">*(Wajib Di-upload / Mandatory)</span>
+        </label>
+        <input type="file" id="tekPhoto" accept="image/*" style="width: 100%; padding: 10px; border: 1.5px dashed var(--border); border-radius: var(--radius-sm); margin-bottom: 8px; background: white;" onchange="if(this.files && this.files.length > 0){ document.getElementById('tekPhotoPreview').style.display='flex'; document.getElementById('tekPhotoFileName').innerText='✅ ' + this.files[0].name + ' (' + Math.round(this.files[0].size/1024) + ' KB)'; this.style.borderColor='#10b981'; }">
+        <div id="tekPhotoPreview" style="display: none; align-items: center; gap: 8px; padding: 8px 12px; background: #ecfdf5; border: 1px solid #10b981; border-radius: 8px; margin-bottom: 12px;">
+            <span id="tekPhotoFileName" style="font-size: 12px; font-weight: 700; color: #065f46;">Foto siap di-upload</span>
+        </div>
         
         <label class="block text-sm font-medium text-gray-700 mb-1">Status Pekerjaan / Pending (Opsional)</label>
         <select id="tekPendingReason" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 10px; background: white;" onchange="updateState('pendingReason', this.value)">
@@ -2769,7 +2782,9 @@ function renderHelpdeskFlow() {
         ${checklistSectionHtml}
 
         <div style="margin-top: 15px; margin-bottom: 15px;">
-            <label class="block text-sm font-medium text-gray-700 mb-1" style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Upload Foto Evidence Logic (Opsional)</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1" style="display: block; font-size: 12.5px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px;">
+                📸 Upload / Tempel Screenshot Evidence Logic <span style="color: #dc2626; font-weight: 800;">*(Wajib Di-upload / Mandatory)</span>
+            </label>
             
             <!-- Custom Zone Copas Evidence -->
             <div id="hdPhotoPasteZone" 
@@ -3025,6 +3040,28 @@ window.requestApprovalBackend = async function (event) {
         return;
     }
 
+    // 1. Validasi Checklist Logic (MANDATORY)
+    if (checkedItems.length === 0 && !notes) {
+        alert("⚠️ MANDATORY EVIDENCE LOGIC:\n\nSilakan centang langkah checklist logic yang sudah dikerjakan atau tulis catatan sebelum mengajukan approval ke Korlap!");
+        return;
+    }
+
+    // 2. Validasi Foto / Screenshot Evidence Logic (MANDATORY)
+    const photoInput = document.getElementById('hdPhoto');
+    const file = window.selectedHdPhotoFile || (photoInput && photoInput.files.length > 0 ? photoInput.files[0] : null);
+    if (!file) {
+        alert("⚠️ MANDATORY EVIDENCE LOGIC:\n\nFoto / Screenshot evidence eksekusi GCU Logic WAJIB di-upload sebelum mengajukan approval ke Korlap!\n\nSilakan tekan Ctrl+V (atau Cmd+V) untuk menempel screenshot, atau klik tombol '📁 Atau Pilih File dari Galeri'.");
+        const zone = document.getElementById('hdPhotoPasteZone');
+        if (zone) {
+            zone.focus();
+            zone.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            zone.style.border = "2px dashed #ef4444";
+            zone.style.background = "#fef2f2";
+            zone.style.boxShadow = "0 0 0 3px rgba(239, 68, 68, 0.25)";
+        }
+        return;
+    }
+
     // UBAH WARNA TOMBOL MENJADI HIJAU SEKETIKA SAAT DIKLIK OLEH HELPDESK
     btn.style.background = "linear-gradient(135deg, #10b981, #059669)";
     btn.style.color = "#ffffff";
@@ -3042,9 +3079,6 @@ window.requestApprovalBackend = async function (event) {
         summaryText: summaryText
     };
 
-    // Proses Foto Jika Ada
-    const photoInput = document.getElementById('hdPhoto');
-    const file = window.selectedHdPhotoFile || (photoInput && photoInput.files.length > 0 ? photoInput.files[0] : null);
     if (file) {
         btn.innerText = "✅ Mengupload Foto Evidence...";
         try {
@@ -3127,13 +3161,37 @@ window.submitTeknisiEvidence = async function (event) {
         summaryText = "[GCU LOGIC] - EVIDENCE FISIK SUBMITTED: " + (checkedItems.length > 0 ? checkedItems.join(", ") : "Selesai") + (notes ? " | Catatan: " + notes : "");
     }
 
+    // Validasi Evidence Fisik (MANDATORY) jika bukan tiket PENDING
+    if (!pendingReason) {
+        const photoInput = document.getElementById('tekPhoto');
+        const hasPhoto = photoInput && photoInput.files && photoInput.files.length > 0;
+        if (!hasPhoto) {
+            alert("⚠️ MANDATORY EVIDENCE FISIK:\n\nFoto evidence pekerjaan fisik lapangan WAJIB di-upload sebelum submit!\nSilakan pilih foto evidence terlebih dahulu.");
+            if (photoInput) {
+                photoInput.focus();
+                photoInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                photoInput.style.outline = "2px solid #ef4444";
+            }
+            btn.innerText = oldText;
+            btn.disabled = false;
+            return;
+        }
+
+        if (checkedItems.length === 0 && !notes) {
+            alert("⚠️ MANDATORY EVIDENCE FISIK:\n\nSilakan centang minimal salah satu checklist pekerjaan fisik (Cek ODP / Cek ONT / Patching Kabel) atau tulis catatan perbaikan!");
+            btn.innerText = oldText;
+            btn.disabled = false;
+            return;
+        }
+    }
+
     const payload = {
         action: 'submit_evidence_fisik',
         ticketId: state.activeTicketId,
         summaryText: summaryText
     };
 
-    // Proses Foto Jika Ada
+    // Proses Foto
     const photoInput = document.getElementById('tekPhoto');
     if (photoInput && photoInput.files.length > 0) {
         btn.innerText = "Mengupload Foto...";

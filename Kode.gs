@@ -521,7 +521,7 @@ function doGet(e) {
               <div class="card">
                   <h3>Detail Perbaikan</h3>
                   <div class="form-group">
-                      <label>Penyebab</label>
+                      <label>Penyebab <span style="color:#ef4444;font-weight:700;">* Wajib</span></label>
                       <select id="penyebab" onchange="toggleOthers('penyebab')">
                           <option value="">-- Pilih Penyebab --</option>
                           <option value="DC putus digigit tikus">DC putus digigit tikus</option>
@@ -536,7 +536,7 @@ function doGet(e) {
                   </div>
                   
                   <div class="form-group">
-                      <label>Perbaikan</label>
+                      <label>Perbaikan <span style="color:#ef4444;font-weight:700;">* Wajib</span></label>
                       <select id="perbaikan" onchange="toggleOthers('perbaikan')">
                           <option value="">-- Pilih Perbaikan --</option>
                           <option value="Sambung ulang DC">Sambung ulang DC</option>
@@ -550,7 +550,7 @@ function doGet(e) {
                   </div>
 
                   <div class="form-group">
-                      <label>Segmen</label>
+                      <label>Segmen <span style="color:#ef4444;font-weight:700;">* Wajib</span></label>
                       <select id="segmen">
                           <option value="">-- Pilih Segmen --</option>
                           <option value="DC">DC</option>
@@ -583,7 +583,7 @@ function doGet(e) {
                   </div>
 
                   <div class="form-group">
-                      <label>Penempatan ONT</label>
+                      <label>Penempatan ONT <span style="color:#ef4444;font-weight:700;">* Wajib</span></label>
                       <input type="file" id="ev_ont_link" name="ev_ont_file" accept="image/*" style="padding:8px; border:1px solid #cbd5e1; border-radius:6px; width:100%; box-sizing:border-box;">
                       <div class="switch-container">
                           <span class="switch-label">Status ONT:</span>
@@ -595,7 +595,7 @@ function doGet(e) {
                   </div>
 
                   <div class="form-group">
-                      <label>Sambungan DC</label>
+                      <label>Sambungan DC <span style="color:#ef4444;font-weight:700;">* Wajib</span></label>
                       <select id="dc_count" onchange="renderDcInputs()">
                           <option value="1">1 Sambungan</option>
                           <option value="2">2 Sambungan</option>
@@ -615,17 +615,17 @@ function doGet(e) {
                   </div>
 
                   <div class="form-group">
-                      <label>Foto di Lokasi / Pelanggan</label>
+                      <label>Foto di Lokasi / Pelanggan <span style="color:#ef4444;font-weight:700;">* Wajib</span></label>
                       <input type="file" id="ev_lokasi" name="ev_lokasi_file" accept="image/*" style="padding:8px; border:1px solid #cbd5e1; border-radius:6px; width:100%; box-sizing:border-box;">
                   </div>
                   
                   <div class="form-group">
-                      <label>Hasil Ukur Redaman di ODP</label>
+                      <label>Hasil Ukur Redaman di ODP <span style="color:#ef4444;font-weight:700;">* Wajib</span></label>
                       <input type="text" id="redaman_odp" placeholder="Masukkan nilai redaman" style="padding:8px; border:1px solid #cbd5e1; border-radius:6px; width:100%; box-sizing:border-box;">
                   </div>
 
                   <div class="form-group">
-                      <label>Upload Foto Evidence Redaman</label>
+                      <label>Upload Foto Evidence Redaman <span style="color:#ef4444;font-weight:700;">* Wajib</span></label>
                       <input type="file" id="ev_redaman" name="ev_redaman_file" accept="image/*" style="padding:8px; border:1px solid #cbd5e1; border-radius:6px; width:100%; box-sizing:border-box;">
                   </div>
 
@@ -850,9 +850,43 @@ function doGet(e) {
                       var penyebab = getVal('penyebab') === 'Others' ? getVal('penyebab_others') : getVal('penyebab');
                       var perbaikan = getVal('perbaikan') === 'Others' ? getVal('perbaikan_others') : getVal('perbaikan');
                       var segmen = getVal('segmen');
-                      
-                      if(!penyebab || !perbaikan || !segmen) {
-                          showMsg('⚠️ Harap isi Penyebab, Perbaikan, dan Segmen terlebih dahulu!', 'error');
+                      var redamanVal = getVal('redaman_odp');
+
+                      var fJalur = document.getElementById('ev_jalur_link');
+                      var fOnt = document.getElementById('ev_ont_link');
+                      var fDc = document.getElementById('ev_dc_1');
+                      var fLokasi = document.getElementById('ev_lokasi');
+                      var fRedaman = document.getElementById('ev_redaman');
+
+                      var missing = [];
+                      if(!penyebab) missing.push("Penyebab");
+                      if(!perbaikan) missing.push("Perbaikan");
+                      if(!segmen) missing.push("Segmen");
+                      if(!redamanVal) missing.push("Hasil Ukur Redaman di ODP");
+                      if(!fJalur || !fJalur.files || fJalur.files.length === 0) missing.push("Foto Jalur");
+                      if(!fOnt || !fOnt.files || fOnt.files.length === 0) missing.push("Foto Penempatan ONT");
+                      if(!fDc || !fDc.files || fDc.files.length === 0) missing.push("Foto Sambungan DC");
+                      if(!fLokasi || !fLokasi.files || fLokasi.files.length === 0) missing.push("Foto di Lokasi / Pelanggan");
+                      if(!fRedaman || !fRedaman.files || fRedaman.files.length === 0) missing.push("Foto Evidence Redaman ODP");
+
+                      if(document.getElementById('toggle_voice') && document.getElementById('toggle_voice').checked) {
+                          var fVoice = document.getElementById('ev_voice');
+                          if(!fVoice || !fVoice.files || fVoice.files.length === 0) missing.push("Foto Evidence Voice");
+                      }
+                      if(document.getElementById('toggle_iptv') && document.getElementById('toggle_iptv').checked) {
+                          var fIptvCh = document.getElementById('ev_iptv_channel');
+                          var fIptvRem = document.getElementById('ev_iptv_remote');
+                          if(!fIptvCh || !fIptvCh.files || fIptvCh.files.length === 0) missing.push("Foto Evidence Channel IPTV");
+                          if(!fIptvRem || !fIptvRem.files || fIptvRem.files.length === 0) missing.push("Foto Evidence Remote IPTV");
+                      }
+                      if(document.getElementById('toggle_perangkat') && document.getElementById('toggle_perangkat').checked) {
+                          var fPerangkat = document.getElementById('ev_perangkat');
+                          if(!fPerangkat || !fPerangkat.files || fPerangkat.files.length === 0) missing.push("Foto Evidence Perangkat Tambahan");
+                      }
+
+                      if(missing.length > 0) {
+                          showMsg('⚠️ Mandatory Evidence Belum Lengkap! Harap lengkapi: ' + missing.join(', '), 'error');
+                          alert('⚠️ MANDATORY EVIDENCE FISIK BELUM LENGKAP:\n\nHarap lengkapi item berikut sebelum submit:\n• ' + missing.join('\n• '));
                           btn.innerText = 'Submit Evidence';
                           btn.disabled = false;
                           return;
@@ -997,12 +1031,25 @@ function doGet(e) {
   
   var headers = scrapeData[headerRowIdx].map(function(h) { return h.toString().trim(); });
   
-  // Ambil data hanya SETELAH baris header & HANYA baris yang memiliki Incident ID
-  var dataRows = scrapeData.slice(headerRowIdx + 1).filter(function(row) {
-      return row.some(function(cell) {
-          return cell && cell.toString().trim().match(/^(INC\d+|1-SV\d+)/);
-      });
-  });
+  // Ambil data hanya SETELAH baris header & HANYA baris yang memiliki Incident ID (Direct check kolom INCIDENT agar cepat)
+  var incIdxScrapeFast = -1;
+  for (var c = 0; c < headers.length; c++) {
+      var h = headers[c].toUpperCase();
+      if (h === "INCIDENT" || h === "ID TICKET" || h === "TICKET ID" || (h.indexOf("INCIDENT") !== -1 && h.indexOf("PARENT") === -1 && h.indexOf("DOMAIN") === -1 && h.indexOf("RELATED") === -1)) {
+          incIdxScrapeFast = c;
+          break;
+      }
+  }
+  var dataRows = [];
+  for (var r = headerRowIdx + 1; r < scrapeData.length; r++) {
+      var row = scrapeData[r];
+      var incVal = (incIdxScrapeFast !== -1 && row[incIdxScrapeFast]) ? row[incIdxScrapeFast].toString().trim() : "";
+      if (incVal && incVal.match(/^(INC\d+|1-SV\d+)/)) {
+          dataRows.push(row);
+      } else if (incIdxScrapeFast === -1 && row.some(function(cell) { return cell && cell.toString().trim().match(/^(INC\d+|1-SV\d+)/); })) {
+          dataRows.push(row);
+      }
+  }
 
   // Jika DATABASE ALL TICKET ternyata belum ada tiket valid, fallback ke ALL TICKET INSERA atau SCRAPING INSERA
   if (dataRows.length === 0) {
@@ -1142,6 +1189,11 @@ function submitFisikBase64(payload) {
     var checkStatus = checkIsTicketAlreadyGcuFisik(ticketId);
     if (checkStatus && checkStatus.already) {
         return "TIKET_SUDAH_GCU_FISIK: Nomor tiket " + ticketId + " sudah pernah disubmit GCU Fisik sebelumnya (" + checkStatus.currentStage + "). Tidak dapat disubmit ulang.";
+    }
+
+    // Guard: Mandatory Evidence Fisik
+    if (!payload.ev_jalur_file || !payload.ev_ont_file || !payload.ev_lokasi_file || !payload.ev_redaman_file) {
+        return "Error: Evidence fisik belum lengkap (Foto Jalur, ONT, Lokasi, dan Redaman wajib di-upload).";
     }
 
     var lock = LockService.getScriptLock();
@@ -2058,6 +2110,9 @@ function doPost(e) {
   // NEW: Handle request_approval action dari Web Dashboard (Helpdesk -> Korlap)
   if (dataObj.action === 'request_approval') {
       try {
+          if (!dataObj.photoBase64) {
+              return ContentService.createTextOutput("Error: Foto/Screenshot evidence logic wajib di-upload.").setMimeType(ContentService.MimeType.TEXT);
+          }
           var sumText = dataObj.summaryText || "[WAITING APPROVAL KORLAP] - Logic OK, siap di-approve";
           
           if (dataObj.photoBase64) {
