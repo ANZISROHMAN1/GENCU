@@ -4982,147 +4982,176 @@ window.renderKonselingGaulDashboard = function () {
         }
     });
 
-    // Helper: Validasi apakah tiket pernah submit / melewati GCU Fisik
-    function isTicketEverGcuFisik(t) {
+    // Helper: Validasi apakah tiket benar-benar memiliki riwayat pengerjaan GCU Fisik atau GCU Logic nyata di GENCU
+    function hasRealGcuHistory(t) {
         if (!t) return false;
         let allText = [
             t.actionHistory || "",
             t.evFisik || "",
-            t.category || ""
+            t.evLogic || ""
         ].join(" ").toUpperCase();
 
+        // 1. Evidence Fisik yang sah (pernah disubmit teknisi fisik)
         if (allText.includes("EVIDENCE FISIK SUBMITTED") || allText.includes("GCU FISIK SUBMITTED")) return true;
-        if (t.evFisik && t.evFisik.trim() !== "" && t.evFisik.trim() !== "-") return true;
+        if (t.evFisik && t.evFisik.trim() !== "" && t.evFisik.trim() !== "-" && t.evFisik.trim() !== "null") return true;
         if (t.photos && Object.keys(t.photos).some(k => /JALUR|ONT|DC|LOKASI|REDAMAN/i.test(k))) return true;
-        if (t.category === 'APPROVAL KORLAP' || t.category === 'COMPLETED') return true;
-        if (allText.includes("DIKEMBALIKAN KE GCU LOGIC") || allText.includes("SOLVED VIA GCU LOGIC")) return true;
+
+        // 2. Evidence Logic yang sah (pernah dieksekusi / disubmit helpdesk logic)
+        if (allText.includes("SOLVED VIA GCU LOGIC") || allText.includes("EVIDENCE LOGIC SUBMITTED") || 
+            allText.includes("[WAITING APPROVAL KORLAP]") || allText.includes("EKSEKUSI LOGIC")) return true;
+        if (t.evLogic && t.evLogic.trim() !== "" && t.evLogic.trim() !== "-" && t.evLogic.trim() !== "null") return true;
+
+        // 3. Rework atau feedback alur (tiket pernah dikembalikan / reject pasca pengerjaan)
+        if (allText.includes("DIKEMBALIKAN KE GCU FISIK") || allText.includes("REJECT KE GCU FISIK") || allText.includes("DIKEMBALIKAN KE GCU LOGIC")) return true;
+
+        // 4. Completed resmi pasca approval Korlap di sistem GENCU
+        if (allText.includes("[COMPLETED] - APPROVED BY KORLAP") || allText.includes("APPROVED BY KORLAP")) return true;
+
         return false;
     }
 
-    // 2. Tandai nomor internet yang SUDAH PERNAH DI-GCU FISIK
-    const serviceFisikMap = new Map();
-    ticketsByService.forEach((sList, sn) => {
-        let fisikList = sList.filter(t => isTicketEverGcuFisik(t));
-        if (fisikList.length > 0) {
-            let tek = "";
-            for (let f of fisikList) {
-                if (f.technician && f.technician !== "-" && f.technician !== "Unknown" && !f.technician.toLowerCase().includes("assign")) {
-                    tek = f.technician.toString().trim();
-                    break;
-                }
-            }
-            serviceFisikMap.set(sn, {
-                hasFisik: true,
-                fisikTickets: fisikList,
-                prevTechnician: tek
-            });
+    function hasRealGcuFisik(t) {
+        if (!t) return false;
+        let allText = [t.actionHistory || "", t.evFisik || ""].join(" ").toUpperCase();
+        if (allText.includes("EVIDENCE FISIK SUBMITTED") || allText.includes("GCU FISIK SUBMITTED")) return true;
+        if (t.evFisik && t.evFisik.trim() !== "" && t.evFisik.trim() !== "-" && t.evFisik.trim() !== "null") return true;
+        if (t.photos && Object.keys(t.photos).some(k => /JALUR|ONT|DC|LOKASI|REDAMAN/i.test(k))) return true;
+        return false;
+    }
+
+    function getTicketSequence(t) {
+        if (t.statusDate) {
+            let ts = new Date(t.statusDate).getTime();
+            if (!isNaN(ts) && ts > 0) return ts;
         }
-    });
+        let m = (t.incident || "").match(/\d+/);
+        return m ? parseInt(m[0], 10) : 0;
+    }
 
     const logs = window.getKonselingLogs();
     const gaulMap = new Map();
     let totalKasusGaul = 0;
+    let seenRepeatIncidents = new Set();
 
-    // 3. Filter tiket yang masuk ke Menu GAUL:
-    // Sesuai aturan: Tiket (baik di GCU Fisik atau di GCU Logic) yang nomor internetnya sudah pernah di-GCU fisik
-    // namun muncul tiket lagi dengan nomor internet yang sama.
-    tickets.forEach(t => {
-        let sn = (t.serviceNumber || '').trim();
-        if (!sn || sn === '-' || sn === 'Unknown') return;
+    function addGaulRecord(curTicket, rawNik, priorGcuTicket) {
+        // Jika Witel filter aktif, pastikan tiket atau prior ticket sesuai witel yang difilter
+        if (window.konselingWitelFilterVal && window.konselingWitelFilterVal !== 'ALL') {
+            let w = window.konselingWitelFilterVal;
+            if (curTicket.witel !== w && (!priorGcuTicket || priorGcuTicket.witel !== w)) {
+                return;
+            }
+        }
 
-        let isTargetCategory = (t.category === 'GCU FISIK' || t.category === 'GCU LOGIC');
-        let sList = ticketsByService.get(sn) || [];
-        let fisikInfo = serviceFisikMap.get(sn);
+        let groupKey = rawNik || "TANPA_NIK";
+        if (!gaulMap.has(groupKey)) {
+            let tInfo = rawNik ? window.getTeknisiInfo(rawNik) : null;
+            let isValid = rawNik ? window.isTeknisiValidInDb(rawNik) : false;
+            gaulMap.set(groupKey, {
+                nik: rawNik || "-",
+                nama: tInfo ? tInfo.nama : (rawNik ? (isValid ? rawNik : `⚠️ ${rawNik}`) : "⚠️ Belum Di-assign"),
+                isValidInDb: isValid,
+                count: 0,
+                totalScore: 0,
+                symptomMap: {},
+                stos: {},
+                witels: new Set(),
+                tickets: []
+            });
+        }
 
-        let isGaulRepeat = false;
-        let prevFisikTicket = null;
+        let item = gaulMap.get(groupKey);
+        item.count++;
+        totalKasusGaul++;
 
-        if (fisikInfo) {
-            // Cek apakah ada tiket fisik lain selain tiket ini untuk nomor internet yang sama
-            let otherFisik = fisikInfo.fisikTickets.find(ft => ft.incident !== t.incident);
-            if (otherFisik) {
-                isGaulRepeat = true;
-                prevFisikTicket = otherFisik;
-            } else if (sList.length > 1 && fisikInfo.fisikTickets.length >= 1) {
-                // Muncul tiket lagi dengan nomor internet yang sama dan nomor ini pernah GCU Fisik
-                if (isTargetCategory || t !== fisikInfo.fisikTickets[0]) {
-                    isGaulRepeat = true;
-                    prevFisikTicket = fisikInfo.fisikTickets[0];
+        let gScore = 1;
+        if (curTicket.gaul && curTicket.gaul > 0) gScore = Math.max(gScore, curTicket.gaul);
+        item.totalScore += gScore;
+        item.tickets.push(curTicket);
+
+        if (curTicket.sto && curTicket.sto !== '-') {
+            item.stos[curTicket.sto] = (item.stos[curTicket.sto] || 0) + 1;
+        }
+        if (curTicket.witel && curTicket.witel !== '-') {
+            item.witels.add(curTicket.witel);
+        }
+
+        let sym = (curTicket.symptom && curTicket.symptom !== '-') ? curTicket.symptom.trim() : null;
+        if (sym && sym.includes('|')) {
+            let parts = sym.split('|').map(p => p.trim()).filter(p => p && p.toLowerCase() !== 'null' && p.toLowerCase() !== 'technical');
+            if (parts.length > 0) sym = parts[parts.length - 1];
+        }
+        if (sym && sym.length > 50) {
+            sym = sym.substring(0, 48) + '...';
+        }
+        if (!sym && (curTicket.status || '').toUpperCase().includes('LOS')) {
+            sym = 'LOS (Loss of Signal)';
+        }
+        if (!sym && curTicket.rx && curTicket.rx.toUpperCase().includes('LOS')) {
+            sym = 'LOS (Loss of Signal)';
+        }
+        if (sym) {
+            item.symptomMap[sym] = (item.symptomMap[sym] || 0) + 1;
+        }
+    }
+
+    // 2. Evaluasi tiket GAUL berdasarkan aturan bisnis presisi:
+    // "Bukan tiket yang belum di gcu fisik yaa tetapi tiket yang sudah pernah di gcu fisik atau gcu logik namun muncul lagi,
+    //  patokkannya di nomer internetnya dan tiketnya"
+    ticketsByService.forEach((sList, sn) => {
+        // Skenario 1: Lebih dari 1 tiket pada nomor internet yang sama
+        if (sList.length > 1) {
+            // Urutkan tiket secara kronologis (dari terdahulu ke terbaru)
+            let sorted = [...sList].sort((a, b) => getTicketSequence(a) - getTicketSequence(b));
+
+            // Periksa setiap tiket mulai dari urutan ke-2 (index 1 ke atas)
+            for (let i = 1; i < sorted.length; i++) {
+                let curTicket = sorted[i];
+                if (seenRepeatIncidents.has(curTicket.incident)) continue;
+
+                // Cari tiket sebelum curTicket yang SUDAH PERNAH di-GCU Fisik atau GCU Logic
+                let priorGcu = null;
+                for (let j = 0; j < i; j++) {
+                    if (hasRealGcuHistory(sorted[j])) {
+                        priorGcu = sorted[j];
+                        break;
+                    }
+                }
+
+                // Jika ada tiket terdahulu yang sudah pernah diproses GCU Fisik / GCU Logic,
+                // maka curTicket merupakan TIKET REPEAT (GAUL)!
+                if (priorGcu) {
+                    seenRepeatIncidents.add(curTicket.incident);
+
+                    // Tentukan teknisi penyumbang GAUL:
+                    // 1) Prioritaskan teknisi pada pengerjaan GCU terdahulu yang mengalami gangguan ulang (penyebab repeat)
+                    // 2) Atau teknisi tiket saat ini jika tiket terdahulu belum ada personil teknisi (misal GCU Logic)
+                    let rawNik = "";
+                    if (priorGcu.technician && priorGcu.technician !== "-" && priorGcu.technician !== "Unknown" && !priorGcu.technician.toLowerCase().includes("assign")) {
+                        rawNik = priorGcu.technician.toString().trim();
+                    } else if (curTicket.technician && curTicket.technician !== "-" && curTicket.technician !== "Unknown" && !curTicket.technician.toLowerCase().includes("assign")) {
+                        rawNik = curTicket.technician.toString().trim();
+                    }
+
+                    curTicket._prevGcuIncident = priorGcu.incident;
+                    curTicket._prevGcuType = hasRealGcuFisik(priorGcu) ? "GCU Fisik" : "GCU Logic";
+                    curTicket._prevGcuTechnician = priorGcu.technician || "-";
+
+                    addGaulRecord(curTicket, rawNik, priorGcu);
                 }
             }
-        }
-
-        // Cek juga tiket yang di history-nya sendiri pernah submit fisik lalu dibuka kembali / di-rework
-        if (!isGaulRepeat && isTargetCategory) {
+        } else if (sList.length === 1) {
+            // Skenario 2: Tiket tunggal tetapi mengalami rework/reopen setelah submit evidence fisik
+            let t = sList[0];
             let actUpper = (t.actionHistory || '').toUpperCase();
-            if ((actUpper.includes("DIKEMBALIKAN KE GCU FISIK") || actUpper.includes("[BUTUH FISIK")) && actUpper.includes("EVIDENCE FISIK SUBMITTED")) {
-                isGaulRepeat = true;
-                prevFisikTicket = t;
-            }
-        }
-
-        if (isGaulRepeat) {
-            // Tentukan teknisi penyumbang GAUL:
-            // 1) Teknisi yang mengerjakan GCU Fisik sebelumnya (yang menyebabkan repeat)
-            // 2) Atau teknisi pada tiket saat ini
-            let rawNik = "";
-            if (prevFisikTicket && prevFisikTicket.technician && prevFisikTicket.technician !== "-" && prevFisikTicket.technician !== "Unknown" && !prevFisikTicket.technician.toLowerCase().includes("assign")) {
-                rawNik = prevFisikTicket.technician.toString().trim();
-            } else if (t.technician && t.technician !== "-" && t.technician !== "Unknown" && !t.technician.toLowerCase().includes("assign")) {
-                rawNik = t.technician.toString().trim();
-            }
-
-            let groupKey = rawNik || "TANPA_NIK";
-            if (!gaulMap.has(groupKey)) {
-                let tInfo = rawNik ? window.getTeknisiInfo(rawNik) : null;
-                let isValid = rawNik ? window.isTeknisiValidInDb(rawNik) : false;
-                gaulMap.set(groupKey, {
-                    nik: rawNik || "-",
-                    nama: tInfo ? tInfo.nama : (rawNik ? (isValid ? rawNik : `⚠️ ${rawNik}`) : "⚠️ Belum Di-assign"),
-                    isValidInDb: isValid,
-                    count: 0,
-                    totalScore: 0,
-                    symptomMap: {},
-                    stos: {},
-                    witels: new Set(),
-                    tickets: []
-                });
-            }
-
-            let item = gaulMap.get(groupKey);
-            item.count++;
-            totalKasusGaul++;
-
-            let gScore = 1;
-            if (t.gaul && t.gaul > 0) gScore = Math.max(gScore, t.gaul);
-            item.totalScore += gScore;
-
-            t._prevFisikIncident = prevFisikTicket ? prevFisikTicket.incident : '-';
-            item.tickets.push(t);
-
-            if (t.sto && t.sto !== '-') {
-                item.stos[t.sto] = (item.stos[t.sto] || 0) + 1;
-            }
-            if (t.witel && t.witel !== '-') {
-                item.witels.add(t.witel);
-            }
-
-            let sym = (t.symptom && t.symptom !== '-') ? t.symptom.trim() : null;
-            if (sym && sym.includes('|')) {
-                let parts = sym.split('|').map(p => p.trim()).filter(p => p && p.toLowerCase() !== 'null' && p.toLowerCase() !== 'technical');
-                if (parts.length > 0) sym = parts[parts.length - 1];
-            }
-            if (sym && sym.length > 50) {
-                sym = sym.substring(0, 48) + '...';
-            }
-            if (!sym && (t.status || '').toUpperCase().includes('LOS')) {
-                sym = 'LOS (Loss of Signal)';
-            }
-            if (!sym && t.rx && t.rx.toUpperCase().includes('LOS')) {
-                sym = 'LOS (Loss of Signal)';
-            }
-            if (sym) {
-                item.symptomMap[sym] = (item.symptomMap[sym] || 0) + 1;
+            if ((actUpper.includes("DIKEMBALIKAN KE GCU FISIK") || actUpper.includes("REJECT KE GCU FISIK")) && actUpper.includes("EVIDENCE FISIK SUBMITTED")) {
+                if (!seenRepeatIncidents.has(t.incident)) {
+                    seenRepeatIncidents.add(t.incident);
+                    let rawNik = (t.technician && t.technician !== "-" && !t.technician.toLowerCase().includes("assign")) ? t.technician.toString().trim() : "";
+                    t._prevGcuIncident = t.incident + " (Rework)";
+                    t._prevGcuType = "Rework Fisik";
+                    t._prevGcuTechnician = rawNik || "-";
+                    addGaulRecord(t, rawNik, t);
+                }
             }
         }
     });
@@ -5211,7 +5240,7 @@ window.filterKonselingGaulTable = function () {
     }
 
     if (list.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 40px 20px; color: var(--text-secondary);"><ion-icon name="shield-checkmark-outline" style="font-size: 36px; color: #10b981; display: block; margin: 0 auto 10px;"></ion-icon><h4 style="margin: 0 0 6px; font-size: 15px; color: var(--text-primary); font-weight: 700;">Tidak Ada Kasus GAUL Pasca GCU Fisik</h4><p style="margin: 0 auto; font-size: 12.5px; max-width: 520px; color: var(--text-secondary); line-height: 1.5;">Data GAUL khusus menghitung tiket repeat (di GCU Fisik / GCU Logic) yang nomor internetnya sudah pernah dikerjakan GCU Fisik sebelumnya. Saat ini belum ditemukan repeat incident pasca GCU Fisik.</p></td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 40px 20px; color: var(--text-secondary);"><ion-icon name="shield-checkmark-outline" style="font-size: 36px; color: #10b981; display: block; margin: 0 auto 10px;"></ion-icon><h4 style="margin: 0 0 6px; font-size: 15px; color: var(--text-primary); font-weight: 700;">Tidak Ada Kasus GAUL Pasca GCU Fisik / Logic</h4><p style="margin: 0 auto; font-size: 12.5px; max-width: 540px; color: var(--text-secondary); line-height: 1.5;">Data GAUL khusus memonitor tiket repeat pada nomor internet yang <strong>sudah pernah diproses GCU Fisik atau GCU Logic sebelumnya</strong>. Tiket mentah dari Insera yang belum pernah melewati GCU tidak dimasukkan ke dalam daftar repeat ini.</p></td></tr>`;
         return;
     }
 
@@ -5329,7 +5358,9 @@ window.filterKonselingGaulTable = function () {
                         <span class="badge" style="font-size: 10px; font-weight: 700; background: ${t.category === 'GCU FISIK' ? '#fee2e2' : '#eff6ff'}; color: ${t.category === 'GCU FISIK' ? '#b91c1c' : '#2563eb'}; padding: 2px 6px; border-radius: 4px; display: inline-block;">
                             ${t.category || 'GCU LOGIC'}
                         </span>
-                        <span style="display: block; font-size: 10px; color: #f43f5e; font-weight: 700; margin-top: 2px;">Repeat Pasca Fisik</span>
+                        <span style="display: block; font-size: 10px; color: #f43f5e; font-weight: 700; margin-top: 2px;" title="Tiket repeat gangguan pasca ${t._prevGcuIncident || '-'}">
+                            Repeat ${t._prevGcuIncident ? `Pasca ${t._prevGcuIncident}` : 'Pasca GCU'}
+                        </span>
                     </td>
                     <td>
                         <div style="font-size: 11px; color: var(--text-secondary); max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${t.symptom || '-'}">
