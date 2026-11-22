@@ -4972,11 +4972,49 @@ window.renderKonselingGaulDashboard = function () {
         tickets = tickets.filter(t => t.witel === window.konselingWitelFilterVal);
     }
 
-    // 1. Petakan semua tiket di database berdasarkan Nomor Layanan / Internet (serviceNumber)
+    // Helper: Validasi nomor layanan / internet valid (bukan dummy/placeholder/alpro)
+    function isValidInternetNumber(sn) {
+        if (!sn) return false;
+        let clean = sn.toString().trim();
+        if (clean === "-" || clean === "Unknown" || clean.toUpperCase() === "NN" || clean === "null" || clean === "undefined") return false;
+        if (/^[A-Z]{3}\d{3,4}$/i.test(clean)) return false; // Alpro/ODP pattern (misal BOO234, CBN378)
+        let digits = clean.replace(/\D/g, "");
+        if (digits.length < 7) return false;
+        return true;
+    }
+
+    // Helper: Singkirkan tiket yang BUKAN gangguan (proaktif, mutasi, tagihan, infrastruktur)
+    function isNotGaulCategoryOrSymptom(t) {
+        let s = ((t.symptom || "") + " " + (t.summary || "")).toUpperCase();
+        if (s.includes("PROACTIVE") || s.includes("PREDICTIVE") || s.includes("MONITORING")) return true;
+        if (s.includes("PERMINTAAN") || s.includes("CABUT") || s.includes("UPGRADE") || s.includes("MUTASI") || s.includes("BALIK NAMA")) return true;
+        if (s.includes("TAGIHAN") || s.includes("GIMMIC") || s.includes("PASANG BARU") || s.includes("PINDAH PERANGKAT")) return true;
+        if (s.includes("PINTU HILANG") || s.includes("ODP TERBUKA") || s.includes("PENGUKURAN ODP") || s.includes("SPBU PERTAMINA")) return true;
+        return false;
+    }
+
+    // Helper: Validasi apakah tiket merupakan GAUL (Gangguan Ulang) sah di OSS Insera
+    function isGaulRepeatTrouble(t) {
+        if (t.gaul && t.gaul > 0) return true;
+        if (t.lapul && t.lapul > 0) return true;
+        let s = ((t.symptom || "") + " " + (t.summary || "")).toUpperCase();
+        if (s.includes("GAUL") || s.includes("REPEAT") || s.includes("GANGGUAN ULANG") || s.includes("REOPEN")) return true;
+        return false;
+    }
+
+    function getValidNik(t) {
+        if (!t || !t.technician) return "";
+        let tek = t.technician.toString().trim();
+        if (tek === "-" || tek === "Unknown" || tek.toLowerCase().includes("assign")) return "";
+        let m = tek.match(/\d+/);
+        return m ? m[0] : "";
+    }
+
+    // 1. Petakan semua tiket di database berdasarkan Nomor Layanan / Internet valid (serviceNumber)
     const ticketsByService = new Map();
     allTickets.forEach(t => {
         let sn = (t.serviceNumber || '').trim();
-        if (sn && sn !== '-' && sn !== 'Unknown') {
+        if (isValidInternetNumber(sn)) {
             if (!ticketsByService.has(sn)) ticketsByService.set(sn, []);
             ticketsByService.get(sn).push(t);
         }
@@ -4997,15 +5035,11 @@ window.renderKonselingGaulDashboard = function () {
         if (t.photos && Object.keys(t.photos).some(k => /JALUR|ONT|DC|LOKASI|REDAMAN/i.test(k))) return true;
 
         // 2. Evidence Logic yang sah (pernah dieksekusi / disubmit helpdesk logic)
-        if (allText.includes("SOLVED VIA GCU LOGIC") || allText.includes("EVIDENCE LOGIC SUBMITTED") || 
-            allText.includes("[WAITING APPROVAL KORLAP]") || allText.includes("EKSEKUSI LOGIC")) return true;
-        if (t.evLogic && t.evLogic.trim() !== "" && t.evLogic.trim() !== "-" && t.evLogic.trim() !== "null") return true;
+        if (allText.includes("SOLVED VIA GCU LOGIC") || allText.includes("EVIDENCE LOGIC SUBMITTED")) return true;
+        if (allText.includes("[WAITING APPROVAL KORLAP]") && (allText.includes("PINDAH CHANNEL") || allText.includes("CHECKLIST") || allText.includes("IPV6") || allText.includes("ONT"))) return true;
 
-        // 3. Rework atau feedback alur (tiket pernah dikembalikan / reject pasca pengerjaan)
-        if (allText.includes("DIKEMBALIKAN KE GCU FISIK") || allText.includes("REJECT KE GCU FISIK") || allText.includes("DIKEMBALIKAN KE GCU LOGIC")) return true;
-
-        // 4. Completed resmi pasca approval Korlap di sistem GENCU
-        if (allText.includes("[COMPLETED] - APPROVED BY KORLAP") || allText.includes("APPROVED BY KORLAP")) return true;
+        // 3. Completed resmi pasca approval Korlap di sistem GENCU
+        if (allText.includes("[COMPLETED] - APPROVED BY KORLAP")) return true;
 
         return false;
     }
@@ -5094,9 +5128,8 @@ window.renderKonselingGaulDashboard = function () {
         }
     }
 
-    // 2. Evaluasi tiket GAUL berdasarkan aturan bisnis presisi:
-    // "Bukan tiket yang belum di gcu fisik yaa tetapi tiket yang sudah pernah di gcu fisik atau gcu logik namun muncul lagi,
-    //  patokkannya di nomer internetnya dan tiketnya"
+    // 2. Evaluasi tiket GAUL berdasarkan aturan bisnis presisi & bersih:
+    // Hanya tiket repeat gangguan nyata (GAUL) pada nomor internet valid yang pernah di-GCU sebelumnya
     ticketsByService.forEach((sList, sn) => {
         // Skenario 1: Lebih dari 1 tiket pada nomor internet yang sama
         if (sList.length > 1) {
@@ -5107,6 +5140,10 @@ window.renderKonselingGaulDashboard = function () {
             for (let i = 1; i < sorted.length; i++) {
                 let curTicket = sorted[i];
                 if (seenRepeatIncidents.has(curTicket.incident)) continue;
+                if (isNotGaulCategoryOrSymptom(curTicket)) continue;
+
+                // Wajib merupakan gangguan berulang / GAUL sah di Insera OSS
+                let isGaul = isGaulRepeatTrouble(curTicket);
 
                 // Cari tiket sebelum curTicket yang SUDAH PERNAH di-GCU Fisik atau GCU Logic
                 let priorGcu = null;
@@ -5117,24 +5154,20 @@ window.renderKonselingGaulDashboard = function () {
                     }
                 }
 
-                // Jika ada tiket terdahulu yang sudah pernah diproses GCU Fisik / GCU Logic,
-                // maka curTicket merupakan TIKET REPEAT (GAUL)!
-                if (priorGcu) {
+                // Jika ada tiket terdahulu yang sudah diproses GCU dan tiket saat ini adalah GAUL
+                if (priorGcu && isGaul) {
                     seenRepeatIncidents.add(curTicket.incident);
 
                     // Tentukan teknisi penyumbang GAUL:
                     // 1) Prioritaskan teknisi pada pengerjaan GCU terdahulu yang mengalami gangguan ulang (penyebab repeat)
-                    // 2) Atau teknisi tiket saat ini jika tiket terdahulu belum ada personil teknisi (misal GCU Logic)
-                    let rawNik = "";
-                    if (priorGcu.technician && priorGcu.technician !== "-" && priorGcu.technician !== "Unknown" && !priorGcu.technician.toLowerCase().includes("assign")) {
-                        rawNik = priorGcu.technician.toString().trim();
-                    } else if (curTicket.technician && curTicket.technician !== "-" && curTicket.technician !== "Unknown" && !curTicket.technician.toLowerCase().includes("assign")) {
-                        rawNik = curTicket.technician.toString().trim();
-                    }
+                    // 2) Atau teknisi tiket saat ini jika tiket terdahulu tanpa NIK (misal GCU Logic)
+                    let nikPrior = getValidNik(priorGcu);
+                    let nikCur = getValidNik(curTicket);
+                    let rawNik = nikPrior || nikCur;
 
                     curTicket._prevGcuIncident = priorGcu.incident;
                     curTicket._prevGcuType = hasRealGcuFisik(priorGcu) ? "GCU Fisik" : "GCU Logic";
-                    curTicket._prevGcuTechnician = priorGcu.technician || "-";
+                    curTicket._prevGcuTechnician = nikPrior || "-";
 
                     addGaulRecord(curTicket, rawNik, priorGcu);
                 }
@@ -5142,15 +5175,17 @@ window.renderKonselingGaulDashboard = function () {
         } else if (sList.length === 1) {
             // Skenario 2: Tiket tunggal tetapi mengalami rework/reopen setelah submit evidence fisik
             let t = sList[0];
-            let actUpper = (t.actionHistory || '').toUpperCase();
-            if ((actUpper.includes("DIKEMBALIKAN KE GCU FISIK") || actUpper.includes("REJECT KE GCU FISIK")) && actUpper.includes("EVIDENCE FISIK SUBMITTED")) {
-                if (!seenRepeatIncidents.has(t.incident)) {
-                    seenRepeatIncidents.add(t.incident);
-                    let rawNik = (t.technician && t.technician !== "-" && !t.technician.toLowerCase().includes("assign")) ? t.technician.toString().trim() : "";
-                    t._prevGcuIncident = t.incident + " (Rework)";
-                    t._prevGcuType = "Rework Fisik";
-                    t._prevGcuTechnician = rawNik || "-";
-                    addGaulRecord(t, rawNik, t);
+            if (!isNotGaulCategoryOrSymptom(t)) {
+                let actUpper = (t.actionHistory || '').toUpperCase();
+                if ((actUpper.includes("DIKEMBALIKAN KE GCU FISIK") || actUpper.includes("REJECT KE GCU FISIK")) && actUpper.includes("EVIDENCE FISIK SUBMITTED")) {
+                    if (!seenRepeatIncidents.has(t.incident)) {
+                        seenRepeatIncidents.add(t.incident);
+                        let rawNik = getValidNik(t);
+                        t._prevGcuIncident = t.incident + " (Rework)";
+                        t._prevGcuType = "Rework Fisik";
+                        t._prevGcuTechnician = rawNik || "-";
+                        addGaulRecord(t, rawNik, t);
+                    }
                 }
             }
         }
