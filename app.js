@@ -5446,11 +5446,11 @@ if (typeof document !== 'undefined' && document.readyState === 'loading') {
 
 
 // ==========================================
-// DASHBOARD ANALISIS SAMBUNGAN DROPCORE (DC)
+// DASHBOARD ANALISIS SAMBUNGAN DROPCORE (DC > 2)
 // ==========================================
 
 window.extractTicketDcInfo = function(ticket) {
-    if (!ticket) return { dcCount: 0, hasEvidenceFisik: false, isOverJoint: false, rekomendasiText: 'Belum Ada Data', rekomendasiBadge: '' };
+    if (!ticket) return { dcCount: 0, hasEvidenceFisik: false, isOverJointKritis: false, rekomendasiText: 'Belum Ada Data', rekomendasiBadge: '' };
 
     let allText = [
         ticket.actionHistory || "",
@@ -5496,7 +5496,8 @@ window.extractTicketDcInfo = function(ticket) {
         dcCount = 1;
     }
 
-    let isOverJoint = hasEvidenceFisik && (dcCount > 1);
+    // Sesuai instruksi: Fokus khusus sambungan di atas 2 (> 2 sambungan, contoh: 3 sambungan)
+    let isOverJointKritis = hasEvidenceFisik && (dcCount > 2);
 
     // Evaluasi Redaman & Status
     let rxNum = NaN;
@@ -5508,20 +5509,22 @@ window.extractTicketDcInfo = function(ticket) {
     let isHighLoss = !isNaN(rxNum) && rxNum < -27;
     let isNormal = !isLos && !isHighLoss && (!isNaN(rxNum) && rxNum >= -27);
 
-    // Kriteria Rekomendasi Tarik Baru: Sambungan >= 2 dengan kendala redaman drop/LOS/repeat trouble
-    let isTarikBaru = (dcCount >= 2 && (isLos || isHighLoss || (ticket.gaul && ticket.gaul > 0))) || (dcCount >= 3);
+    // Rekomendasi Tarik Baru: Semua dropcore dengan sambungan > 2 wajib ditarik kabel pengganti
+    let isTarikBaru = dcCount > 2;
 
     let rekomendasiText = "";
     let rekomendasiBadge = "";
 
-    if (isTarikBaru) {
-        rekomendasiText = "🚨 WAJIB TARIK DC BARU";
-        rekomendasiBadge = "background: #fee2e2; color: #dc2626; border: 1.5px solid #f87171; font-weight: 800;";
-    } else if (dcCount >= 3) {
-        rekomendasiText = "⚠️ Over-Joint (Kritis)";
-        rekomendasiBadge = "background: #fef2f2; color: #b91c1c; border: 1px solid #fca5a5; font-weight: 700;";
+    if (dcCount > 2) {
+        if (isLos || isHighLoss) {
+            rekomendasiText = "🚨 WAJIB TARIK DC BARU (LOS/DROP)";
+            rekomendasiBadge = "background: #fee2e2; color: #dc2626; border: 1.5px solid #f87171; font-weight: 800;";
+        } else {
+            rekomendasiText = "🚨 WAJIB TARIK DC BARU";
+            rekomendasiBadge = "background: #fef2f2; color: #b91c1c; border: 1.5px solid #fca5a5; font-weight: 800;";
+        }
     } else if (dcCount === 2) {
-        rekomendasiText = "🟡 Batas Maksimal (Waspada)";
+        rekomendasiText = "🟡 Batas Maksimal (2 Sambungan)";
         rekomendasiBadge = "background: #fef3c7; color: #b45309; border: 1px solid #fcd34d; font-weight: 700;";
     } else if (dcCount === 1) {
         rekomendasiText = "✅ Sesuai Standar SOP (1 Sambungan)";
@@ -5534,7 +5537,7 @@ window.extractTicketDcInfo = function(ticket) {
     return {
         dcCount: dcCount,
         hasEvidenceFisik: hasEvidenceFisik,
-        isOverJoint: isOverJoint,
+        isOverJointKritis: isOverJointKritis,
         rxNum: rxNum,
         isLos: isLos,
         isHighLoss: isHighLoss,
@@ -5582,11 +5585,11 @@ window.setDcFilterChip = function (chip) {
     if (chip === 'ALL') {
         const c = document.getElementById('dcChipAll');
         if (c) c.classList.add('active');
-    } else if (chip === '2') {
-        const c = document.getElementById('dcChip2');
-        if (c) c.classList.add('active');
-    } else if (chip === '3+') {
+    } else if (chip === '3') {
         const c = document.getElementById('dcChip3');
+        if (c) c.classList.add('active');
+    } else if (chip === 'LOS') {
+        const c = document.getElementById('dcChipLos');
         if (c) c.classList.add('active');
     } else if (chip === 'TARIK_BARU') {
         const c = document.getElementById('dcChipTarik');
@@ -5620,39 +5623,36 @@ window.renderAnalisisDcDashboard = function () {
     });
 
     let totalDcTickets = 0;
-    let count2 = 0;
-    let count3Plus = 0;
+    let count3 = 0;
+    let countKendalaRedaman = 0;
     let countTarikBaru = 0;
 
-    let rxStats = {
-        2: { sum: 0, count: 0, los: 0, highLoss: 0, normal: 0 },
-        3: { sum: 0, count: 0, los: 0, highLoss: 0, normal: 0 }
-    };
-
+    let rxStats = { sum: 0, count: 0, los: 0, highLoss: 0, normal: 0 };
     let stoDcMap = {};
 
     window.dcAnalyzedTickets = [];
 
-    // Filter ketat: HANYA tiket yang sudah submit GCU Fisik DAN memiliki sambungan DC > 1
+    // Filter ketat: HANYA tiket yang sudah submit GCU Fisik DAN sambungan DC DI ATAS 2 (> 2 sambungan, contoh: 3 sambungan)
     tickets.forEach(t => {
         let info = window.extractTicketDcInfo(t);
         
-        if (info.hasEvidenceFisik && info.dcCount > 1) {
+        if (info.hasEvidenceFisik && info.dcCount > 2) {
             totalDcTickets++;
-            if (info.dcCount === 2) count2++;
-            else if (info.dcCount >= 3) count3Plus++;
+            if (info.dcCount === 3) count3++;
 
+            if (info.isLos || info.isHighLoss) {
+                countKendalaRedaman++;
+            }
             if (info.isTarikBaru) countTarikBaru++;
 
             // Hitung statistik redaman
-            let bucket = info.dcCount === 2 ? 2 : 3;
             if (!isNaN(info.rxNum)) {
-                rxStats[bucket].sum += info.rxNum;
-                rxStats[bucket].count++;
+                rxStats.sum += info.rxNum;
+                rxStats.count++;
             }
-            if (info.isLos) rxStats[bucket].los++;
-            else if (info.isHighLoss) rxStats[bucket].highLoss++;
-            else if (info.isNormal) rxStats[bucket].normal++;
+            if (info.isLos) rxStats.los++;
+            else if (info.isHighLoss) rxStats.highLoss++;
+            else if (info.isNormal) rxStats.normal++;
 
             // Agregasi STO
             let sto = (t.sto && t.sto !== '-') ? t.sto.toUpperCase() : 'UNKNOWN';
@@ -5667,20 +5667,21 @@ window.renderAnalisisDcDashboard = function () {
         }
     });
 
-    // Urutkan tiket over-joint: Prioritas Sambungan >= 3 atau Wajib Tarik Baru di posisi teratas
+    // Urutkan tiket: Prioritas yang ada kendala LOS / Redaman Drop di paling atas
     window.dcAnalyzedTickets.sort((a, b) => {
-        if (a.dcInfo.isTarikBaru && !b.dcInfo.isTarikBaru) return -1;
-        if (!a.dcInfo.isTarikBaru && b.dcInfo.isTarikBaru) return 1;
+        let aBad = (a.dcInfo.isLos || a.dcInfo.isHighLoss) ? 1 : 0;
+        let bBad = (b.dcInfo.isLos || b.dcInfo.isHighLoss) ? 1 : 0;
+        if (aBad !== bBad) return bBad - aBad;
         return (b.dcInfo.dcCount || 0) - (a.dcInfo.dcCount || 0);
     });
 
     // Update KPI Card values
     const elTotal = document.getElementById('dcKpiTotalTiket');
     if (elTotal) elTotal.innerText = totalDcTickets;
-    const el2 = document.getElementById('dcKpi2Sambungan');
-    if (el2) el2.innerText = count2;
     const el3 = document.getElementById('dcKpi3Sambungan');
-    if (el3) el3.innerText = count3Plus;
+    if (el3) el3.innerText = count3;
+    const elRedaman = document.getElementById('dcKpiKendalaRedaman');
+    if (elRedaman) elRedaman.innerText = countKendalaRedaman;
     const elTarik = document.getElementById('dcKpiRekomendasiTarik');
     if (elTarik) elTarik.innerText = countTarikBaru;
     const elChipTarikCount = document.getElementById('dcChipTarikCount');
@@ -5689,29 +5690,28 @@ window.renderAnalisisDcDashboard = function () {
     // Render Card A: Korelasi Sambungan vs Redaman
     const korelasiContainer = document.getElementById('dcKorelasiContainer');
     if (korelasiContainer) {
-        const avg2 = rxStats[2].count > 0 ? (rxStats[2].sum / rxStats[2].count).toFixed(1) + " dBm" : "Belum ada data";
-        const avg3 = rxStats[3].count > 0 ? (rxStats[3].sum / rxStats[3].count).toFixed(1) + " dBm" : "Belum ada data";
+        const avgRx = rxStats.count > 0 ? (rxStats.sum / rxStats.count).toFixed(1) + " dBm" : "Belum ada data";
 
         korelasiContainer.innerHTML = `
-            <div style="background: rgba(245, 158, 11, 0.05); border: 1px solid rgba(245, 158, 11, 0.2); border-radius: 10px; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between;">
+            <div style="background: rgba(239, 68, 68, 0.05); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 10px; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between;">
                 <div>
-                    <span style="font-size: 13px; font-weight: 700; color: #b45309;">🟡 2 Sambungan DC (Batas Toleransi)</span>
-                    <p style="margin: 3px 0 0; font-size: 11.5px; color: var(--text-secondary);">${count2} tiket tercatat &bull; ${rxStats[2].highLoss + rxStats[2].los} berisiko redaman drop</p>
+                    <span style="font-size: 13px; font-weight: 700; color: #b91c1c;">🔴 Sambungan DC &gt; 2 (Over-Joint Kritis)</span>
+                    <p style="margin: 3px 0 0; font-size: 11.5px; color: var(--text-secondary);">${totalDcTickets} tiket &bull; ${countKendalaRedaman} mengalami kendala redaman drop / LOS</p>
                 </div>
                 <div style="text-align: right;">
-                    <span style="font-size: 15px; font-weight: 800; color: #b45309;">${avg2}</span>
+                    <span style="font-size: 15px; font-weight: 800; color: #b91c1c;">${avgRx}</span>
                     <span style="display: block; font-size: 10.5px; color: var(--text-secondary);">Rata-rata Rx</span>
                 </div>
             </div>
 
-            <div style="background: rgba(239, 68, 68, 0.05); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 10px; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between;">
+            <div style="background: rgba(139, 92, 246, 0.05); border: 1px solid rgba(139, 92, 246, 0.2); border-radius: 10px; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between;">
                 <div>
-                    <span style="font-size: 13px; font-weight: 700; color: #b91c1c;">🔴 &ge; 3 Sambungan DC (Over-Joint Kritis)</span>
-                    <p style="margin: 3px 0 0; font-size: 11.5px; color: var(--text-secondary);">${count3Plus} tiket kritis &bull; Prioritas utama penarikan kabel baru</p>
+                    <span style="font-size: 13px; font-weight: 700; color: #7c3aed;">🚨 Kebijakan Standar SOP Telkom</span>
+                    <p style="margin: 3px 0 0; font-size: 11.5px; color: var(--text-secondary);">Kabel dropcore dengan &gt; 2 sambungan wajib segera dijadwalkan tarik baru.</p>
                 </div>
                 <div style="text-align: right;">
-                    <span style="font-size: 15px; font-weight: 800; color: #b91c1c;">${avg3}</span>
-                    <span style="display: block; font-size: 10.5px; color: var(--text-secondary);">Rata-rata Rx</span>
+                    <span style="font-size: 14px; font-weight: 800; color: #7c3aed;">Tarik Baru</span>
+                    <span style="display: block; font-size: 10.5px; color: var(--text-secondary);">Rekomendasi</span>
                 </div>
             </div>
         `;
@@ -5725,7 +5725,7 @@ window.renderAnalisisDcDashboard = function () {
             topStoContainer.innerHTML = `
                 <div style="text-align: center; padding: 25px 10px; color: var(--text-secondary); font-size: 12px;">
                     <ion-icon name="checkmark-done-circle-outline" style="font-size: 26px; color: #10b981; display: block; margin: 0 auto 6px;"></ion-icon>
-                    Belum ada data tiket over-joint per STO.
+                    Belum ada data tiket over-joint &gt; 2 sambungan per STO.
                 </div>
             `;
         } else {
@@ -5736,7 +5736,7 @@ window.renderAnalisisDcDashboard = function () {
                     <div style="margin-bottom: 8px;">
                         <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 3px;">
                             <span style="font-weight: 700; color: var(--text-primary);">${idx + 1}. ${s.sto} <small style="color: var(--text-secondary);">(${s.totalTickets} Tiket)</small></span>
-                            <span style="font-weight: 800; color: #dc2626;">${s.overJointCount} Over-Joint</span>
+                            <span style="font-weight: 800; color: #dc2626;">${s.overJointCount} Tiket (&gt; 2 Sambungan)</span>
                         </div>
                         <div style="width: 100%; height: 6px; background: rgba(0,0,0,0.06); border-radius: 4px; overflow: hidden;">
                             <div style="width: ${pct}%; height: 100%; background: linear-gradient(90deg, #f59e0b, #ef4444); border-radius: 4px;"></div>
@@ -5764,8 +5764,8 @@ window.filterDcTable = function () {
         let info = item.dcInfo;
 
         // Filter Chip
-        if (chip === '2' && info.dcCount !== 2) return false;
-        if (chip === '3+' && info.dcCount < 3) return false;
+        if (chip === '3' && info.dcCount !== 3) return false;
+        if (chip === 'LOS' && !info.isLos && !info.isHighLoss) return false;
         if (chip === 'TARIK_BARU' && !info.isTarikBaru) return false;
 
         // Filter Search
@@ -5786,12 +5786,12 @@ window.filterDcTable = function () {
         tableBody.innerHTML = `
             <tr>
                 <td colspan="10" style="text-align: center; padding: 45px 20px; color: var(--text-secondary);">
-                    <div style="width: 50px; height: 50px; border-radius: 50%; background: rgba(245, 158, 11, 0.1); display: flex; align-items: center; justify-content: center; margin: 0 auto 12px;">
-                        <ion-icon name="git-network-outline" style="font-size: 26px; color: #f59e0b;"></ion-icon>
+                    <div style="width: 50px; height: 50px; border-radius: 50%; background: rgba(239, 68, 68, 0.1); display: flex; align-items: center; justify-content: center; margin: 0 auto 12px;">
+                        <ion-icon name="warning-outline" style="font-size: 26px; color: #ef4444;"></ion-icon>
                     </div>
-                    <h4 style="margin: 0 0 6px; font-size: 15px; color: var(--text-primary); font-weight: 700;">Belum Ada Tiket dengan Sambungan DC &gt; 1</h4>
+                    <h4 style="margin: 0 0 6px; font-size: 15px; color: var(--text-primary); font-weight: 700;">Belum Ada Tiket dengan Sambungan DC &gt; 2</h4>
                     <p style="margin: 0 auto; font-size: 12.5px; max-width: 540px; line-height: 1.5; color: var(--text-secondary);">
-                        Data ini bersumber dari form <strong>GCU Fisik</strong> saat teknisi lapangan memilih <strong>2 Sambungan</strong> atau <strong>3 Sambungan</strong> DC. Tiket akan otomatis tampil di sini secara real-time saat teknisi melakukan submit bukti fisik over-joint.
+                        Menu ini khusus memonitor tiket dengan <strong>sambungan dropcore di atas 2 (contoh: 3 sambungan)</strong> yang disubmit oleh teknisi pada form GCU Fisik. Data akan otomatis masuk ke sini secara real-time saat teknisi submit bukti fisik dengan sambungan &gt; 2.
                     </p>
                 </td>
             </tr>
@@ -5810,14 +5810,7 @@ window.filterDcTable = function () {
         let tr = document.createElement('tr');
 
         // Badge Sambungan DC
-        let dcBadge = "";
-        if (info.dcCount === 2) {
-            dcBadge = '<span style="background: #fffbeb; color: #b45309; border: 1px solid #fde68a; padding: 3px 8px; border-radius: 6px; font-weight: 700; font-size: 11.5px;">🟡 2 Sambungan</span>';
-        } else if (info.dcCount >= 3) {
-            dcBadge = `<span style="background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; padding: 3px 8px; border-radius: 6px; font-weight: 800; font-size: 11.5px;">🔴 ${info.dcCount} Sambungan (Over)</span>`;
-        } else {
-            dcBadge = '<span style="background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; padding: 3px 8px; border-radius: 6px; font-weight: 700; font-size: 11.5px;">🟢 1 Sambungan</span>';
-        }
+        let dcBadge = `<span style="background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; padding: 3px 8px; border-radius: 6px; font-weight: 800; font-size: 11.5px;">🔴 ${info.dcCount} Sambungan (Over)</span>`;
 
         // Badge Redaman
         let rxDisplay = t.rx || "-";

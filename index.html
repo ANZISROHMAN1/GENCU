@@ -885,8 +885,8 @@
                             <ion-icon name="git-network" style="font-size: 22px; color: #f59e0b;"></ion-icon>
                         </div>
                         <div>
-                            <h2 style="margin: 0; font-size: 20px;">Analisis Sambungan Dropcore (DC)</h2>
-                            <p class="subtitle" style="margin: 2px 0 0 0; font-size: 11.5px; color: var(--text-secondary);">Monitoring khusus tiket pelanggan dengan sambungan kabel dropcore lebih dari 1 (&gt;1) yang disubmit teknisi GCU Fisik</p>
+                            <h2 style="margin: 0; font-size: 20px;">Analisis Sambungan Dropcore (DC &gt; 2)</h2>
+                            <p class="subtitle" style="margin: 2px 0 0 0; font-size: 11.5px; color: var(--text-secondary);">Monitoring khusus tiket pelanggan dengan sambungan kabel dropcore di atas 2 (&gt;2 sambungan, contoh: 3 sambungan) yang disubmit teknisi GCU Fisik</p>
                         </div>
                     </div>
                     <div class="header-actions">
@@ -905,34 +905,19 @@
                     </div>
                 </header>
 
-                <!-- Top KPI Cards (Khusus Over-Joint > 1 Sambungan) -->
+                <!-- Top KPI Cards (Khusus Over-Joint > 2 Sambungan) -->
                 <div class="summary-cards mon-kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
                     <div class="card summary-card" style="background: linear-gradient(135deg, #0284c7, #0369a1) !important; border: none;">
                         <div class="card-content" style="width: 100%;">
                             <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                                 <div>
                                     <h1 id="dcKpiTotalTiket">0</h1>
-                                    <p><ion-icon name="git-network-outline"></ion-icon> TOTAL OVER-JOINT (&gt; 1)</p>
+                                    <p><ion-icon name="git-network-outline"></ion-icon> TOTAL SAMBUNGAN &gt; 2</p>
                                 </div>
                                 <ion-icon name="git-network" style="font-size: 30px; opacity: 0.8;"></ion-icon>
                             </div>
                             <div style="margin-top: 10px; font-size: 11.5px; color: rgba(255,255,255,0.9);">
-                                <span>Tiket dengan submit fisik sambungan &ge; 2</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="card summary-card" style="background: linear-gradient(135deg, #f59e0b, #d97706) !important; border: none;">
-                        <div class="card-content" style="width: 100%;">
-                            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                                <div>
-                                    <h1 id="dcKpi2Sambungan">0</h1>
-                                    <p><ion-icon name="alert-circle-outline"></ion-icon> 2 SAMBUNGAN (WASPADA)</p>
-                                </div>
-                                <ion-icon name="alert-circle" style="font-size: 30px; opacity: 0.8;"></ion-icon>
-                            </div>
-                            <div style="margin-top: 10px; font-size: 11.5px; color: rgba(255,255,255,0.9);">
-                                <span>Batas toleransi maksimal sambungan</span>
+                                <span>Tiket submit fisik sambungan &gt; 2</span>
                             </div>
                         </div>
                     </div>
@@ -942,12 +927,27 @@
                             <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                                 <div>
                                     <h1 id="dcKpi3Sambungan">0</h1>
-                                    <p><ion-icon name="warning-outline"></ion-icon> &ge; 3 SAMBUNGAN (KRITIS)</p>
+                                    <p><ion-icon name="warning-outline"></ion-icon> 3 SAMBUNGAN (KRITIS)</p>
                                 </div>
                                 <ion-icon name="warning" style="font-size: 30px; opacity: 0.8;"></ion-icon>
                             </div>
                             <div style="margin-top: 10px; font-size: 11.5px; color: rgba(255,255,255,0.9);">
-                                <span>Over-joint, rentan putus &amp; redaman drop</span>
+                                <span>Over-joint melebihi batas standar SOP</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card summary-card" style="background: linear-gradient(135deg, #f59e0b, #d97706) !important; border: none;">
+                        <div class="card-content" style="width: 100%;">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                <div>
+                                    <h1 id="dcKpiKendalaRedaman">0</h1>
+                                    <p><ion-icon name="pulse-outline"></ion-icon> KENDALA REDAMAN / LOS</p>
+                                </div>
+                                <ion-icon name="pulse" style="font-size: 30px; opacity: 0.8;"></ion-icon>
+                            </div>
+                            <div style="margin-top: 10px; font-size: 11.5px; color: rgba(255,255,255,0.9);">
+                                <span>Tiket DC &gt; 2 berisiko redaman jebol / LOS</span>
                             </div>
                         </div>
                     </div>
@@ -1002,8 +1002,8 @@
                 <div class="card dashboard-section">
                     <div class="dashboard-header" style="flex-wrap: wrap; gap: 12px;">
                         <div>
-                            <h3 style="margin: 0; font-size: 16px;">Daftar Tiket Sambungan Dropcore &gt; 1 (Over-Joint)</h3>
-                            <p class="subtitle" style="margin-top: 3px;">Hanya menampilkan tiket yang sudah disubmit GCU Fisik dengan lebih dari 1 sambungan DC (&gt;1 sambungan).</p>
+                            <h3 style="margin: 0; font-size: 16px;">Daftar Tiket Sambungan Dropcore &gt; 2 (Over-Joint Kritis)</h3>
+                            <p class="subtitle" style="margin-top: 3px;">Hanya menampilkan tiket yang sudah disubmit GCU Fisik dengan sambungan di atas 2 (&gt;2 sambungan, contoh: 3 sambungan).</p>
                         </div>
                         <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                             <div class="filter-search-box" style="margin-bottom: 0;">
@@ -1011,9 +1011,9 @@
                                 <input type="text" id="dcSearchInput" placeholder="Cari No Incident / No Internet / STO / NIK..." oninput="window.filterDcTable()">
                             </div>
                             <div class="mon-filter-chips">
-                                <button class="mon-chip active" id="dcChipAll" onclick="window.setDcFilterChip('ALL')">Semua Over-Joint (&gt; 1)</button>
-                                <button class="mon-chip" id="dcChip2" onclick="window.setDcFilterChip('2')">🟡 2 Sambungan</button>
-                                <button class="mon-chip" id="dcChip3" onclick="window.setDcFilterChip('3+')">🔴 &ge; 3 Sambungan</button>
+                                <button class="mon-chip active" id="dcChipAll" onclick="window.setDcFilterChip('ALL')">Semua Data (&gt; 2 Sambungan)</button>
+                                <button class="mon-chip" id="dcChip3" onclick="window.setDcFilterChip('3')">🔴 3 Sambungan</button>
+                                <button class="mon-chip" id="dcChipLos" onclick="window.setDcFilterChip('LOS')">⚠️ Redaman Drop / LOS</button>
                                 <button class="mon-chip" id="dcChipTarik" onclick="window.setDcFilterChip('TARIK_BARU')">🚨 Tarik DC Baru (<span id="dcChipTarikCount">0</span>)</button>
                             </div>
                         </div>
@@ -1121,7 +1121,7 @@
         </div>
     </div>
 
-    <script src="app.js?v=4.1"></script>
+    <script src="app.js?v=4.2"></script>
     <script>
         // Mobile sidebar toggle
         function toggleSidebar() {
