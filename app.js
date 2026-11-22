@@ -4972,12 +4972,50 @@ window.renderKonselingGaulDashboard = function () {
         tickets = tickets.filter(t => t.witel === window.konselingWitelFilterVal);
     }
 
-    // Hitung kemunculan repeat per nomor internet
-    const serviceCounts = new Map();
-    tickets.forEach(t => {
+    // 1. Petakan semua tiket di database berdasarkan Nomor Layanan / Internet (serviceNumber)
+    const ticketsByService = new Map();
+    allTickets.forEach(t => {
         let sn = (t.serviceNumber || '').trim();
         if (sn && sn !== '-' && sn !== 'Unknown') {
-            serviceCounts.set(sn, (serviceCounts.get(sn) || 0) + 1);
+            if (!ticketsByService.has(sn)) ticketsByService.set(sn, []);
+            ticketsByService.get(sn).push(t);
+        }
+    });
+
+    // Helper: Validasi apakah tiket pernah submit / melewati GCU Fisik
+    function isTicketEverGcuFisik(t) {
+        if (!t) return false;
+        let allText = [
+            t.actionHistory || "",
+            t.evFisik || "",
+            t.category || ""
+        ].join(" ").toUpperCase();
+
+        if (allText.includes("EVIDENCE FISIK SUBMITTED") || allText.includes("GCU FISIK SUBMITTED")) return true;
+        if (t.evFisik && t.evFisik.trim() !== "" && t.evFisik.trim() !== "-") return true;
+        if (t.photos && Object.keys(t.photos).some(k => /JALUR|ONT|DC|LOKASI|REDAMAN/i.test(k))) return true;
+        if (t.category === 'APPROVAL KORLAP' || t.category === 'COMPLETED') return true;
+        if (allText.includes("DIKEMBALIKAN KE GCU LOGIC") || allText.includes("SOLVED VIA GCU LOGIC")) return true;
+        return false;
+    }
+
+    // 2. Tandai nomor internet yang SUDAH PERNAH DI-GCU FISIK
+    const serviceFisikMap = new Map();
+    ticketsByService.forEach((sList, sn) => {
+        let fisikList = sList.filter(t => isTicketEverGcuFisik(t));
+        if (fisikList.length > 0) {
+            let tek = "";
+            for (let f of fisikList) {
+                if (f.technician && f.technician !== "-" && f.technician !== "Unknown" && !f.technician.toLowerCase().includes("assign")) {
+                    tek = f.technician.toString().trim();
+                    break;
+                }
+            }
+            serviceFisikMap.set(sn, {
+                hasFisik: true,
+                fisikTickets: fisikList,
+                prevTechnician: tek
+            });
         }
     });
 
@@ -4985,18 +5023,53 @@ window.renderKonselingGaulDashboard = function () {
     const gaulMap = new Map();
     let totalKasusGaul = 0;
 
+    // 3. Filter tiket yang masuk ke Menu GAUL:
+    // Sesuai aturan: Tiket (baik di GCU Fisik atau di GCU Logic) yang nomor internetnya sudah pernah di-GCU fisik
+    // namun muncul tiket lagi dengan nomor internet yang sama.
     tickets.forEach(t => {
         let sn = (t.serviceNumber || '').trim();
-        let isRepeatService = sn && (serviceCounts.get(sn) || 0) > 1;
-        let hasGaulFlag = (t.gaul && t.gaul > 0) || (t.lapul && t.lapul > 0);
+        if (!sn || sn === '-' || sn === 'Unknown') return;
 
-        if (hasGaulFlag || isRepeatService) {
-            let rawNik = (t.technician && t.technician !== "-" && t.technician !== "Unknown" && t.technician !== "null")
-                ? t.technician.toString().trim()
-                : "";
+        let isTargetCategory = (t.category === 'GCU FISIK' || t.category === 'GCU LOGIC');
+        let sList = ticketsByService.get(sn) || [];
+        let fisikInfo = serviceFisikMap.get(sn);
 
-            if (rawNik.toLowerCase().includes('assign') || rawNik.toLowerCase().includes('manually')) {
-                rawNik = "";
+        let isGaulRepeat = false;
+        let prevFisikTicket = null;
+
+        if (fisikInfo) {
+            // Cek apakah ada tiket fisik lain selain tiket ini untuk nomor internet yang sama
+            let otherFisik = fisikInfo.fisikTickets.find(ft => ft.incident !== t.incident);
+            if (otherFisik) {
+                isGaulRepeat = true;
+                prevFisikTicket = otherFisik;
+            } else if (sList.length > 1 && fisikInfo.fisikTickets.length >= 1) {
+                // Muncul tiket lagi dengan nomor internet yang sama dan nomor ini pernah GCU Fisik
+                if (isTargetCategory || t !== fisikInfo.fisikTickets[0]) {
+                    isGaulRepeat = true;
+                    prevFisikTicket = fisikInfo.fisikTickets[0];
+                }
+            }
+        }
+
+        // Cek juga tiket yang di history-nya sendiri pernah submit fisik lalu dibuka kembali / di-rework
+        if (!isGaulRepeat && isTargetCategory) {
+            let actUpper = (t.actionHistory || '').toUpperCase();
+            if ((actUpper.includes("DIKEMBALIKAN KE GCU FISIK") || actUpper.includes("[BUTUH FISIK")) && actUpper.includes("EVIDENCE FISIK SUBMITTED")) {
+                isGaulRepeat = true;
+                prevFisikTicket = t;
+            }
+        }
+
+        if (isGaulRepeat) {
+            // Tentukan teknisi penyumbang GAUL:
+            // 1) Teknisi yang mengerjakan GCU Fisik sebelumnya (yang menyebabkan repeat)
+            // 2) Atau teknisi pada tiket saat ini
+            let rawNik = "";
+            if (prevFisikTicket && prevFisikTicket.technician && prevFisikTicket.technician !== "-" && prevFisikTicket.technician !== "Unknown" && !prevFisikTicket.technician.toLowerCase().includes("assign")) {
+                rawNik = prevFisikTicket.technician.toString().trim();
+            } else if (t.technician && t.technician !== "-" && t.technician !== "Unknown" && !t.technician.toLowerCase().includes("assign")) {
+                rawNik = t.technician.toString().trim();
             }
 
             let groupKey = rawNik || "TANPA_NIK";
@@ -5020,10 +5093,11 @@ window.renderKonselingGaulDashboard = function () {
             item.count++;
             totalKasusGaul++;
 
-            let gScore = (t.gaul || 0) + (t.lapul || 0);
-            if (gScore === 0 && isRepeatService) gScore = 1;
+            let gScore = 1;
+            if (t.gaul && t.gaul > 0) gScore = Math.max(gScore, t.gaul);
             item.totalScore += gScore;
 
+            t._prevFisikIncident = prevFisikTicket ? prevFisikTicket.incident : '-';
             item.tickets.push(t);
 
             if (t.sto && t.sto !== '-') {
@@ -5137,7 +5211,7 @@ window.filterKonselingGaulTable = function () {
     }
 
     if (list.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 30px; color: var(--text-secondary);"><ion-icon name="shield-checkmark-outline" style="font-size: 32px; color: #10b981; display: block; margin: 0 auto 8px;"></ion-icon>Tidak ada teknisi penyumbang repeat trouble yang sesuai filter.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 40px 20px; color: var(--text-secondary);"><ion-icon name="shield-checkmark-outline" style="font-size: 36px; color: #10b981; display: block; margin: 0 auto 10px;"></ion-icon><h4 style="margin: 0 0 6px; font-size: 15px; color: var(--text-primary); font-weight: 700;">Tidak Ada Kasus GAUL Pasca GCU Fisik</h4><p style="margin: 0 auto; font-size: 12.5px; max-width: 520px; color: var(--text-secondary); line-height: 1.5;">Data GAUL khusus menghitung tiket repeat (di GCU Fisik / GCU Logic) yang nomor internetnya sudah pernah dikerjakan GCU Fisik sebelumnya. Saat ini belum ditemukan repeat incident pasca GCU Fisik.</p></td></tr>`;
         return;
     }
 
@@ -5252,7 +5326,10 @@ window.filterKonselingGaulTable = function () {
                         <span style="font-weight: 800; color: ${rxColor};">${t.rx || "-"}</span>
                     </td>
                     <td>
-                        <span style="font-size: 11px; color: #ef4444; font-weight: 700;">GAUL: ${t.gaul || 0} | LAPUL: ${t.lapul || 0}</span>
+                        <span class="badge" style="font-size: 10px; font-weight: 700; background: ${t.category === 'GCU FISIK' ? '#fee2e2' : '#eff6ff'}; color: ${t.category === 'GCU FISIK' ? '#b91c1c' : '#2563eb'}; padding: 2px 6px; border-radius: 4px; display: inline-block;">
+                            ${t.category || 'GCU LOGIC'}
+                        </span>
+                        <span style="display: block; font-size: 10px; color: #f43f5e; font-weight: 700; margin-top: 2px;">Repeat Pasca Fisik</span>
                     </td>
                     <td>
                         <div style="font-size: 11px; color: var(--text-secondary); max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${t.symptom || '-'}">
