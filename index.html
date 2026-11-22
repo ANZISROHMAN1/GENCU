@@ -141,6 +141,11 @@
                             <ion-icon name="flame-outline" style="margin-right: 10px; color: #f43f5e; font-size: 17px;"></ion-icon> KONSELING GAUL
                         </a>
 
+                        <!-- 3. Menu Analisis Sambungan DC -->
+                        <a href="#" class="nav-item" id="menuAnalisisDc" onclick="showAnalisisDcView()" style="color: #f59e0b; font-weight: 700;">
+                            <ion-icon name="git-network-outline" style="margin-right: 10px; color: #f59e0b; font-size: 17px;"></ion-icon> ANALISIS SAMBUNGAN DC
+                        </a>
+
                         <!-- 3. Rekap Kinerja Witel -->
                         <a href="#" class="nav-item" id="menuMonitoring" onclick="showMonitoringView()" style="color: #8b5cf6; font-weight: 700;">
                             <ion-icon name="stats-chart-outline" style="margin-right: 10px; color: #8b5cf6; font-size: 17px;"></ion-icon> REKAP KINERJA WITEL
@@ -871,6 +876,188 @@
                     </div>
                 </div>
             </div>
+
+            <!-- VIEW: ANALISIS SAMBUNGAN DC -->
+            <div id="view-analisis-dc" style="display: none;">
+                <header class="top-header">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="width: 38px; height: 38px; border-radius: 10px; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.3); display: flex; align-items: center; justify-content: center;">
+                            <ion-icon name="git-network" style="font-size: 22px; color: #f59e0b;"></ion-icon>
+                        </div>
+                        <div>
+                            <h2 style="margin: 0; font-size: 20px;">Analisis Sambungan Dropcore (DC)</h2>
+                            <p class="subtitle" style="margin: 2px 0 0 0; font-size: 11.5px; color: var(--text-secondary);">Monitoring kualitas kabel optik, titik sambungan DC, risiko redaman, dan rekomendasi penarikan kabel baru</p>
+                        </div>
+                    </div>
+                    <div class="header-actions">
+                        <div class="filter-select-group filter-group-witel" style="margin-bottom: 0;">
+                            <label for="dcWitelFilter">WITEL:</label>
+                            <select id="dcWitelFilter" onchange="window.onDcWitelChange()">
+                                <option value="ALL">Semua Witel</option>
+                            </select>
+                        </div>
+                        <button class="btn-reload" onclick="toggleTheme()">
+                            <ion-icon name="sunny-outline"></ion-icon> Theme
+                        </button>
+                        <button class="btn-reload" onclick="fetchTickets(true)">
+                            <ion-icon name="refresh-outline"></ion-icon> Reload
+                        </button>
+                    </div>
+                </header>
+
+                <!-- Top KPI Cards -->
+                <div class="summary-cards mon-kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));">
+                    <div class="card summary-card" style="background: linear-gradient(135deg, #0284c7, #0369a1) !important; border: none;">
+                        <div class="card-content" style="width: 100%;">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                <div>
+                                    <h1 id="dcKpiTotalTiket">0</h1>
+                                    <p><ion-icon name="git-network-outline"></ion-icon> TOTAL TERANALISIS DC</p>
+                                </div>
+                                <ion-icon name="git-network" style="font-size: 30px; opacity: 0.8;"></ion-icon>
+                            </div>
+                            <div style="margin-top: 10px; font-size: 11.5px; color: rgba(255,255,255,0.9);">
+                                <span>Tiket dengan data titik sambungan</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card summary-card" style="background: linear-gradient(135deg, #10b981, #059669) !important; border: none;">
+                        <div class="card-content" style="width: 100%;">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                <div>
+                                    <h1 id="dcKpi1Sambungan">0</h1>
+                                    <p><ion-icon name="checkmark-circle-outline"></ion-icon> 1 SAMBUNGAN (AMAN)</p>
+                                </div>
+                                <ion-icon name="checkmark-circle" style="font-size: 30px; opacity: 0.8;"></ion-icon>
+                            </div>
+                            <div style="margin-top: 10px; font-size: 11.5px; color: rgba(255,255,255,0.9);">
+                                <span>Toleransi standar SOP Telkom</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card summary-card" style="background: linear-gradient(135deg, #f59e0b, #d97706) !important; border: none;">
+                        <div class="card-content" style="width: 100%;">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                <div>
+                                    <h1 id="dcKpi2Sambungan">0</h1>
+                                    <p><ion-icon name="alert-circle-outline"></ion-icon> 2 SAMBUNGAN (WASPADA)</p>
+                                </div>
+                                <ion-icon name="alert-circle" style="font-size: 30px; opacity: 0.8;"></ion-icon>
+                            </div>
+                            <div style="margin-top: 10px; font-size: 11.5px; color: rgba(255,255,255,0.9);">
+                                <span>Batas toleransi maksimal sambungan</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card summary-card" style="background: linear-gradient(135deg, #ef4444, #dc2626) !important; border: none;">
+                        <div class="card-content" style="width: 100%;">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                <div>
+                                    <h1 id="dcKpi3Sambungan">0</h1>
+                                    <p><ion-icon name="warning-outline"></ion-icon> &ge; 3 SAMBUNGAN (KRITIS)</p>
+                                </div>
+                                <ion-icon name="warning" style="font-size: 30px; opacity: 0.8;"></ion-icon>
+                            </div>
+                            <div style="margin-top: 10px; font-size: 11.5px; color: rgba(255,255,255,0.9);">
+                                <span>Over-joint, rentan putus &amp; redaman drop</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card summary-card" style="background: linear-gradient(135deg, #8b5cf6, #6d28d9) !important; border: none;">
+                        <div class="card-content" style="width: 100%;">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                <div>
+                                    <h1 id="dcKpiRekomendasiTarik">0</h1>
+                                    <p><ion-icon name="flash-outline"></ion-icon> REKOMENDASI TARIK BARU</p>
+                                </div>
+                                <ion-icon name="flash" style="font-size: 30px; opacity: 0.8;"></ion-icon>
+                            </div>
+                            <div style="margin-top: 10px; font-size: 11.5px; color: rgba(255,255,255,0.9);">
+                                <span>Wajib penarikan kabel DC pengganti</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section: Ringkasan Analisis Kualitas & Top STO -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 15px; margin-bottom: 20px;">
+                    <!-- Card A: Distribusi & Dampak Redaman -->
+                    <div class="card" style="background: var(--bg-surface); padding: 18px 20px; border-radius: 14px; border: 1px solid var(--border);">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; border-bottom: 1px solid var(--border); padding-bottom: 8px;">
+                            <h4 style="margin: 0; font-size: 14px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+                                <ion-icon name="pulse-outline" style="color: #f59e0b; font-size: 18px;"></ion-icon>
+                                Korelasi Sambungan vs Rata-rata Redaman
+                            </h4>
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 10px;" id="dcKorelasiContainer">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- Card B: STO Titik Sambungan Terbanyak -->
+                    <div class="card" style="background: var(--bg-surface); padding: 18px 20px; border-radius: 14px; border: 1px solid var(--border);">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; border-bottom: 1px solid var(--border); padding-bottom: 8px;">
+                            <h4 style="margin: 0; font-size: 14px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+                                <ion-icon name="business-outline" style="color: #0284c7; font-size: 18px;"></ion-icon>
+                                Top STO Rawan Sambungan Dropcore
+                            </h4>
+                            <span style="font-size: 11px; color: var(--text-secondary); font-weight: 600;">Prioritas Overhaul</span>
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 8px;" id="dcTopStoContainer">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Main Content Section: Tabel Interaktif -->
+                <div class="card dashboard-section">
+                    <div class="dashboard-header" style="flex-wrap: wrap; gap: 12px;">
+                        <div>
+                            <h3 style="margin: 0; font-size: 16px;">Daftar Tiket Berdasarkan Sambungan DC</h3>
+                            <p class="subtitle" style="margin-top: 3px;">Rincian tiket pelanggan dengan histori sambungan kabel dropcore dan evaluasi kelayakan fisik.</p>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                            <div class="filter-search-box" style="margin-bottom: 0;">
+                                <ion-icon name="search-outline"></ion-icon>
+                                <input type="text" id="dcSearchInput" placeholder="Cari No Incident / No Internet / STO / NIK..." oninput="window.filterDcTable()">
+                            </div>
+                            <div class="mon-filter-chips">
+                                <button class="mon-chip active" id="dcChipAll" onclick="window.setDcFilterChip('ALL')">Semua Data</button>
+                                <button class="mon-chip" id="dcChip1" onclick="window.setDcFilterChip('1')">🟢 1 Sambungan</button>
+                                <button class="mon-chip" id="dcChip2" onclick="window.setDcFilterChip('2')">🟡 2 Sambungan</button>
+                                <button class="mon-chip" id="dcChip3" onclick="window.setDcFilterChip('3+')">🔴 &ge; 3 Sambungan</button>
+                                <button class="mon-chip" id="dcChipTarik" onclick="window.setDcFilterChip('TARIK_BARU')">🚨 Tarik DC Baru (<span id="dcChipTarikCount">0</span>)</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="table-container" id="dcTableContainer" style="max-height: 600px; overflow-y: auto;">
+                        <table class="data-table" id="dcDataTable" style="min-width: 980px; width: 100%;">
+                            <thead>
+                                <tr>
+                                    <th style="width: 50px; text-align: center;">NO</th>
+                                    <th style="min-width: 140px;">INCIDENT</th>
+                                    <th style="min-width: 170px;">NO LAYANAN / PELANGGAN</th>
+                                    <th style="width: 110px; text-align: center;">STO / WITEL</th>
+                                    <th style="text-align: center; width: 150px;">SAMBUNGAN DC</th>
+                                    <th style="text-align: center; width: 140px;">REDAMAN RX</th>
+                                    <th style="min-width: 130px;">TEKNISI</th>
+                                    <th style="text-align: center; width: 130px;">STATUS ALUR</th>
+                                    <th style="min-width: 180px;">REKOMENDASI SISTEM</th>
+                                    <th style="text-align: center; width: 110px;">AKSI</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dcTableBody">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
         </main>
     </div>
 
@@ -950,7 +1137,7 @@
         </div>
     </div>
 
-    <script src="app.js?v=3.9"></script>
+    <script src="app.js?v=4.0"></script>
     <script>
         // Mobile sidebar toggle
         function toggleSidebar() {
