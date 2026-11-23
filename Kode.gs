@@ -392,6 +392,16 @@ function doGet(e) {
       }
   }
 
+  // Handle action reorganize_archive - Pisahkan ulang tiket completed vs uncompleted di spreadsheet arsip
+  if (e && e.parameter && e.parameter.action === 'reorganize_archive') {
+      try {
+          var resReorg = reorganizeArchiveTabs();
+          return ContentService.createTextOutput(JSON.stringify(resReorg)).setMimeType(ContentService.MimeType.JSON);
+      } catch (errReorg) {
+          return ContentService.createTextOutput(JSON.stringify({ success: false, error: errReorg.toString() })).setMimeType(ContentService.MimeType.JSON);
+      }
+  }
+
   // Handle action mark_gcu_logic (langsung selesai via logic)
   if (e && e.parameter && e.parameter.action === 'mark_gcu_logic') {
       var ticketId = e.parameter.ticket || "";
@@ -3325,6 +3335,7 @@ function onOpen() {
       .addSeparator()
       .addItem('📦 Preview Pemindahan Arsip Tiket > 60 Hari', 'previewArchive60Days')
       .addItem('🚀 Jalankan Pemindahan Arsip Tiket > 60 Hari', 'runArchive60DaysManual')
+      .addItem('🔀 Pisahkan Ulang Arsip Completed & Uncompleted', 'reorganizeArchiveTabs')
       .addItem('⏱️ Pasang Timer Otomatis Arsip Harian (02:00 WIB)', 'setupArchiveDailyTrigger')
       .addSeparator()
       .addItem('📢 Atur ID Grup Khusus Tiket Close', 'dialogSetGrupClose')
@@ -4929,13 +4940,12 @@ function archiveOldTickets60Days(isDryRun) {
             var korlapText = (evKorlapColIdx !== -1 && row[evKorlapColIdx]) ? row[evKorlapColIdx].toString().toUpperCase() : "";
             var statusText = (statusColIdx !== -1 && row[statusColIdx]) ? row[statusColIdx].toString().toUpperCase() : "";
             
+            // Sesuai standar GCU: Tiket COMPLETED HANYA jika ada bukti approval/closing dari Korlap ([COMPLETED])
+            // Status CLOSED dari OSS tidak dihitung completed di GCU karena OSS auto-close tiket dalam hitungan jam/hari
             var isCompleted = false;
             if (actionText.indexOf("[COMPLETED]") !== -1 || 
                 korlapText.indexOf("[COMPLETED]") !== -1 || 
                 korlapText.indexOf("APPROVED") !== -1 || 
-                statusText.indexOf("CLOSED") !== -1 || 
-                statusText.indexOf("RESOLV") !== -1 || 
-                statusText.indexOf("COMPLETED") !== -1 || 
                 rowText.indexOf("[COMPLETED]") !== -1) {
                 isCompleted = true;
             }
@@ -5178,5 +5188,113 @@ function searchTicketsInArchive(query) {
         tickets: [headersWithTab].concat(matchedRows)
     };
 }
+
+/**
+ * Memisahkan ulang tiket di Spreadsheet Arsip:
+ * Memeriksa seluruh baris di ARSIP_COMPLETED,
+ * jika tiket belum pernah berstatus [COMPLETED] / Approved oleh Korlap di GCU,
+ * maka dipindahkan ke ARSIP_UNCOMPLETED!
+ */
+function reorganizeArchiveTabs() {
+    var ssArchive;
+    try {
+        ssArchive = SpreadsheetApp.openById(ARCHIVE_SPREADSHEET_ID);
+    } catch (e) {
+        return { success: false, message: "Gagal membuka Spreadsheet Arsip: " + e.toString() };
+    }
+    
+    var sheetComp = ssArchive.getSheetByName(ARCHIVE_TAB_COMPLETED);
+    var sheetUncomp = ssArchive.getSheetByName(ARCHIVE_TAB_UNCOMPLETED);
+    if (!sheetComp || sheetComp.getLastRow() < 2) {
+        return { success: false, message: "Sheet ARSIP_COMPLETED masih kosong atau tidak ada data untuk dipisahkan." };
+    }
+    if (!sheetUncomp) {
+        sheetUncomp = ssArchive.insertSheet(ARCHIVE_TAB_UNCOMPLETED);
+    }
+    
+    var data = sheetComp.getDataRange().getValues();
+    var header = data[0];
+    
+    var actionColIdx = -1;
+    var evKorlapColIdx = -1;
+    for (var c = 0; c < header.length; c++) {
+        var h = (header[c] || "").toString().toUpperCase().trim();
+        if (h === "ACTION") actionColIdx = c;
+        if (h === "EVIDENCE KORLAP") evKorlapColIdx = c;
+    }
+    
+    var trueCompleted = [];
+    var trueUncompleted = [];
+    
+    for (var r = 1; r < data.length; r++) {
+        var row = data[r];
+        var hasContent = row.some(function(cell) { return cell !== "" && cell !== null && cell !== undefined; });
+        if (!hasContent) continue;
+        
+        var actionText = (actionColIdx !== -1 && row[actionColIdx]) ? row[actionColIdx].toString().toUpperCase() : "";
+        var korlapText = (evKorlapColIdx !== -1 && row[evKorlapColIdx]) ? row[evKorlapColIdx].toString().toUpperCase() : "";
+        var rowText = row.join(" ").toUpperCase();
+        
+        // HANYA yang benar-benar pernah disubmit [COMPLETED] atau diapprove Korlap yang tetap di ARSIP_COMPLETED
+        var isGcuCompleted = (actionText.indexOf("[COMPLETED]") !== -1 || 
+                              korlapText.indexOf("[COMPLETED]") !== -1 || 
+                              korlapText.indexOf("APPROVED") !== -1 || 
+                              rowText.indexOf("[COMPLETED]") !== -1);
+                              
+        if (isGcuCompleted) {
+            trueCompleted.push(row);
+        } else {
+            trueUncompleted.push(row);
+        }
+    }
+    
+    // 1. Tulis ulang ARSIP_COMPLETED
+    sheetComp.clearContents();
+    sheetComp.getRange(1, 1, 1, header.length).setValues([header]);
+    sheetComp.getRange(1, 1, 1, header.length).setFontWeight("bold").setBackground("#e0f7fa");
+    if (trueCompleted.length > 0) {
+        sheetComp.getRange(2, 1, trueCompleted.length, header.length).setValues(trueCompleted);
+    }
+    
+    // Rapikan sisa baris kosong ARSIP_COMPLETED
+    var maxComp = sheetComp.getMaxRows();
+    var needComp = Math.max(trueCompleted.length + 10, 50);
+    if (maxComp > needComp + 50) {
+        sheetComp.deleteRows(needComp + 1, maxComp - needComp);
+    }
+    
+    // 2. Tulis ulang ARSIP_UNCOMPLETED
+    sheetUncomp.clearContents();
+    sheetUncomp.getRange(1, 1, 1, header.length).setValues([header]);
+    sheetUncomp.getRange(1, 1, 1, header.length).setFontWeight("bold").setBackground("#fff9c4");
+    if (trueUncompleted.length > 0) {
+        sheetUncomp.getRange(2, 1, trueUncompleted.length, header.length).setValues(trueUncompleted);
+    }
+    
+    // Rapikan sisa baris kosong ARSIP_UNCOMPLETED
+    var maxUncomp = sheetUncomp.getMaxRows();
+    var needUncomp = Math.max(trueUncompleted.length + 10, 50);
+    if (maxUncomp > needUncomp + 50) {
+        sheetUncomp.deleteRows(needUncomp + 1, maxUncomp - needUncomp);
+    }
+    
+    var msg = "🎉 BERHASIL MEMISAHKAN ARSIP!\n\n" +
+              "• Tiket ke ARSIP_COMPLETED (Sudah selesai/approved GCU): " + trueCompleted.length + " tiket\n" +
+              "• Tiket ke ARSIP_UNCOMPLETED (Belum selesai di GCU): " + trueUncompleted.length + " tiket\n\n" +
+              "Sekarang tab ARSIP_UNCOMPLETED sudah terisi dengan tiket yang belum tuntas di GCU!";
+              
+    Logger.log(msg);
+    if (typeof SpreadsheetApp !== "undefined" && SpreadsheetApp.getUi) {
+        SpreadsheetApp.getUi().alert("SELESAI! ✅", msg, SpreadsheetApp.getUi().ButtonSet.OK);
+    }
+    
+    return {
+        success: true,
+        message: msg,
+        completedCount: trueCompleted.length,
+        uncompletedCount: trueUncompleted.length
+    };
+}
+
 
 

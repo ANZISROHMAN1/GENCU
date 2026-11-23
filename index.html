@@ -1067,6 +1067,9 @@
                         <button class="btn-reload" onclick="toggleTheme()">
                             <ion-icon name="sunny-outline"></ion-icon> Theme
                         </button>
+                        <button class="btn-reload" id="btnReorgArchive" onclick="window.reorganizeArchive()" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3);">
+                            <ion-icon name="git-branch-outline"></ion-icon> Pisahkan Ulang Arsip
+                        </button>
                         <button class="btn-reload" onclick="window.loadArchiveStats()">
                             <ion-icon name="refresh-outline"></ion-icon> Cek Statistik Arsip
                         </button>
@@ -1262,7 +1265,7 @@
         </div>
     </div>
 
-    <script src="app.js?v=4.6"></script>
+    <script src="app.js?v=4.7"></script>
     <script>
         // Mobile sidebar toggle
         function toggleSidebar() {

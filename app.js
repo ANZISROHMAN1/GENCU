@@ -6196,3 +6196,33 @@ window.searchArchiveTickets = async function (e) {
         }
     }
 };
+
+window.reorganizeArchive = async function () {
+    const btn = document.getElementById('btnReorgArchive');
+    if (!confirm("Pisahkan ulang tiket di Spreadsheet Arsip?\n\n• Tiket yang sudah selesai GCU / Approved Korlap akan tetap di ARSIP_COMPLETED.\n• Tiket yang belum pernah selesai di GCU akan dipindahkan ke ARSIP_UNCOMPLETED.")) {
+        return;
+    }
+
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<ion-icon name="sync-outline" style="animation: spin 1s linear infinite;"></ion-icon> Memisahkan...';
+    }
+
+    try {
+        const res = await fetch(SCRIPT_URL + '?action=reorganize_archive&_t=' + Date.now());
+        const data = await res.json();
+        if (data && data.success) {
+            alert(data.message || "Berhasil memisahkan tiket Completed dan Uncompleted!");
+            window.loadArchiveStats();
+        } else {
+            alert("Gagal memisahkan arsip: " + (data.message || data.error || "Terjadi kesalahan"));
+        }
+    } catch (err) {
+        alert("Terjadi kesalahan jaringan: " + err.message);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<ion-icon name="git-branch-outline"></ion-icon> Pisahkan Ulang Arsip';
+        }
+    }
+};
