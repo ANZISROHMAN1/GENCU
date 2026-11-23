@@ -5247,10 +5247,13 @@ function searchTicketsInArchive(query) {
 }
 
 /**
- * Memisahkan ulang tiket di Spreadsheet Arsip:
- * Memeriksa seluruh baris di ARSIP_COMPLETED,
- * jika tiket belum pernah berstatus [COMPLETED] / Approved oleh Korlap di GCU,
- * maka dipindahkan ke ARSIP_UNCOMPLETED!
+ * Sinkronisasi dan Pemisahan Lengkap Arsip Tiket (> 30 Hari):
+ * 1. Membaca seluruh data arsip yang ada (ARSIP_COMPLETED & ARSIP_UNCOMPLETED)
+ * 2. Memeriksa DATABASE ALL TICKET untuk tiket > 30 hari
+ * 3. Memilah secara akurat:
+ *    - Tiket berstatus [COMPLETED] / Approved Korlap -> ARSIP_COMPLETED
+ *    - Tiket belum selesai di GCU -> ARSIP_UNCOMPLETED
+ * 4. Merapikan header dari #REF! dan menata kolom
  */
 function reorganizeArchiveTabs() {
     var ssArchive;
@@ -5262,37 +5265,115 @@ function reorganizeArchiveTabs() {
     
     var sheetComp = ssArchive.getSheetByName(ARCHIVE_TAB_COMPLETED);
     var sheetUncomp = ssArchive.getSheetByName(ARCHIVE_TAB_UNCOMPLETED);
-    if (!sheetComp || sheetComp.getLastRow() < 2) {
-        return { success: false, message: "Sheet ARSIP_COMPLETED masih kosong atau tidak ada data untuk dipisahkan." };
-    }
-    if (!sheetUncomp) {
-        sheetUncomp = ssArchive.insertSheet(ARCHIVE_TAB_UNCOMPLETED);
+    if (!sheetComp) sheetComp = ssArchive.insertSheet(ARCHIVE_TAB_COMPLETED);
+    if (!sheetUncomp) sheetUncomp = ssArchive.insertSheet(ARCHIVE_TAB_UNCOMPLETED);
+    
+    var allRows = [];
+    var header = null;
+    
+    // 1. Ambil dari ARSIP_COMPLETED
+    if (sheetComp.getLastRow() > 1) {
+        var compData = sheetComp.getDataRange().getValues();
+        header = compData[0];
+        allRows = allRows.concat(compData.slice(1));
     }
     
-    var data = sheetComp.getDataRange().getValues();
-    var header = data[0];
+    // 2. Ambil dari ARSIP_UNCOMPLETED
+    if (sheetUncomp.getLastRow() > 1) {
+        var uncompData = sheetUncomp.getDataRange().getValues();
+        if (!header) header = uncompData[0];
+        allRows = allRows.concat(uncompData.slice(1));
+    }
     
+    // 3. Jika header belum ada, ambil dari sheet utama DATABASE ALL TICKET
+    var ssOrigin = SpreadsheetApp.getActiveSpreadsheet();
+    var sheetOrigin = ssOrigin.getSheetByName("DATABASE ALL TICKET") || ssOrigin.getSheetByName("DATABASE");
+    if (!header && sheetOrigin && sheetOrigin.getLastRow() > 0) {
+        header = sheetOrigin.getRange(1, 1, 1, sheetOrigin.getLastColumn()).getValues()[0];
+    }
+    
+    if (!header) {
+        return { success: false, message: "Header database tidak ditemukan." };
+    }
+    
+    // Map kolom penting
     var actionColIdx = -1;
     var evKorlapColIdx = -1;
+    var incColIdx = -1;
+    var umurColIdx = -1;
+    var repDateColIdx = -1;
+    var statusDateColIdx = -1;
+    var timeColIdx = -1;
+    
     for (var c = 0; c < header.length; c++) {
         var h = (header[c] || "").toString().toUpperCase().trim();
         if (h === "ACTION") actionColIdx = c;
         if (h === "EVIDENCE KORLAP") evKorlapColIdx = c;
+        if (h.indexOf("INCIDENT") !== -1 || h.indexOf("ID TICKET") !== -1 || h.indexOf("TICKET ID") !== -1) incColIdx = c;
+        if (h.indexOf("UMUR") !== -1) umurColIdx = c;
+        if (h.indexOf("REPORTED") !== -1 && h.indexOf("BY") === -1 && h.indexOf("PROBLEM") === -1) repDateColIdx = c;
+        if (h.indexOf("STATUS") !== -1 && (h.indexOf("DA") !== -1 || h.indexOf("DATE") !== -1)) statusDateColIdx = c;
+        if (h.indexOf("TIME") !== -1) timeColIdx = c;
     }
     
+    // 4. Periksa juga apakah di DATABASE ALL TICKET masih ada tiket > 30 hari yang belum terambil
+    var nowMs = new Date().getTime();
+    var MS_PER_DAY = 1000 * 60 * 60 * 24;
+    var originRowsToKeep = [];
+    var originData = null;
+    
+    if (sheetOrigin && sheetOrigin.getLastRow() > 1) {
+        originData = sheetOrigin.getDataRange().getValues();
+        for (var or = 1; or < originData.length; or++) {
+            var oRow = originData[or];
+            var hasContent = oRow.some(function(cell) { return cell !== "" && cell !== null && cell !== undefined; });
+            if (!hasContent) continue;
+            
+            // Hitung umur
+            var age = null;
+            if (umurColIdx !== -1 && oRow[umurColIdx]) {
+                var m = oRow[umurColIdx].toString().match(/(\d+)/);
+                if (m) age = parseInt(m[1], 10);
+            }
+            if (age === null || isNaN(age)) {
+                var dVal = (repDateColIdx !== -1 && oRow[repDateColIdx]) ? oRow[repDateColIdx] :
+                           ((statusDateColIdx !== -1 && oRow[statusDateColIdx]) ? oRow[statusDateColIdx] : 
+                           ((timeColIdx !== -1 && oRow[timeColIdx]) ? oRow[timeColIdx] : null));
+                if (dVal) {
+                    var pDate = (dVal instanceof Date) ? dVal : new Date(dVal);
+                    if (pDate && !isNaN(pDate.getTime()) && pDate.getFullYear() >= 2020) {
+                        age = Math.floor((nowMs - pDate.getTime()) / MS_PER_DAY);
+                    }
+                }
+            }
+            
+            if (age !== null && age > 30) {
+                // Masukkan ke baris arsip
+                allRows.push(oRow);
+            } else {
+                originRowsToKeep.push(oRow);
+            }
+        }
+    }
+    
+    // 5. Dedup & Pisahkan ke Completed vs Uncompleted
+    var seenInc = {};
     var trueCompleted = [];
     var trueUncompleted = [];
     
-    for (var r = 1; r < data.length; r++) {
-        var row = data[r];
+    for (var r = 0; r < allRows.length; r++) {
+        var row = allRows[r];
         var hasContent = row.some(function(cell) { return cell !== "" && cell !== null && cell !== undefined; });
         if (!hasContent) continue;
+        
+        var incId = (incColIdx !== -1 && row[incColIdx]) ? row[incColIdx].toString().trim() : ("ROW_" + r);
+        if (seenInc[incId]) continue; // Skip duplikat
+        seenInc[incId] = true;
         
         var actionText = (actionColIdx !== -1 && row[actionColIdx]) ? row[actionColIdx].toString().toUpperCase() : "";
         var korlapText = (evKorlapColIdx !== -1 && row[evKorlapColIdx]) ? row[evKorlapColIdx].toString().toUpperCase() : "";
         var rowText = row.join(" ").toUpperCase();
         
-        // HANYA yang benar-benar pernah disubmit [COMPLETED] atau diapprove Korlap yang tetap di ARSIP_COMPLETED
         var isGcuCompleted = (actionText.indexOf("[COMPLETED]") !== -1 || 
                               korlapText.indexOf("[COMPLETED]") !== -1 || 
                               korlapText.indexOf("APPROVED") !== -1 || 
@@ -5305,6 +5386,7 @@ function reorganizeArchiveTabs() {
         }
     }
     
+    // 6. Header Bersih (Hilangkan #REF!)
     var cleanHeader = header.slice();
     for (var ch = 0; ch < cleanHeader.length; ch++) {
         if (cleanHeader[ch] === "#REF!") {
@@ -5315,40 +5397,45 @@ function reorganizeArchiveTabs() {
         }
     }
     
-    // 1. Tulis ulang ARSIP_COMPLETED
+    // 7. Tulis ke ARSIP_COMPLETED
     sheetComp.clearContents();
     sheetComp.getRange(1, 1, 1, cleanHeader.length).setValues([cleanHeader]);
     sheetComp.getRange(1, 1, 1, cleanHeader.length).setFontWeight("bold").setBackground("#e0f7fa");
     if (trueCompleted.length > 0) {
         sheetComp.getRange(2, 1, trueCompleted.length, cleanHeader.length).setValues(trueCompleted);
     }
-    
-    // Rapikan sisa baris kosong ARSIP_COMPLETED
     var maxComp = sheetComp.getMaxRows();
     var needComp = Math.max(trueCompleted.length + 10, 50);
     if (maxComp > needComp + 50) {
         sheetComp.deleteRows(needComp + 1, maxComp - needComp);
     }
     
-    // 2. Tulis ulang ARSIP_UNCOMPLETED
+    // 8. Tulis ke ARSIP_UNCOMPLETED
     sheetUncomp.clearContents();
     sheetUncomp.getRange(1, 1, 1, cleanHeader.length).setValues([cleanHeader]);
     sheetUncomp.getRange(1, 1, 1, cleanHeader.length).setFontWeight("bold").setBackground("#fff9c4");
     if (trueUncompleted.length > 0) {
         sheetUncomp.getRange(2, 1, trueUncompleted.length, cleanHeader.length).setValues(trueUncompleted);
     }
-    
-    // Rapikan sisa baris kosong ARSIP_UNCOMPLETED
     var maxUncomp = sheetUncomp.getMaxRows();
     var needUncomp = Math.max(trueUncompleted.length + 10, 50);
     if (maxUncomp > needUncomp + 50) {
         sheetUncomp.deleteRows(needUncomp + 1, maxUncomp - needUncomp);
     }
     
-    var msg = "🎉 BERHASIL MEMISAHKAN ARSIP!\n\n" +
-              "• Tiket ke ARSIP_COMPLETED (Sudah selesai/approved GCU): " + trueCompleted.length + " tiket\n" +
-              "• Tiket ke ARSIP_UNCOMPLETED (Belum selesai di GCU): " + trueUncompleted.length + " tiket\n\n" +
-              "Sekarang tab ARSIP_UNCOMPLETED sudah terisi dengan tiket yang belum tuntas di GCU!";
+    // 9. Jika ada baris lama yang terambil dari DATABASE ALL TICKET, update sheet utama
+    if (originData && originRowsToKeep.length > 0 && originRowsToKeep.length < (originData.length - 1)) {
+        sheetOrigin.clearContents();
+        sheetOrigin.getRange(1, 1, 1, cleanHeader.length).setValues([cleanHeader]);
+        sheetOrigin.getRange(2, 1, originRowsToKeep.length, cleanHeader.length).setValues(originRowsToKeep);
+        checkAndCreateHeaders(null, sheetOrigin);
+    }
+    
+    var msg = "🎉 SINKRONISASI ARSIP BERHASIL!\n\n" +
+              "• Tiket di ARSIP_COMPLETED: " + trueCompleted.length + " tiket\n" +
+              "• Tiket di ARSIP_UNCOMPLETED: " + trueUncompleted.length + " tiket\n" +
+              "• Total Tiket Terarsip: " + (trueCompleted.length + trueUncompleted.length) + " tiket\n\n" +
+              "Header telah dibersihkan dan kedua tab arsip sudah terisi sempurna!";
               
     Logger.log(msg);
     try {
@@ -5361,9 +5448,11 @@ function reorganizeArchiveTabs() {
         success: true,
         message: msg,
         completedCount: trueCompleted.length,
-        uncompletedCount: trueUncompleted.length
+        uncompletedCount: trueUncompleted.length,
+        totalArchived: trueCompleted.length + trueUncompleted.length
     };
 }
+
 
 
 
