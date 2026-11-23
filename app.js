@@ -6229,7 +6229,7 @@ window.reorganizeArchive = async function () {
 
 window.runArchiveNow = async function () {
     const btn = document.getElementById('btnRunArchiveNow');
-    if (!confirm("Jalankan pemindahan arsip tiket > 60 hari sekarang?\n\nTiket berumur > 60 hari di DATABASE ALL TICKET akan dipindahkan ke Spreadsheet ARSIP TIKET GENCU.")) {
+    if (!confirm("Jalankan pemindahan arsip tiket > 30 hari sekarang?\n\nTiket berumur > 30 hari di DATABASE ALL TICKET akan dipindahkan ke Spreadsheet ARSIP TIKET GENCU.")) {
         return;
     }
 
@@ -6242,7 +6242,7 @@ window.runArchiveNow = async function () {
         const res = await fetch(SCRIPT_URL + '?action=run_archive_cron&preview=0&_t=' + Date.now());
         const data = await res.json();
         if (data && data.success) {
-            alert(data.message || "Pemindahan arsip tiket > 60 hari berhasil!");
+            alert(data.message || "Pemindahan arsip tiket > 30 hari berhasil!");
             window.loadArchiveStats();
         } else {
             alert("Gagal memindahkan arsip: " + (data.message || data.error || "Terjadi kesalahan"));
@@ -6259,7 +6259,7 @@ window.runArchiveNow = async function () {
 
 window.setupArchiveTimer = async function () {
     const btn = document.getElementById('btnSetupTimer');
-    if (!confirm("Pasang timer otomatis harian pada jam 02:00 WIB?\n\nSetiap hari pukul 02:00 - 03:00 WIB, script akan secara otomatis memeriksa dan memindahkan tiket > 60 hari ke spreadsheet arsip tanpa perlu dijalankan manual lagi.")) {
+    if (!confirm("Pasang timer otomatis harian pada jam 02:00 WIB?\n\nSetiap hari pukul 02:00 - 03:00 WIB, script akan secara otomatis memeriksa dan memindahkan tiket > 30 hari ke spreadsheet arsip tanpa perlu dijalankan manual lagi.")) {
         return;
     }
 

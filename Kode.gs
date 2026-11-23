@@ -3343,8 +3343,8 @@ function onOpen() {
       .addItem('🗑️ Hapus Tiket STO Non-Area (DEP, SKJ, PCM, CNE, CSL)', 'cleanupExcludedWorkzonesInDatabase')
       .addItem('👥 Rapikan & Gabungkan Duplikat Sheet TEKNISI', 'rapikanSheetTeknisi')
       .addSeparator()
-      .addItem('📦 Preview Pemindahan Arsip Tiket > 60 Hari', 'previewArchive60Days')
-      .addItem('🚀 Jalankan Pemindahan Arsip Tiket > 60 Hari', 'runArchive60DaysManual')
+      .addItem('📦 Preview Pemindahan Arsip Tiket > 30 Hari', 'previewArchive60Days')
+      .addItem('🚀 Jalankan Pemindahan Arsip Tiket > 30 Hari', 'runArchive60DaysManual')
       .addItem('🔀 Pisahkan Ulang Arsip Completed & Uncompleted', 'reorganizeArchiveTabs')
       .addItem('⏱️ Pasang Timer Otomatis Arsip Harian (02:00 WIB)', 'setupArchiveDailyTrigger')
       .addSeparator()
@@ -4815,7 +4815,7 @@ function sendLaporanCloseTiket(ticketId, korlapNote, extraData) {
 }
 
 // =========================================================================
-// SISTEM ARSIP TIKET GENCU (> 60 HARI) KE GOOGLE SPREADSHEET TERPISAH
+// SISTEM ARSIP TIKET GENCU (> 30 HARI) KE GOOGLE SPREADSHEET TERPISAH
 // Target Spreadsheet: ARSIP TIKET GENCU
 // Tabs: ARSIP_COMPLETED & ARSIP_UNCOMPLETED
 // =========================================================================
@@ -4823,10 +4823,10 @@ function sendLaporanCloseTiket(ticketId, korlapNote, extraData) {
 var ARCHIVE_SPREADSHEET_ID = "1UIMinB_cqcw4F8I5HPf8rfojfku-CqZaef-YtzWa174";
 var ARCHIVE_TAB_COMPLETED = "ARSIP_COMPLETED";
 var ARCHIVE_TAB_UNCOMPLETED = "ARSIP_UNCOMPLETED";
-var ARCHIVE_DAYS_THRESHOLD = 60; // Ambang batas umur tiket (hari)
+var ARCHIVE_DAYS_THRESHOLD = 30; // Ambang batas umur tiket (hari): > 30 hari diarsipkan
 
 /**
- * Memindahkan tiket berumur > 60 hari dari DATABASE ALL TICKET
+ * Memindahkan tiket berumur > 30 hari dari DATABASE ALL TICKET
  * ke Spreadsheet ARSIP TIKET GENCU.
  * 
  * @param {boolean} isDryRun - Jika true, hanya kalkulasi jumlah tanpa memindahkan/menghapus.
@@ -4977,12 +4977,12 @@ function archiveOldTickets60Days(isDryRun) {
             continue;
         }
         
-        // 2. Evaluasi Threshold 60 Hari
+        // 2. Evaluasi Threshold 30 Hari
         if (ageDays <= ARCHIVE_DAYS_THRESHOLD) {
-            // Tiket masih aktif / di bawah 60 hari -> PERTAHANKAN di sheet utama
+            // Tiket masih aktif / di bawah 30 hari -> PERTAHANKAN di sheet utama
             rowsToKeep.push(row);
         } else {
-            // Tiket berumur > 60 hari -> PINDAH KE ARSIP
+            // Tiket berumur > 30 hari -> PINDAH KE ARSIP
             var rowText = row.join(" ").toUpperCase();
             var actionText = (actionColIdx !== -1 && row[actionColIdx]) ? row[actionColIdx].toString().toUpperCase() : "";
             var korlapText = (evKorlapColIdx !== -1 && row[evKorlapColIdx]) ? row[evKorlapColIdx].toString().toUpperCase() : "";
@@ -5008,9 +5008,9 @@ function archiveOldTickets60Days(isDryRun) {
     
     // Hasil Preview (Dry Run)
     if (isPreview) {
-        var previewMsg = "🔍 PREVIEW PEMINDAHAN ARSIP TIKET (> 60 HARI)\n\n" +
+        var previewMsg = "🔍 PREVIEW PEMINDAHAN ARSIP TIKET (> 30 HARI)\n\n" +
                          "• Total Tiket di Database: " + (originData.length - 1) + " baris\n" +
-                         "• Tiket Tetap di Sheet Utama (<= 60 Hari): " + rowsToKeep.length + " tiket\n" +
+                         "• Tiket Tetap di Sheet Utama (<= 30 Hari): " + rowsToKeep.length + " tiket\n" +
                          "• Tiket Akan Dipindah ke ARSIP_COMPLETED: " + rowsToArchiveCompleted.length + " tiket\n" +
                          "• Tiket Akan Dipindah ke ARSIP_UNCOMPLETED: " + rowsToArchiveUncompleted.length + " tiket\n\n" +
                          "ℹ️ Tidak ada data yang diubah atau dihapus (Mode Preview).";
@@ -5124,7 +5124,7 @@ function previewArchive60Days() {
 function runArchive60DaysManual() {
     var ui = SpreadsheetApp.getUi();
     var confirm = ui.alert("🚀 KONFIRMASI PEMINDAHAN ARSIP", 
-                           "Tiket berumur > 60 hari akan disalin ke spreadsheet:\n" +
+                           "Tiket berumur > 30 hari akan disalin ke spreadsheet:\n" +
                            "ARSIP TIKET GENCU\n\n" +
                            "• Tiket completed masuk ke ARSIP_COMPLETED\n" +
                            "• Tiket uncompleted masuk ke ARSIP_UNCOMPLETED\n\n" +
@@ -5155,7 +5155,7 @@ function setupArchiveDailyTrigger() {
         .create();
         
     var msg = "⏰ Timer otomatis harian berhasil dipasang!\n\n" +
-              "Fungsi pemindahan arsip akan berjalan setiap hari pukul 02:00 - 03:00 WIB secara otomatis di latar belakang.";
+              "Fungsi pemindahan arsip akan berjalan setiap hari pukul 02:00 - 03:00 WIB secara otomatis di latar belakang untuk tiket berumur > 30 hari.";
     if (typeof SpreadsheetApp !== "undefined" && SpreadsheetApp.getUi) {
         SpreadsheetApp.getUi().alert("TIMER AKTIF! ✅", msg, SpreadsheetApp.getUi().ButtonSet.OK);
     }
@@ -5166,7 +5166,7 @@ function setupArchiveDailyTrigger() {
  * Target cron handler otomatis setiap hari
  */
 function archiveOldTicketsDailyCron() {
-    Logger.log("⏰ Menjalankan auto-archive harian tiket > 60 hari...");
+    Logger.log("⏰ Menjalankan auto-archive harian tiket > 30 hari...");
     archiveOldTickets60Days(false);
 }
 
