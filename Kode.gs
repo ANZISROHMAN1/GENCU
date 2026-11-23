@@ -360,6 +360,38 @@ function doGet(e) {
       return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
   }
 
+  // Handle action get_archive_stats - Ringkasan jumlah tiket di spreadsheet arsip
+  if (e && e.parameter && e.parameter.action === 'get_archive_stats') {
+      try {
+          var stats = getArchiveStatistics();
+          return ContentService.createTextOutput(JSON.stringify({ success: true, stats: stats })).setMimeType(ContentService.MimeType.JSON);
+      } catch (errStats) {
+          return ContentService.createTextOutput(JSON.stringify({ success: false, message: errStats.toString() })).setMimeType(ContentService.MimeType.JSON);
+      }
+  }
+
+  // Handle action search_archive - Pencarian on-demand tiket lama di spreadsheet arsip
+  if (e && e.parameter && e.parameter.action === 'search_archive') {
+      try {
+          var query = (e.parameter.q || "").toString().trim();
+          var searchResult = searchTicketsInArchive(query);
+          return ContentService.createTextOutput(JSON.stringify(searchResult)).setMimeType(ContentService.MimeType.JSON);
+      } catch (errSearch) {
+          return ContentService.createTextOutput(JSON.stringify({ success: false, error: errSearch.toString(), tickets: [] })).setMimeType(ContentService.MimeType.JSON);
+      }
+  }
+
+  // Handle action run_archive_cron - Trigger pemindahan arsip via URL/API
+  if (e && e.parameter && e.parameter.action === 'run_archive_cron') {
+      try {
+          var isPreview = e.parameter.preview === '1' || e.parameter.preview === 'true';
+          var resArchive = archiveOldTickets60Days(isPreview);
+          return ContentService.createTextOutput(JSON.stringify(resArchive)).setMimeType(ContentService.MimeType.JSON);
+      } catch (errArch) {
+          return ContentService.createTextOutput(JSON.stringify({ success: false, error: errArch.toString() })).setMimeType(ContentService.MimeType.JSON);
+      }
+  }
+
   // Handle action mark_gcu_logic (langsung selesai via logic)
   if (e && e.parameter && e.parameter.action === 'mark_gcu_logic') {
       var ticketId = e.parameter.ticket || "";
@@ -3290,6 +3322,11 @@ function onOpen() {
       .addItem('🧹 Rapikan & Hapus Baris Kosong Database', 'cleanupBlankRowsInDatabase')
       .addItem('🗑️ Hapus Tiket STO Non-Area (DEP, SKJ, PCM, CNE, CSL)', 'cleanupExcludedWorkzonesInDatabase')
       .addItem('👥 Rapikan & Gabungkan Duplikat Sheet TEKNISI', 'rapikanSheetTeknisi')
+      .addSeparator()
+      .addItem('📦 Preview Pemindahan Arsip Tiket > 60 Hari', 'previewArchive60Days')
+      .addItem('🚀 Jalankan Pemindahan Arsip Tiket > 60 Hari', 'runArchive60DaysManual')
+      .addItem('⏱️ Pasang Timer Otomatis Arsip Harian (02:00 WIB)', 'setupArchiveDailyTrigger')
+      .addSeparator()
       .addItem('📢 Atur ID Grup Khusus Tiket Close', 'dialogSetGrupClose')
       .addItem('🔍 Deteksi Otomatis Grup Baru (@Assurance_B2BBot)', 'autoDetectGrupClose')
       .addItem('🔄 Reset Webhook & Bersihkan Antrean Telegram', 'setWebhookTelegram')
@@ -4755,4 +4792,391 @@ function sendLaporanCloseTiket(ticketId, korlapNote, extraData) {
         } catch (ign) {}
     }
 }
+
+// =========================================================================
+// SISTEM ARSIP TIKET GENCU (> 60 HARI) KE GOOGLE SPREADSHEET TERPISAH
+// Target Spreadsheet: ARSIP TIKET GENCU
+// Tabs: ARSIP_COMPLETED & ARSIP_UNCOMPLETED
+// =========================================================================
+
+var ARCHIVE_SPREADSHEET_ID = "1UIMinB_cqcw4F8I5HPf8rfojfku-CqZaef-YtzWa174";
+var ARCHIVE_TAB_COMPLETED = "ARSIP_COMPLETED";
+var ARCHIVE_TAB_UNCOMPLETED = "ARSIP_UNCOMPLETED";
+var ARCHIVE_DAYS_THRESHOLD = 60; // Ambang batas umur tiket (hari)
+
+/**
+ * Memindahkan tiket berumur > 60 hari dari DATABASE ALL TICKET
+ * ke Spreadsheet ARSIP TIKET GENCU.
+ * 
+ * @param {boolean} isDryRun - Jika true, hanya kalkulasi jumlah tanpa memindahkan/menghapus.
+ * @return {object} Status dan rincian pemindahan.
+ */
+function archiveOldTickets60Days(isDryRun) {
+    var isPreview = (isDryRun === true);
+    var startTime = new Date();
+    
+    var ssOrigin = SpreadsheetApp.getActiveSpreadsheet();
+    var sheetOrigin = ssOrigin.getSheetByName("DATABASE ALL TICKET") || ssOrigin.getSheetByName("DATABASE");
+    if (!sheetOrigin) {
+        return { success: false, message: "Sheet DATABASE ALL TICKET tidak ditemukan di spreadsheet utama!" };
+    }
+    
+    var lastRow = sheetOrigin.getLastRow();
+    var lastCol = sheetOrigin.getLastColumn();
+    if (lastRow < 2 || lastCol < 1) {
+        return { 
+            success: true, 
+            message: "Sheet DATABASE ALL TICKET masih kosong (hanya header atau tidak ada data).", 
+            movedCompleted: 0, 
+            movedUncompleted: 0, 
+            keptActive: 0 
+        };
+    }
+    
+    // Buka Spreadsheet Arsip
+    var ssArchive;
+    try {
+        ssArchive = SpreadsheetApp.openById(ARCHIVE_SPREADSHEET_ID);
+    } catch (eOpen) {
+        return { success: false, message: "Gagal membuka Spreadsheet Arsip (ID: " + ARCHIVE_SPREADSHEET_ID + "): " + eOpen.toString() };
+    }
+    
+    // Pastikan Tab Arsip Tersedia
+    var sheetCompleted = ssArchive.getSheetByName(ARCHIVE_TAB_COMPLETED);
+    if (!sheetCompleted) {
+        sheetCompleted = ssArchive.insertSheet(ARCHIVE_TAB_COMPLETED);
+    }
+    var sheetUncompleted = ssArchive.getSheetByName(ARCHIVE_TAB_UNCOMPLETED);
+    if (!sheetUncompleted) {
+        sheetUncompleted = ssArchive.insertSheet(ARCHIVE_TAB_UNCOMPLETED);
+    }
+    
+    // Ambil Data Asli dari Sheet Utama
+    var originData = sheetOrigin.getRange(1, 1, lastRow, lastCol).getValues();
+    var header = originData[0];
+    
+    // Mapping Kolom
+    var umurColIdx = -1;
+    var reportedDateColIdx = -1;
+    var statusDateColIdx = -1;
+    var actionColIdx = -1;
+    var evKorlapColIdx = -1;
+    var statusColIdx = -1;
+    var incidentColIdx = -1;
+    
+    for (var c = 0; c < header.length; c++) {
+        var h = (header[c] || "").toString().toUpperCase().trim();
+        if (h === "UMUR") umurColIdx = c;
+        if (h === "REPORTED DATE" || h === "REPORTED_DATE" || h === "CREATION DATE") reportedDateColIdx = c;
+        if (h === "STATUS DATE" || h === "STATUS_DATE" || h === "DATE") statusDateColIdx = c;
+        if (h === "ACTION") actionColIdx = c;
+        if (h === "EVIDENCE KORLAP") evKorlapColIdx = c;
+        if (h === "TICKET STATUS" || h === "STATUS" || h === "LAST STATUS") statusColIdx = c;
+        if (h === "INCIDENT" || h === "ID TICKET" || h === "TICKET ID") incidentColIdx = c;
+    }
+    
+    var rowsToArchiveCompleted = [];
+    var rowsToArchiveUncompleted = [];
+    var rowsToKeep = [];
+    var nowMs = new Date().getTime();
+    var MS_PER_DAY = 1000 * 60 * 60 * 24;
+    
+    for (var r = 1; r < originData.length; r++) {
+        var row = originData[r];
+        
+        // Lewati baris kosong total
+        var hasContent = row.some(function(cell) { return cell !== "" && cell !== null && cell !== undefined; });
+        if (!hasContent) continue;
+        
+        // 1. Hitung Umur Tiket (Hari)
+        var ageDays = null;
+        
+        // Cek dari kolom UMUR jika sudah terisi rumus/nilai (misal: "65 Hari" atau 65)
+        if (umurColIdx !== -1 && row[umurColIdx]) {
+            var umurStr = row[umurColIdx].toString().trim();
+            var umurMatch = umurStr.match(/(\d+)/);
+            if (umurMatch) {
+                ageDays = parseInt(umurMatch[1], 10);
+            }
+        }
+        
+        // Fallback hitung manual dari REPORTED DATE atau STATUS DATE
+        if (ageDays === null || isNaN(ageDays)) {
+            var dateVal = (reportedDateColIdx !== -1 && row[reportedDateColIdx]) ? row[reportedDateColIdx] :
+                          ((statusDateColIdx !== -1 && row[statusDateColIdx]) ? row[statusDateColIdx] : null);
+            if (dateVal) {
+                var parsedDate = new Date(dateVal);
+                if (!isNaN(parsedDate.getTime())) {
+                    ageDays = Math.floor((nowMs - parsedDate.getTime()) / MS_PER_DAY);
+                }
+            }
+        }
+        
+        // Jika tidak dapat dihitung umurnya, jangan hapus/arsip (safety first)
+        if (ageDays === null || isNaN(ageDays) || ageDays < 0) {
+            rowsToKeep.push(row);
+            continue;
+        }
+        
+        // 2. Evaluasi Threshold 60 Hari
+        if (ageDays <= ARCHIVE_DAYS_THRESHOLD) {
+            // Tiket masih aktif / di bawah 60 hari -> PERTAHANKAN di sheet utama
+            rowsToKeep.push(row);
+        } else {
+            // Tiket berumur > 60 hari -> PINDAH KE ARSIP
+            var rowText = row.join(" ").toUpperCase();
+            var actionText = (actionColIdx !== -1 && row[actionColIdx]) ? row[actionColIdx].toString().toUpperCase() : "";
+            var korlapText = (evKorlapColIdx !== -1 && row[evKorlapColIdx]) ? row[evKorlapColIdx].toString().toUpperCase() : "";
+            var statusText = (statusColIdx !== -1 && row[statusColIdx]) ? row[statusColIdx].toString().toUpperCase() : "";
+            
+            var isCompleted = false;
+            if (actionText.indexOf("[COMPLETED]") !== -1 || 
+                korlapText.indexOf("[COMPLETED]") !== -1 || 
+                korlapText.indexOf("APPROVED") !== -1 || 
+                statusText.indexOf("CLOSED") !== -1 || 
+                statusText.indexOf("RESOLV") !== -1 || 
+                statusText.indexOf("COMPLETED") !== -1 || 
+                rowText.indexOf("[COMPLETED]") !== -1) {
+                isCompleted = true;
+            }
+            
+            if (isCompleted) {
+                rowsToArchiveCompleted.push(row);
+            } else {
+                rowsToArchiveUncompleted.push(row);
+            }
+        }
+    }
+    
+    // Hasil Preview (Dry Run)
+    if (isPreview) {
+        var previewMsg = "🔍 PREVIEW PEMINDAHAN ARSIP TIKET (> 60 HARI)\n\n" +
+                         "• Total Tiket di Database: " + (originData.length - 1) + " baris\n" +
+                         "• Tiket Tetap di Sheet Utama (<= 60 Hari): " + rowsToKeep.length + " tiket\n" +
+                         "• Tiket Akan Dipindah ke ARSIP_COMPLETED: " + rowsToArchiveCompleted.length + " tiket\n" +
+                         "• Tiket Akan Dipindah ke ARSIP_UNCOMPLETED: " + rowsToArchiveUncompleted.length + " tiket\n\n" +
+                         "ℹ️ Tidak ada data yang diubah atau dihapus (Mode Preview).";
+        Logger.log(previewMsg);
+        return {
+            success: true,
+            preview: true,
+            message: previewMsg,
+            totalRows: originData.length - 1,
+            keptActive: rowsToKeep.length,
+            toCompleted: rowsToArchiveCompleted.length,
+            toUncompleted: rowsToArchiveUncompleted.length
+        };
+    }
+    
+    // EKSEKUSI RIIL PEMINDAHAN (Copy-Verify-Delete)
+    var lock = LockService.getScriptLock();
+    var hasLock = lock.tryLock(60000); // 60 detik lock
+    if (!hasLock) {
+        return { success: false, message: "Sistem sedang sibuk memproses sinkronisasi data lain. Coba beberapa saat lagi." };
+    }
+    
+    try {
+        // 1. Pastikan Header di Sheet Arsip Sinkron dengan Sheet Utama
+        if (sheetCompleted.getLastRow() < 1) {
+            sheetCompleted.getRange(1, 1, 1, header.length).setValues([header]);
+            sheetCompleted.getRange(1, 1, 1, header.length).setFontWeight("bold").setBackground("#e0f7fa");
+        }
+        if (sheetUncompleted.getLastRow() < 1) {
+            sheetUncompleted.getRange(1, 1, 1, header.length).setValues([header]);
+            sheetUncompleted.getRange(1, 1, 1, header.length).setFontWeight("bold").setBackground("#fff9c4");
+        }
+        
+        // 2. Salin ke ARSIP_COMPLETED
+        if (rowsToArchiveCompleted.length > 0) {
+            var startRowComp = sheetCompleted.getLastRow() + 1;
+            sheetCompleted.getRange(startRowComp, 1, rowsToArchiveCompleted.length, header.length).setValues(rowsToArchiveCompleted);
+        }
+        
+        // 3. Salin ke ARSIP_UNCOMPLETED
+        if (rowsToArchiveUncompleted.length > 0) {
+            var startRowUncomp = sheetUncompleted.getLastRow() + 1;
+            sheetUncompleted.getRange(startRowUncomp, 1, rowsToArchiveUncompleted.length, header.length).setValues(rowsToArchiveUncompleted);
+        }
+        
+        // 4. Perbarui Sheet Utama DATABASE ALL TICKET
+        var totalArchived = rowsToArchiveCompleted.length + rowsToArchiveUncompleted.length;
+        if (totalArchived > 0) {
+            sheetOrigin.clearContents();
+            sheetOrigin.getRange(1, 1, 1, header.length).setValues([header]);
+            if (rowsToKeep.length > 0) {
+                sheetOrigin.getRange(2, 1, rowsToKeep.length, header.length).setValues(rowsToKeep);
+            }
+            
+            // Pangkas baris kosong berlebih di bawah agar kalkulasi spreadsheet kembali sangat cepat
+            var currentMaxRows = sheetOrigin.getMaxRows();
+            var neededRows = Math.max(rowsToKeep.length + 10, 50);
+            if (currentMaxRows > neededRows + 50) {
+                sheetOrigin.deleteRows(neededRows + 1, currentMaxRows - neededRows);
+            }
+            
+            // Pasang kembali rumus UMUR & warna header
+            checkAndCreateHeaders(null, sheetOrigin);
+        }
+        
+        var durationSec = Math.round((new Date().getTime() - startTime.getTime()) / 1000);
+        var successMsg = "🎉 PEMINDAHAN ARSIP TIKET BERHASIL!\n\n" +
+                         "• Tiket Dipindah ke ARSIP_COMPLETED: " + rowsToArchiveCompleted.length + " tiket\n" +
+                         "• Tiket Dipindah ke ARSIP_UNCOMPLETED: " + rowsToArchiveUncompleted.length + " tiket\n" +
+                         "• Tiket Aktif di DATABASE ALL TICKET: " + rowsToKeep.length + " tiket\n" +
+                         "• Waktu Proses: " + durationSec + " detik\n\n" +
+                         "Web GENCU, Scraper, dan Bot kini jauh lebih ringan & kencang!";
+        
+        Logger.log(successMsg);
+        
+        // Catat ke log
+        try {
+            var errSheet = ssOrigin.getSheetByName("DEBUG_LOG") || ssOrigin.insertSheet("DEBUG_LOG");
+            errSheet.appendRow([new Date(), "ARCHIVE_60_DAYS_SUCCESS", "Completed: " + rowsToArchiveCompleted.length + ", Uncompleted: " + rowsToArchiveUncompleted.length + ", Kept: " + rowsToKeep.length]);
+        } catch (eLog) {}
+        
+        return {
+            success: true,
+            message: successMsg,
+            movedCompleted: rowsToArchiveCompleted.length,
+            movedUncompleted: rowsToArchiveUncompleted.length,
+            keptActive: rowsToKeep.length,
+            durationSeconds: durationSec
+        };
+    } catch (eExec) {
+        Logger.log("❌ ERROR ARCHIVE: " + eExec.toString());
+        return { success: false, message: "Terjadi kesalahan saat memproses arsip: " + eExec.toString() };
+    } finally {
+        lock.releaseLock();
+    }
+}
+
+/**
+ * Menu UI Google Sheets: Preview data yang akan diarsipkan
+ */
+function previewArchive60Days() {
+    var res = archiveOldTickets60Days(true);
+    if (typeof SpreadsheetApp !== "undefined" && SpreadsheetApp.getUi) {
+        SpreadsheetApp.getUi().alert("🔍 PREVIEW ARSIP TIKET", res.message, SpreadsheetApp.getUi().ButtonSet.OK);
+    }
+}
+
+/**
+ * Menu UI Google Sheets: Eksekusi pemindahan riil dengan konfirmasi
+ */
+function runArchive60DaysManual() {
+    var ui = SpreadsheetApp.getUi();
+    var confirm = ui.alert("🚀 KONFIRMASI PEMINDAHAN ARSIP", 
+                           "Tiket berumur > 60 hari akan disalin ke spreadsheet:\n" +
+                           "ARSIP TIKET GENCU\n\n" +
+                           "• Tiket completed masuk ke ARSIP_COMPLETED\n" +
+                           "• Tiket uncompleted masuk ke ARSIP_UNCOMPLETED\n\n" +
+                           "Apakah Anda yakin ingin mengeksekusi sekarang?", 
+                           ui.ButtonSet.YES_NO);
+    if (confirm === ui.Button.YES) {
+        var res = archiveOldTickets60Days(false);
+        ui.alert(res.success ? "✅ SELESAI" : "❌ GAGAL", res.message, ui.ButtonSet.OK);
+    }
+}
+
+/**
+ * Memasang time-driven trigger harian pukul 02:00 - 03:00 WIB
+ */
+function setupArchiveDailyTrigger() {
+    var functionName = "archiveOldTicketsDailyCron";
+    var triggers = ScriptApp.getProjectTriggers();
+    for (var i = 0; i < triggers.length; i++) {
+        if (triggers[i].getHandlerFunction() === functionName) {
+            ScriptApp.deleteTrigger(triggers[i]);
+        }
+    }
+    
+    ScriptApp.newTrigger(functionName)
+        .timeBased()
+        .everyDays(1)
+        .atHour(2)
+        .create();
+        
+    var msg = "⏰ Timer otomatis harian berhasil dipasang!\n\n" +
+              "Fungsi pemindahan arsip akan berjalan setiap hari pukul 02:00 - 03:00 WIB secara otomatis di latar belakang.";
+    if (typeof SpreadsheetApp !== "undefined" && SpreadsheetApp.getUi) {
+        SpreadsheetApp.getUi().alert("TIMER AKTIF! ✅", msg, SpreadsheetApp.getUi().ButtonSet.OK);
+    }
+    Logger.log(msg);
+}
+
+/**
+ * Target cron handler otomatis setiap hari
+ */
+function archiveOldTicketsDailyCron() {
+    Logger.log("⏰ Menjalankan auto-archive harian tiket > 60 hari...");
+    archiveOldTickets60Days(false);
+}
+
+/**
+ * Mendapatkan statistik ringkasan tiket di Spreadsheet Arsip
+ */
+function getArchiveStatistics() {
+    var ssArchive = SpreadsheetApp.openById(ARCHIVE_SPREADSHEET_ID);
+    var sheetComp = ssArchive.getSheetByName(ARCHIVE_TAB_COMPLETED);
+    var sheetUncomp = ssArchive.getSheetByName(ARCHIVE_TAB_UNCOMPLETED);
+    
+    var countComp = (sheetComp && sheetComp.getLastRow() > 1) ? (sheetComp.getLastRow() - 1) : 0;
+    var countUncomp = (sheetUncomp && sheetUncomp.getLastRow() > 1) ? (sheetUncomp.getLastRow() - 1) : 0;
+    
+    return {
+        completed: countComp,
+        uncompleted: countUncomp,
+        total: countComp + countUncomp,
+        url: "https://docs.google.com/spreadsheets/d/" + ARCHIVE_SPREADSHEET_ID + "/edit"
+    };
+}
+
+/**
+ * Pencarian on-demand tiket lama di spreadsheet arsip
+ */
+function searchTicketsInArchive(query) {
+    if (!query) {
+        return { success: false, message: "Kata kunci pencarian kosong", tickets: [] };
+    }
+    
+    var cleanQ = query.toString().trim().toUpperCase();
+    var ssArchive = SpreadsheetApp.openById(ARCHIVE_SPREADSHEET_ID);
+    var targetSheets = [ARCHIVE_TAB_COMPLETED, ARCHIVE_TAB_UNCOMPLETED];
+    var matchedRows = [];
+    var commonHeader = [];
+    
+    for (var s = 0; s < targetSheets.length; s++) {
+        var sheet = ssArchive.getSheetByName(targetSheets[s]);
+        if (!sheet || sheet.getLastRow() < 2) continue;
+        
+        var data = sheet.getDataRange().getValues();
+        if (data.length <= 1) continue;
+        
+        if (commonHeader.length === 0) {
+            commonHeader = data[0];
+        }
+        
+        for (var r = 1; r < data.length; r++) {
+            var row = data[r];
+            var rowStr = row.join(" ").toUpperCase();
+            if (rowStr.indexOf(cleanQ) !== -1) {
+                var rowCopy = row.slice();
+                rowCopy.push(targetSheets[s]); // Keterangan tab arsip
+                matchedRows.push(rowCopy);
+                if (matchedRows.length >= 100) break; // Batasi max 100 hasil demi kecepatan respon
+            }
+        }
+        if (matchedRows.length >= 100) break;
+    }
+    
+    var headersWithTab = commonHeader.slice();
+    if (headersWithTab.length > 0) headersWithTab.push("TAB_ARSIP");
+    
+    return {
+        success: true,
+        count: matchedRows.length,
+        tickets: [headersWithTab].concat(matchedRows)
+    };
+}
+
 

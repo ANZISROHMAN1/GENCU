@@ -150,6 +150,11 @@
                         <a href="#" class="nav-item" id="menuMonitoring" onclick="showMonitoringView()" style="color: #8b5cf6; font-weight: 700;">
                             <ion-icon name="stats-chart-outline" style="margin-right: 10px; color: #8b5cf6; font-size: 17px;"></ion-icon> REKAP KINERJA WITEL
                         </a>
+
+                        <!-- 4. Menu Arsip Tiket (>60 Hari) -->
+                        <a href="#" class="nav-item" id="menuArsip" onclick="showArsipView()" style="color: #10b981; font-weight: 700;">
+                            <ion-icon name="archive-outline" style="margin-right: 10px; color: #10b981; font-size: 17px;"></ion-icon> ARSIP TIKET (&gt;60 HARI)
+                        </a>
                     </nav>
                 </div>
             </div>
@@ -1042,6 +1047,142 @@
                     </div>
                 </div>
             </div>
+
+            <!-- VIEW: ARSIP TIKET (>60 HARI) -->
+            <div id="view-arsip" style="display: none;">
+                <header class="top-header">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="width: 38px; height: 38px; border-radius: 10px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); display: flex; align-items: center; justify-content: center;">
+                            <ion-icon name="archive" style="font-size: 22px; color: #10b981;"></ion-icon>
+                        </div>
+                        <div>
+                            <h2 style="margin: 0; font-size: 20px;">Arsip Tiket GENCU (&gt; 60 Hari)</h2>
+                            <p class="subtitle" style="margin: 2px 0 0 0; font-size: 11.5px; color: var(--text-secondary);">Tiket kedaluwarsa &gt; 60 hari dipindahkan ke spreadsheet arsip terpisah agar Web GENCU harian tetap super responsif.</p>
+                        </div>
+                    </div>
+                    <div class="header-actions">
+                        <a href="https://docs.google.com/spreadsheets/d/1UIMinB_cqcw4F8I5HPf8rfojfku-CqZaef-YtzWa174/edit" target="_blank" rel="noopener noreferrer" class="btn-reload" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">
+                            <ion-icon name="open-outline"></ion-icon> Buka Google Sheet Arsip
+                        </a>
+                        <button class="btn-reload" onclick="toggleTheme()">
+                            <ion-icon name="sunny-outline"></ion-icon> Theme
+                        </button>
+                        <button class="btn-reload" onclick="window.loadArchiveStats()">
+                            <ion-icon name="refresh-outline"></ion-icon> Cek Statistik Arsip
+                        </button>
+                    </div>
+                </header>
+
+                <!-- Top KPI Cards Arsip -->
+                <div class="summary-cards mon-kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
+                    <div class="card summary-card" style="background: linear-gradient(135deg, #059669, #047857) !important; border: none;">
+                        <div class="card-content" style="width: 100%;">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                <div>
+                                    <h1 id="arsipKpiTotal">0</h1>
+                                    <p><ion-icon name="albums-outline"></ion-icon> TOTAL TIKET DIARSIPKAN</p>
+                                </div>
+                                <ion-icon name="archive" style="font-size: 30px; opacity: 0.8;"></ion-icon>
+                            </div>
+                            <div style="margin-top: 10px; font-size: 11.5px; color: rgba(255,255,255,0.9);">
+                                <span>Tiket berumur &gt; 60 hari di database arsip</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card summary-card" style="background: linear-gradient(135deg, #2563eb, #1d4ed8) !important; border: none;">
+                        <div class="card-content" style="width: 100%;">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                <div>
+                                    <h1 id="arsipKpiCompleted">0</h1>
+                                    <p><ion-icon name="checkmark-done-circle-outline"></ion-icon> ARSIP COMPLETED</p>
+                                </div>
+                                <ion-icon name="ribbon" style="font-size: 30px; opacity: 0.8;"></ion-icon>
+                            </div>
+                            <div style="margin-top: 10px; font-size: 11.5px; color: rgba(255,255,255,0.9);">
+                                <span>Sheet: ARSIP_COMPLETED</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card summary-card" style="background: linear-gradient(135deg, #d97706, #b45309) !important; border: none;">
+                        <div class="card-content" style="width: 100%;">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                <div>
+                                    <h1 id="arsipKpiUncompleted">0</h1>
+                                    <p><ion-icon name="alert-circle-outline"></ion-icon> ARSIP UNCOMPLETED</p>
+                                </div>
+                                <ion-icon name="time" style="font-size: 30px; opacity: 0.8;"></ion-icon>
+                            </div>
+                            <div style="margin-top: 10px; font-size: 11.5px; color: rgba(255,255,255,0.9);">
+                                <span>Sheet: ARSIP_UNCOMPLETED</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card summary-card" style="background: linear-gradient(135deg, #4f46e5, #4338ca) !important; border: none;">
+                        <div class="card-content" style="width: 100%;">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                <div>
+                                    <h1 style="font-size: 20px; line-height: 1.4;">02:00 WIB</h1>
+                                    <p><ion-icon name="time-outline"></ion-icon> AUTO ARSIP HARIAN</p>
+                                </div>
+                                <ion-icon name="alarm" style="font-size: 30px; opacity: 0.8;"></ion-icon>
+                            </div>
+                            <div style="margin-top: 10px; font-size: 11.5px; color: rgba(255,255,255,0.9);">
+                                <span>Timer otomatis berjalan tiap malam</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Box Pencarian On-Demand Tiket Arsip -->
+                <div class="card" style="padding: 22px; border-radius: 16px; margin-top: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+                        <div>
+                            <h3 style="margin: 0; font-size: 16px;">🔍 Cari Tiket di Spreadsheet Arsip (On-Demand)</h3>
+                            <p class="subtitle" style="margin-top: 3px;">Pencarian langsung ke Google Sheet Arsip tanpa membebani browser dengan ribuan data.</p>
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <a href="https://docs.google.com/spreadsheets/d/1UIMinB_cqcw4F8I5HPf8rfojfku-CqZaef-YtzWa174/edit" target="_blank" rel="noopener noreferrer" style="font-size: 12px; color: #10b981; font-weight: 700; text-decoration: underline; display: flex; align-items: center; gap: 4px;">
+                                <ion-icon name="grid-outline"></ion-icon> Buka Spreadsheet Tabular
+                            </a>
+                        </div>
+                    </div>
+
+                    <form onsubmit="window.searchArchiveTickets(event)" style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
+                        <input type="text" id="archiveSearchInput" placeholder="Ketik Nomor Tiket (INC...), Nomor Internet, atau Nama Pelanggan..." style="flex: 1; min-width: 260px; padding: 12px 16px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-surface); color: var(--text-primary); font-size: 14px;">
+                        <button type="submit" id="btnSearchArchive" style="padding: 12px 24px; border-radius: 10px; border: none; background: #10b981; color: white; font-weight: 700; font-size: 14px; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                            <ion-icon name="search-outline"></ion-icon> Cari Tiket
+                        </button>
+                    </form>
+
+                    <!-- Table Container Arsip -->
+                    <div class="table-container" style="max-height: 550px; overflow-y: auto;">
+                        <table class="fl-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 50px; text-align: center;">NO</th>
+                                    <th style="width: 140px; text-align: center;">TAB ARSIP</th>
+                                    <th style="width: 150px;">ID TIKET</th>
+                                    <th style="width: 140px;">NO INTERNET</th>
+                                    <th>CUSTOMER</th>
+                                    <th>STATUS / ACTION</th>
+                                    <th style="width: 140px; text-align: center;">UMUR / TGL</th>
+                                </tr>
+                            </thead>
+                            <tbody id="archiveTableBody">
+                                <tr>
+                                    <td colspan="7" style="text-align: center; padding: 40px; color: var(--text-secondary);">
+                                        <ion-icon name="search-outline" style="font-size: 32px; display: block; margin: 0 auto 10px; opacity: 0.5;"></ion-icon>
+                                        Masukkan kata kunci di atas untuk mencari tiket pada spreadsheet arsip.
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
         </main>
     </div>
 
@@ -1121,7 +1262,7 @@
         </div>
     </div>
 
-    <script src="app.js?v=4.5"></script>
+    <script src="app.js?v=4.6"></script>
     <script>
         // Mobile sidebar toggle
         function toggleSidebar() {

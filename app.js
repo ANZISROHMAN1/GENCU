@@ -55,6 +55,7 @@ const viewMonitoring = document.getElementById('view-monitoring');
 const viewMonitoringTeknisi = document.getElementById('view-monitoring-teknisi');
 const viewKonselingGaul = document.getElementById('view-konseling-gaul');
 const viewAnalisisDc = document.getElementById('view-analisis-dc');
+const viewArsip = document.getElementById('view-arsip');
 const workflowContainer = document.getElementById('workflowContainer');
 const workflowPageTitle = document.getElementById('workflowPageTitle');
 const workflowSubtitle = document.getElementById('workflowSubtitle');
@@ -1070,6 +1071,10 @@ window.showDashboard = function (filterStatus) {
     if (vMonTek) vMonTek.style.display = 'none';
     const vGaul = document.getElementById('view-konseling-gaul');
     if (vGaul) vGaul.style.display = 'none';
+    const vDc = document.getElementById('view-analisis-dc');
+    if (vDc) vDc.style.display = 'none';
+    const vArsip = document.getElementById('view-arsip');
+    if (vArsip) vArsip.style.display = 'none';
 
     // Sidebar Active state
     document.querySelectorAll('.nav-links .nav-item').forEach(el => el.classList.remove('active'));
@@ -1120,6 +1125,10 @@ window.showWorkflow = function (role) {
     if (vMonTek) vMonTek.style.display = 'none';
     const vGaul = document.getElementById('view-konseling-gaul');
     if (vGaul) vGaul.style.display = 'none';
+    const vDc = document.getElementById('view-analisis-dc');
+    if (vDc) vDc.style.display = 'none';
+    const vArsip = document.getElementById('view-arsip');
+    if (vArsip) vArsip.style.display = 'none';
 
     // Sidebar Active state
     document.querySelectorAll('.nav-links .nav-item').forEach(el => el.classList.remove('active'));
@@ -3855,6 +3864,10 @@ window.showMonitoringView = function () {
     if (vMonTek) vMonTek.style.display = 'none';
     const vGaul = document.getElementById('view-konseling-gaul');
     if (vGaul) vGaul.style.display = 'none';
+    const vDc = document.getElementById('view-analisis-dc');
+    if (vDc) vDc.style.display = 'none';
+    const vArsip = document.getElementById('view-arsip');
+    if (vArsip) vArsip.style.display = 'none';
 
     // Sidebar Active State
     document.querySelectorAll('.nav-links .nav-item').forEach(el => el.classList.remove('active'));
@@ -4533,6 +4546,8 @@ window.showMonitoringTeknisiView = function () {
     if (vGaul) vGaul.style.display = 'none';
     const vDc = document.getElementById('view-analisis-dc');
     if (vDc) vDc.style.display = 'none';
+    const vArsip = document.getElementById('view-arsip');
+    if (vArsip) vArsip.style.display = 'none';
 
     // Sidebar Active State
     document.querySelectorAll('.nav-links .nav-item').forEach(el => el.classList.remove('active'));
@@ -4908,6 +4923,8 @@ window.showKonselingGaulView = function () {
     if (vGaul) vGaul.style.display = 'block';
     const vDc = document.getElementById('view-analisis-dc');
     if (vDc) vDc.style.display = 'none';
+    const vArsip = document.getElementById('view-arsip');
+    if (vArsip) vArsip.style.display = 'none';
 
     // Sidebar Active State
     document.querySelectorAll('.nav-links .nav-item').forEach(el => el.classList.remove('active'));
@@ -5702,6 +5719,8 @@ window.showAnalisisDcView = function () {
     if (vMonTek) vMonTek.style.display = 'none';
     const vGaul = document.getElementById('view-konseling-gaul');
     if (vGaul) vGaul.style.display = 'none';
+    const vArsip = document.getElementById('view-arsip');
+    if (vArsip) vArsip.style.display = 'none';
     const vDc = document.getElementById('view-analisis-dc');
     if (vDc) vDc.style.display = 'block';
 
@@ -6018,5 +6037,162 @@ window.filterDcTable = function () {
             </td>
         `;
         tableBody.appendChild(moreTr);
+    }
+};
+
+// ==========================================
+// VIEW: ARSIP TIKET (> 60 HARI)
+// ==========================================
+window.showArsipView = function () {
+    state.activeView = 'arsip';
+    viewDashboard.style.display = 'none';
+    if (viewWorkflow) viewWorkflow.style.display = 'none';
+    const viewMon = document.getElementById('view-monitoring');
+    if (viewMon) viewMon.style.display = 'none';
+    const vMonTek = document.getElementById('view-monitoring-teknisi');
+    if (vMonTek) vMonTek.style.display = 'none';
+    const vGaul = document.getElementById('view-konseling-gaul');
+    if (vGaul) vGaul.style.display = 'none';
+    const vDc = document.getElementById('view-analisis-dc');
+    if (vDc) vDc.style.display = 'none';
+    const vArsip = document.getElementById('view-arsip');
+    if (vArsip) vArsip.style.display = 'block';
+
+    // Sidebar Active State
+    document.querySelectorAll('.nav-links .nav-item').forEach(el => el.classList.remove('active'));
+    const menuArsip = document.getElementById('menuArsip');
+    if (menuArsip) menuArsip.classList.add('active');
+
+    // Muat statistik ringkasan arsip
+    window.loadArchiveStats();
+};
+
+window.loadArchiveStats = async function () {
+    const kpiTotal = document.getElementById('arsipKpiTotal');
+    const kpiComp = document.getElementById('arsipKpiCompleted');
+    const kpiUncomp = document.getElementById('arsipKpiUncompleted');
+
+    if (kpiTotal) kpiTotal.innerText = '...';
+    if (kpiComp) kpiComp.innerText = '...';
+    if (kpiUncomp) kpiUncomp.innerText = '...';
+
+    try {
+        const res = await fetch(SCRIPT_URL + '?action=get_archive_stats&_t=' + Date.now());
+        const data = await res.json();
+        if (data && data.success && data.stats) {
+            if (kpiTotal) kpiTotal.innerText = Number(data.stats.total || 0).toLocaleString('id-ID');
+            if (kpiComp) kpiComp.innerText = Number(data.stats.completed || 0).toLocaleString('id-ID');
+            if (kpiUncomp) kpiUncomp.innerText = Number(data.stats.uncompleted || 0).toLocaleString('id-ID');
+        } else {
+            if (kpiTotal) kpiTotal.innerText = '0';
+            if (kpiComp) kpiComp.innerText = '0';
+            if (kpiUncomp) kpiUncomp.innerText = '0';
+        }
+    } catch (err) {
+        console.warn("Gagal memuat statistik arsip:", err);
+        if (kpiTotal) kpiTotal.innerText = '-';
+        if (kpiComp) kpiComp.innerText = '-';
+        if (kpiUncomp) kpiUncomp.innerText = '-';
+    }
+};
+
+window.searchArchiveTickets = async function (e) {
+    if (e && e.preventDefault) e.preventDefault();
+    const input = document.getElementById('archiveSearchInput');
+    const query = input ? input.value.trim() : '';
+    const tableBody = document.getElementById('archiveTableBody');
+    const btn = document.getElementById('btnSearchArchive');
+
+    if (!query) {
+        alert("Silakan masukkan kata kunci pencarian (misal No. Tiket, No. Internet, atau Nama).");
+        return;
+    }
+
+    if (tableBody) {
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="7" style="text-align: center; padding: 40px; color: var(--text-secondary);">
+                    <ion-icon name="sync-outline" style="font-size: 32px; display: block; margin: 0 auto 10px; animation: spin 1s linear infinite; color: #10b981;"></ion-icon>
+                    Mencari tiket "${query}" di spreadsheet arsip...
+                </td>
+            </tr>
+        `;
+    }
+    if (btn) btn.disabled = true;
+
+    try {
+        const res = await fetch(SCRIPT_URL + '?action=search_archive&q=' + encodeURIComponent(query) + '&_t=' + Date.now());
+        const result = await res.json();
+
+        if (btn) btn.disabled = false;
+
+        if (!result || !result.success || !result.tickets || result.tickets.length <= 1) {
+            if (tableBody) {
+                tableBody.innerHTML = `
+                    <tr>
+                        <td colspan="7" style="text-align: center; padding: 40px; color: var(--text-secondary);">
+                            <ion-icon name="alert-circle-outline" style="font-size: 32px; display: block; margin: 0 auto 10px; opacity: 0.5; color: #f59e0b;"></ion-icon>
+                            Tidak ditemukan tiket dengan kata kunci "${query}" di Spreadsheet Arsip.
+                        </td>
+                    </tr>
+                `;
+            }
+            return;
+        }
+
+        const headers = result.tickets[0].map(h => (h || '').toString().toUpperCase().trim());
+        const rows = result.tickets.slice(1);
+
+        // Cari index kolom penting
+        let incIdx = headers.findIndex(h => h.includes('INCIDENT') || h === 'TICKET' || h === 'ID TICKET');
+        let sNumIdx = headers.findIndex(h => h.replace(/[^A-Z0-9]/g, '').includes('SERVICENO') || h.replace(/[^A-Z0-9]/g, '').includes('NOINET') || h.replace(/[^A-Z0-9]/g, '').includes('ND'));
+        let custIdx = headers.findIndex(h => h.includes('CUSTOMER') || h.includes('CONTACT'));
+        let actIdx = headers.indexOf('ACTION');
+        let statusIdx = headers.findIndex(h => h.includes('STATUS'));
+        let umurIdx = headers.indexOf('UMUR');
+        let dateIdx = headers.findIndex(h => h.includes('REPORTED') || h.includes('DATE'));
+        let tabIdx = headers.indexOf('TAB_ARSIP');
+
+        let html = '';
+        rows.forEach((row, i) => {
+            const inc = incIdx !== -1 && row[incIdx] ? row[incIdx] : '-';
+            const sNum = sNumIdx !== -1 && row[sNumIdx] ? row[sNumIdx] : '-';
+            const cust = custIdx !== -1 && row[custIdx] ? row[custIdx] : '-';
+            const act = actIdx !== -1 && row[actIdx] ? row[actIdx] : (statusIdx !== -1 && row[statusIdx] ? row[statusIdx] : '-');
+            const umur = umurIdx !== -1 && row[umurIdx] ? row[umurIdx] : (dateIdx !== -1 && row[dateIdx] ? row[dateIdx] : '-');
+            const tab = tabIdx !== -1 && row[tabIdx] ? row[tabIdx] : 'ARSIP';
+
+            const isComp = tab === 'ARSIP_COMPLETED' || act.toString().toUpperCase().includes('[COMPLETED]');
+            const tabBadge = isComp 
+                ? '<span class="badge" style="background: #ecfdf5; color: #059669; font-weight: 700; font-size: 10.5px;">ARSIP_COMPLETED</span>'
+                : '<span class="badge" style="background: #fffbeb; color: #b45309; font-weight: 700; font-size: 10.5px;">ARSIP_UNCOMPLETED</span>';
+
+            html += `
+                <tr>
+                    <td style="text-align: center; color: var(--text-secondary);">${i + 1}</td>
+                    <td style="text-align: center;">${tabBadge}</td>
+                    <td><strong>${inc}</strong></td>
+                    <td style="font-family: monospace;">${sNum}</td>
+                    <td>${cust}</td>
+                    <td style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${act}">${act}</td>
+                    <td style="text-align: center; font-size: 11.5px; color: var(--text-secondary);">${umur}</td>
+                </tr>
+            `;
+        });
+
+        if (tableBody) tableBody.innerHTML = html;
+
+    } catch (err) {
+        if (btn) btn.disabled = false;
+        if (tableBody) {
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="7" style="text-align: center; padding: 40px; color: #ef4444;">
+                        <ion-icon name="warning-outline" style="font-size: 32px; display: block; margin: 0 auto 10px;"></ion-icon>
+                        Gagal melakukan pencarian di spreadsheet arsip: ${err.message}
+                    </td>
+                </tr>
+            `;
+        }
     }
 };
