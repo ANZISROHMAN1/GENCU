@@ -5035,13 +5035,22 @@ function archiveOldTickets60Days(isDryRun) {
     
     try {
         // 1. Pastikan Header di Sheet Arsip Sinkron dengan Sheet Utama
+        var cleanHeader = header.slice();
+        for (var ch = 0; ch < cleanHeader.length; ch++) {
+            if (cleanHeader[ch] === "#REF!") {
+                cleanHeader[ch] = (ch > 103) ? "UMUR (HARI)" : "CATATAN HISTORIS";
+            }
+            if (ch === 84 && cleanHeader[ch] === "") {
+                cleanHeader[ch] = "ACTION EDIT";
+            }
+        }
         if (sheetCompleted.getLastRow() < 1) {
-            sheetCompleted.getRange(1, 1, 1, header.length).setValues([header]);
-            sheetCompleted.getRange(1, 1, 1, header.length).setFontWeight("bold").setBackground("#e0f7fa");
+            sheetCompleted.getRange(1, 1, 1, cleanHeader.length).setValues([cleanHeader]);
+            sheetCompleted.getRange(1, 1, 1, cleanHeader.length).setFontWeight("bold").setBackground("#e0f7fa");
         }
         if (sheetUncompleted.getLastRow() < 1) {
-            sheetUncompleted.getRange(1, 1, 1, header.length).setValues([header]);
-            sheetUncompleted.getRange(1, 1, 1, header.length).setFontWeight("bold").setBackground("#fff9c4");
+            sheetUncompleted.getRange(1, 1, 1, cleanHeader.length).setValues([cleanHeader]);
+            sheetUncompleted.getRange(1, 1, 1, cleanHeader.length).setFontWeight("bold").setBackground("#fff9c4");
         }
         
         // 2. Salin ke ARSIP_COMPLETED
@@ -5296,12 +5305,22 @@ function reorganizeArchiveTabs() {
         }
     }
     
+    var cleanHeader = header.slice();
+    for (var ch = 0; ch < cleanHeader.length; ch++) {
+        if (cleanHeader[ch] === "#REF!") {
+            cleanHeader[ch] = (ch > 103) ? "UMUR (HARI)" : "CATATAN HISTORIS";
+        }
+        if (ch === 84 && cleanHeader[ch] === "") {
+            cleanHeader[ch] = "ACTION EDIT";
+        }
+    }
+    
     // 1. Tulis ulang ARSIP_COMPLETED
     sheetComp.clearContents();
-    sheetComp.getRange(1, 1, 1, header.length).setValues([header]);
-    sheetComp.getRange(1, 1, 1, header.length).setFontWeight("bold").setBackground("#e0f7fa");
+    sheetComp.getRange(1, 1, 1, cleanHeader.length).setValues([cleanHeader]);
+    sheetComp.getRange(1, 1, 1, cleanHeader.length).setFontWeight("bold").setBackground("#e0f7fa");
     if (trueCompleted.length > 0) {
-        sheetComp.getRange(2, 1, trueCompleted.length, header.length).setValues(trueCompleted);
+        sheetComp.getRange(2, 1, trueCompleted.length, cleanHeader.length).setValues(trueCompleted);
     }
     
     // Rapikan sisa baris kosong ARSIP_COMPLETED
@@ -5313,10 +5332,10 @@ function reorganizeArchiveTabs() {
     
     // 2. Tulis ulang ARSIP_UNCOMPLETED
     sheetUncomp.clearContents();
-    sheetUncomp.getRange(1, 1, 1, header.length).setValues([header]);
-    sheetUncomp.getRange(1, 1, 1, header.length).setFontWeight("bold").setBackground("#fff9c4");
+    sheetUncomp.getRange(1, 1, 1, cleanHeader.length).setValues([cleanHeader]);
+    sheetUncomp.getRange(1, 1, 1, cleanHeader.length).setFontWeight("bold").setBackground("#fff9c4");
     if (trueUncompleted.length > 0) {
-        sheetUncomp.getRange(2, 1, trueUncompleted.length, header.length).setValues(trueUncompleted);
+        sheetUncomp.getRange(2, 1, trueUncompleted.length, cleanHeader.length).setValues(trueUncompleted);
     }
     
     // Rapikan sisa baris kosong ARSIP_UNCOMPLETED
@@ -5332,9 +5351,11 @@ function reorganizeArchiveTabs() {
               "Sekarang tab ARSIP_UNCOMPLETED sudah terisi dengan tiket yang belum tuntas di GCU!";
               
     Logger.log(msg);
-    if (typeof SpreadsheetApp !== "undefined" && SpreadsheetApp.getUi) {
-        SpreadsheetApp.getUi().alert("SELESAI! ✅", msg, SpreadsheetApp.getUi().ButtonSet.OK);
-    }
+    try {
+        if (typeof SpreadsheetApp !== "undefined" && SpreadsheetApp.getUi) {
+            SpreadsheetApp.getUi().alert("SELESAI! ✅", msg, SpreadsheetApp.getUi().ButtonSet.OK);
+        }
+    } catch (eUi) {}
     
     return {
         success: true,
