@@ -1064,14 +1064,20 @@
                         <a href="https://docs.google.com/spreadsheets/d/1UIMinB_cqcw4F8I5HPf8rfojfku-CqZaef-YtzWa174/edit" target="_blank" rel="noopener noreferrer" class="btn-reload" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">
                             <ion-icon name="open-outline"></ion-icon> Buka Google Sheet Arsip
                         </a>
-                        <button class="btn-reload" onclick="toggleTheme()">
-                            <ion-icon name="sunny-outline"></ion-icon> Theme
+                        <button class="btn-reload" id="btnRunArchiveNow" onclick="window.runArchiveNow()" style="background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.4); font-weight: 700;">
+                            <ion-icon name="rocket-outline"></ion-icon> Jalankan Pemindahan Arsip
+                        </button>
+                        <button class="btn-reload" id="btnSetupTimer" onclick="window.setupArchiveTimer()" style="background: rgba(79, 70, 229, 0.15); color: #818cf8; border: 1px solid rgba(79, 70, 229, 0.3);">
+                            <ion-icon name="alarm-outline"></ion-icon> Pasang Auto-Timer (02:00 WIB)
                         </button>
                         <button class="btn-reload" id="btnReorgArchive" onclick="window.reorganizeArchive()" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3);">
                             <ion-icon name="git-branch-outline"></ion-icon> Pisahkan Ulang Arsip
                         </button>
                         <button class="btn-reload" onclick="window.loadArchiveStats()">
                             <ion-icon name="refresh-outline"></ion-icon> Cek Statistik Arsip
+                        </button>
+                        <button class="btn-reload" onclick="toggleTheme()">
+                            <ion-icon name="sunny-outline"></ion-icon> Theme
                         </button>
                     </div>
                 </header>
@@ -1265,7 +1271,7 @@
         </div>
     </div>
 
-    <script src="app.js?v=4.7"></script>
+    <script src="app.js?v=4.8"></script>
     <script>
         // Mobile sidebar toggle
         function toggleSidebar() {

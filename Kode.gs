@@ -392,6 +392,16 @@ function doGet(e) {
       }
   }
 
+  // Handle action setup_archive_trigger - Aktifkan timer otomatis 02:00 WIB dari Web
+  if (e && e.parameter && e.parameter.action === 'setup_archive_trigger') {
+      try {
+          setupArchiveDailyTrigger();
+          return ContentService.createTextOutput(JSON.stringify({ success: true, message: "Timer harian otomatis jam 02:00 WIB berhasil diaktifkan!" })).setMimeType(ContentService.MimeType.JSON);
+      } catch (errTrig) {
+          return ContentService.createTextOutput(JSON.stringify({ success: false, message: errTrig.toString() })).setMimeType(ContentService.MimeType.JSON);
+      }
+  }
+
   // Handle action reorganize_archive - Pisahkan ulang tiket completed vs uncompleted di spreadsheet arsip
   if (e && e.parameter && e.parameter.action === 'reorganize_archive') {
       try {
@@ -4870,6 +4880,8 @@ function archiveOldTickets60Days(isDryRun) {
     var umurColIdx = -1;
     var reportedDateColIdx = -1;
     var statusDateColIdx = -1;
+    var timestampColIdx = -1;
+    var bookingDateColIdx = -1;
     var actionColIdx = -1;
     var evKorlapColIdx = -1;
     var statusColIdx = -1;
@@ -4877,13 +4889,15 @@ function archiveOldTickets60Days(isDryRun) {
     
     for (var c = 0; c < header.length; c++) {
         var h = (header[c] || "").toString().toUpperCase().trim();
-        if (h === "UMUR") umurColIdx = c;
-        if (h === "REPORTED DATE" || h === "REPORTED_DATE" || h === "CREATION DATE") reportedDateColIdx = c;
-        if (h === "STATUS DATE" || h === "STATUS_DATE" || h === "DATE") statusDateColIdx = c;
-        if (h === "ACTION") actionColIdx = c;
-        if (h === "EVIDENCE KORLAP") evKorlapColIdx = c;
-        if (h === "TICKET STATUS" || h === "STATUS" || h === "LAST STATUS") statusColIdx = c;
-        if (h === "INCIDENT" || h === "ID TICKET" || h === "TICKET ID") incidentColIdx = c;
+        if (h.indexOf("UMUR") !== -1) umurColIdx = c;
+        if (h.indexOf("REPORTED") !== -1 && h.indexOf("BY") === -1 && h.indexOf("PROBLEM") === -1) reportedDateColIdx = c;
+        if (h.indexOf("STATUS") !== -1 && (h.indexOf("DA") !== -1 || h.indexOf("DATE") !== -1)) statusDateColIdx = c;
+        if (h.indexOf("TIME") !== -1 || h.indexOf("TIMESTAMP") !== -1) timestampColIdx = c;
+        if (h.indexOf("BOOKING") !== -1) bookingDateColIdx = c;
+        if (h.indexOf("ACTION") !== -1) actionColIdx = c;
+        if (h.indexOf("KORLAP") !== -1) evKorlapColIdx = c;
+        if (h === "TICKET STATUS" || h === "STATUS" || h === "LAST STATUS" || (h.indexOf("STATUS") !== -1 && h.indexOf("DATE") === -1 && h.indexOf("DA") === -1)) statusColIdx = c;
+        if (h.indexOf("INCIDENT") !== -1 || h.indexOf("ID TICKET") !== -1 || h.indexOf("TICKET ID") !== -1) incidentColIdx = c;
     }
     
     var rowsToArchiveCompleted = [];
@@ -4899,27 +4913,61 @@ function archiveOldTickets60Days(isDryRun) {
         var hasContent = row.some(function(cell) { return cell !== "" && cell !== null && cell !== undefined; });
         if (!hasContent) continue;
         
-        // 1. Hitung Umur Tiket (Hari)
+        // 1. Hitung Umur Tiket (Hari) - Multi-Layer Intelligent Parser
         var ageDays = null;
         
-        // Cek dari kolom UMUR jika sudah terisi rumus/nilai (misal: "65 Hari" atau 65)
+        // A. Cek dari kolom UMUR jika sudah terisi rumus/nilai (misal: "65 Hari" atau 65)
         if (umurColIdx !== -1 && row[umurColIdx]) {
             var umurStr = row[umurColIdx].toString().trim();
             var umurMatch = umurStr.match(/(\d+)/);
             if (umurMatch) {
-                ageDays = parseInt(umurMatch[1], 10);
+                var uNum = parseInt(umurMatch[1], 10);
+                if (!isNaN(uNum) && uNum >= 0) ageDays = uNum;
             }
         }
         
-        // Fallback hitung manual dari REPORTED DATE atau STATUS DATE
+        // B. Cek dari kolom tanggal insiden (REPORTED DATE / REPORTED DA, STATUS DATE / STATUS DA, BOOKING DATE)
         if (ageDays === null || isNaN(ageDays)) {
-            var dateVal = (reportedDateColIdx !== -1 && row[reportedDateColIdx]) ? row[reportedDateColIdx] :
-                          ((statusDateColIdx !== -1 && row[statusDateColIdx]) ? row[statusDateColIdx] : null);
-            if (dateVal) {
-                var parsedDate = new Date(dateVal);
-                if (!isNaN(parsedDate.getTime())) {
-                    ageDays = Math.floor((nowMs - parsedDate.getTime()) / MS_PER_DAY);
+            var dateCandidates = [
+                reportedDateColIdx !== -1 ? row[reportedDateColIdx] : null,
+                statusDateColIdx !== -1 ? row[statusDateColIdx] : null,
+                bookingDateColIdx !== -1 ? row[bookingDateColIdx] : null
+            ];
+            for (var dIdx = 0; dIdx < dateCandidates.length; dIdx++) {
+                var cVal = dateCandidates[dIdx];
+                if (!cVal) continue;
+                var parsedD = (cVal instanceof Date) ? cVal : new Date(cVal);
+                if (parsedD && !isNaN(parsedD.getTime()) && parsedD.getFullYear() >= 2020) {
+                    var diffDays = Math.floor((nowMs - parsedD.getTime()) / MS_PER_DAY);
+                    if (diffDays >= 0) {
+                        ageDays = diffDays;
+                        break;
+                    }
                 }
+            }
+        }
+        
+        // C. Scan cell di baris ini yang bertipe Date atau string tanggal
+        if (ageDays === null || isNaN(ageDays)) {
+            for (var sc = 0; sc < Math.min(row.length, 30); sc++) {
+                var cell = row[sc];
+                if (cell instanceof Date && cell.getFullYear() >= 2020) {
+                    var diffDays = Math.floor((nowMs - cell.getTime()) / MS_PER_DAY);
+                    if (diffDays >= 0) {
+                        ageDays = diffDays;
+                        break;
+                    }
+                }
+            }
+        }
+        
+        // D. Fallback kolom TIMESTAMP (kapan baris masuk ke spreadsheet)
+        if ((ageDays === null || isNaN(ageDays)) && timestampColIdx !== -1 && row[timestampColIdx]) {
+            var tsVal = row[timestampColIdx];
+            var parsedTs = (tsVal instanceof Date) ? tsVal : new Date(tsVal);
+            if (parsedTs && !isNaN(parsedTs.getTime()) && parsedTs.getFullYear() >= 2020) {
+                var diffDays = Math.floor((nowMs - parsedTs.getTime()) / MS_PER_DAY);
+                if (diffDays >= 0) ageDays = diffDays;
             }
         }
         
