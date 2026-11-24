@@ -1645,9 +1645,14 @@ function sendTelegramRaw(destChatId, textHtml, replyMarkup) {
     "muteHttpExceptions": true
   };
   try {
-    UrlFetchApp.fetch("https://api.telegram.org/bot" + botTokenTg + "/sendMessage", options);
+    var response = UrlFetchApp.fetch("https://api.telegram.org/bot" + botTokenTg + "/sendMessage", options);
+    var resCode = response.getResponseCode();
+    var resText = response.getContentText();
+    if (resCode !== 200) {
+      Logger.log("Send Tg Error (" + resCode + "): " + resText);
+    }
   } catch(e) {
-    console.log("Send Tg Error: " + e.message);
+    Logger.log("Send Tg Error: " + e.message);
   }
 }
 
@@ -1800,19 +1805,19 @@ function sendActiveTicketsForTeknisi(nik, chatId, tekName) {
     var lastCol = sheetDB.getLastColumn();
     if (lastRow < 2 || lastCol < 1) return;
     
-    var data = sheetDB.getRange(1, 1, lastRow, lastCol).getValues();
-    
-    // 1. Cari baris header sebenarnya secara dinamis (mencegah salah baris jika ada timestamp/kosong di row 1)
+    // 1. Ambil baris header secara dinamis dari baris awal (cukup 1-5 baris agar super cepat)
+    var sampleRows = Math.min(5, lastRow);
+    var sampleData = sheetDB.getRange(1, 1, sampleRows, lastCol).getValues();
     var headerRowIdx = 0;
-    for (var r = 0; r < Math.min(5, data.length); r++) {
-      var rowStr = data[r].join(" ").toUpperCase();
+    for (var r = 0; r < sampleData.length; r++) {
+      var rowStr = sampleData[r].join(" ").toUpperCase();
       if (rowStr.includes("INCIDENT") && (rowStr.includes("STATUS") || rowStr.includes("TTR") || rowStr.includes("DATE") || rowStr.includes("PARENT") || rowStr.includes("CUSTOMER") || rowStr.includes("SUMMARY"))) {
         headerRowIdx = r;
         break;
       }
     }
     
-    var headers = data[headerRowIdx].map(function(h) { return (h || "").toString().toUpperCase().trim(); });
+    var headers = sampleData[headerRowIdx].map(function(h) { return (h || "").toString().toUpperCase().trim(); });
     
     // 2. Deteksi index kolom secara presisi (sama persis dengan app.js dashboard)
     var incIdx = -1, sNumIdx = -1, stoIdx = -1, custIdx = -1, svcIdx = -1;
@@ -1889,6 +1894,24 @@ function sendActiveTicketsForTeknisi(nik, chatId, tekName) {
     if (incIdx === -1) incIdx = 3;
     if (techIdx === -1) techIdx = 49;
     
+    // Batasi baris data sebenarnya agar tidak membaca puluhan ribu baris kosong (mencegah timeout & memory limit)
+    var actualLastRow = lastRow;
+    if (lastRow > 500) {
+      try {
+        var incColVals = sheetDB.getRange(headerRowIdx + 2, incIdx + 1, lastRow - (headerRowIdx + 1), 1).getValues();
+        for (var ir = incColVals.length - 1; ir >= 0; ir--) {
+          var cVal = (incColVals[ir][0] || "").toString().trim();
+          if (cVal && cVal.match(/^(INC\d+|1-SV\d+)/)) {
+            actualLastRow = ir + headerRowIdx + 2;
+            break;
+          }
+        }
+      } catch(eBound) {}
+    }
+
+    if (actualLastRow < headerRowIdx + 2) return;
+    var data = sheetDB.getRange(1, 1, actualLastRow, lastCol).getValues();
+
     var targetNikClean = nik.toString().replace(/[^0-9]/g, '');
     var activeTickets = [];
     var seenIncidents = new Set();
@@ -2518,48 +2541,51 @@ function doPost(e) {
         tx = cleanTxPower(tx);
         
         var botTokenTg = "8050598199:AAHpPcFNUaLmox5Y6J2Ea0IvDkkPawLsZd8";
-        var chatIdTg = idTele || "6874834483"; // Gunakan ID Tele dari Web, atau fallback
+        var chatIdTg = "";
         var teknisiName = teknisiNIK;
+        var foundRowTek = -1;
         
-        // Cari Nama teknisi berdasarkan NIK di tab "TEKNISI" (opsional, untuk nama)
+        // Cari Nama & Telegram Chat ID teknisi berdasarkan NIK di tab "TEKNISI"
         var sheetTeknisi = ss.getSheetByName("TEKNISI");
         if (sheetTeknisi) {
             var tekLastRow = sheetTeknisi.getLastRow();
             if (tekLastRow > 1) {
                 var tekData = sheetTeknisi.getRange(2, 1, tekLastRow - 1, 3).getValues();
+                var cleanTargetNik = teknisiNIK.toString().replace(/[^0-9]/g, '');
                 for (var i = 0; i < tekData.length; i++) {
-                    // Asumsi Kolom A: NIK, Kolom B: Nama, Kolom C: Telegram Chat ID
-                    if (tekData[i][0].toString().trim() === teknisiNIK.toString().trim()) {
-                        teknisiName = tekData[i][1].toString().trim() || teknisiNIK;
-                        // Kita tidak override chatIdTg dari database karena Korlap sudah memasukkan ID di Web
+                    var curNikClean = tekData[i][0] ? tekData[i][0].toString().replace(/[^0-9]/g, '') : "";
+                    if (curNikClean === cleanTargetNik || tekData[i][0].toString().trim() === teknisiNIK.toString().trim()) {
+                        foundRowTek = i + 2;
+                        teknisiName = tekData[i][1] ? tekData[i][1].toString().trim() : teknisiNIK;
+                        var registeredTele = tekData[i][2] ? tekData[i][2].toString().trim() : "";
+                        // WAJIB & PRIORITAS UTAMA: Gunakan Chat ID yang sudah resmi terdaftar di database sheet TEKNISI
+                        if (registeredTele && registeredTele !== "-" && registeredTele !== "null") {
+                            chatIdTg = registeredTele;
+                        }
                         break;
                     }
                 }
             }
         }
         
-        // Simpan/Update Chat ID teknisi di sheet TEKNISI agar notifikasi lain (mis. pickup HD) bisa menemukan chat ID-nya
-        try {
-            if (idTele) {
-                if (!sheetTeknisi) {
-                    sheetTeknisi = ss.insertSheet("TEKNISI");
-                    sheetTeknisi.appendRow(["NIK", "NAMA", "TELEGRAM CHAT ID"]);
-                }
-                var tekRows = sheetTeknisi.getLastRow();
-                var foundRow = -1;
-                if (tekRows > 1) {
-                    var nikCol = sheetTeknisi.getRange(2, 1, tekRows - 1, 1).getValues();
-                    for (var k = 0; k < nikCol.length; k++) {
-                        if (nikCol[k][0].toString().trim() === teknisiNIK.toString().trim()) { foundRow = k + 2; break; }
+        // Jika belum ada Chat ID di sheet TEKNISI, gunakan ID dari Web jika valid (dan bukan fallback admin)
+        if (!chatIdTg) {
+            if (idTele && idTele.toString().trim() !== "" && idTele.toString().trim() !== "-" && idTele.toString().trim() !== "null" && idTele.toString().trim() !== "6874834483") {
+                chatIdTg = idTele.toString().trim();
+                // Simpan Chat ID baru ini ke sheet TEKNISI agar ke depannya tersimpan permanen
+                try {
+                    if (sheetTeknisi) {
+                        if (foundRowTek !== -1) {
+                            sheetTeknisi.getRange(foundRowTek, 3).setValue(chatIdTg);
+                        } else {
+                            sheetTeknisi.appendRow([teknisiNIK.toString(), teknisiName.toString(), chatIdTg]);
+                        }
                     }
-                }
-                if (foundRow === -1) {
-                    sheetTeknisi.appendRow([teknisiNIK.toString(), teknisiNIK.toString(), idTele.toString()]);
-                } else {
-                    sheetTeknisi.getRange(foundRow, 3).setValue(idTele.toString());
-                }
+                } catch(eSaveTek) {}
+            } else {
+                chatIdTg = (idTele && idTele.toString().trim() !== "") ? idTele.toString().trim() : "6874834483";
             }
-        } catch (e) {}
+        }
 
         // Update baris tiket di spreadsheet: simpan NIK teknisi dan catat di kolom ACTION (agar tetap di antrean GCU FISIK)
         try {

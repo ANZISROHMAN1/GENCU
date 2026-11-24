@@ -2336,11 +2336,14 @@ function renderKorlapFlow() {
             `;
         }
 
+        const currentTekInfo = assignedTo ? window.getTeknisiInfo(assignedTo) : null;
+        const currentTeleId = (currentTekInfo && currentTekInfo.teleId && currentTekInfo.teleId !== '-') ? currentTekInfo.teleId : '';
+
         contentAssign += `
-            <p class="info-text">Masukkan NIK Teknisi lapangan dan ID Telegram untuk ditugaskan menangani tiket <strong>${state.activeTicketId}</strong>.</p>
+            <p class="info-text">Masukkan NIK Teknisi lapangan untuk ditugaskan menangani tiket <strong>${state.activeTicketId}</strong>. Chat ID Telegram otomatis terisi jika teknisi sudah terdaftar di bot.</p>
             <div class="btn-group" style="margin-bottom: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
-                <input type="text" id="tekSelect" placeholder="Masukkan NIK Teknisi" value="${assignedTo || ''}" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); width: 100%; max-width: 250px;">
-                <input type="text" id="teleSelect" placeholder="Masukkan ID Telegram (Chat ID)" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); width: 100%; max-width: 250px;">
+                <input type="text" id="tekSelect" placeholder="Masukkan NIK Teknisi" value="${assignedTo || ''}" oninput="window.onTekSelectInput(this.value)" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); width: 100%; max-width: 250px;">
+                <input type="text" id="teleSelect" placeholder="ID Telegram (Otomatis / Chat ID)" value="${currentTeleId}" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); width: 100%; max-width: 250px;">
             </div>
             <button class="btn btn-primary" onclick="assignTicketToTelegram(this)">${assignedTo ? 'Re-Assign Ticket' : 'Assign Ticket'}</button>
         `;
@@ -2517,14 +2520,35 @@ window.rejectToQueue = function (targetCategory, reason) {
     });
 };
 
+window.onTekSelectInput = function (val) {
+    const teleInput = document.getElementById('teleSelect');
+    if (!teleInput) return;
+    const clean = (val || '').toString().trim();
+    if (!clean) return;
+    const tData = window.getTeknisiInfo(clean);
+    if (tData && tData.teleId && tData.teleId !== '-') {
+        teleInput.value = tData.teleId;
+    }
+};
+
 window.assignTicketToTelegram = function (btn) {
     const tekSelect = document.getElementById('tekSelect');
     const teleSelect = document.getElementById('teleSelect');
-    const teknisi = tekSelect.value.trim();
-    const idTele = teleSelect.value.trim();
-    if (!teknisi || !idTele) {
-        alert("Masukkan NIK Teknisi dan ID Telegram terlebih dahulu!");
+    const teknisi = tekSelect ? tekSelect.value.trim() : '';
+    let idTele = teleSelect ? teleSelect.value.trim() : '';
+
+    if (!teknisi) {
+        alert("Masukkan NIK Teknisi terlebih dahulu!");
         return;
+    }
+
+    // Auto-lookup Chat ID jika teleSelect masih kosong
+    if (!idTele || idTele === '-') {
+        const tInfo = window.getTeknisiInfo(teknisi);
+        if (tInfo && tInfo.teleId && tInfo.teleId !== '-') {
+            idTele = tInfo.teleId;
+            if (teleSelect) teleSelect.value = idTele;
+        }
     }
 
     btn.innerText = "Mengirim Tugas...";
@@ -3480,12 +3504,19 @@ window.onQuickAssignSearchInput = function (query) {
 window.submitQuickAssign = function (ticketId) {
     const nik = document.getElementById('quickAssignTargetNik') ? document.getElementById('quickAssignTargetNik').value.trim() : '';
     const nama = document.getElementById('quickAssignTargetNama') ? document.getElementById('quickAssignTargetNama').value.trim() : '';
-    const tele = document.getElementById('quickAssignTargetTele') ? document.getElementById('quickAssignTargetTele').value.trim() : '';
+    let tele = document.getElementById('quickAssignTargetTele') ? document.getElementById('quickAssignTargetTele').value.trim() : '';
     const btn = document.getElementById('btnSubmitQuickAssign');
 
     if (!nik) {
         alert("Silakan pilih teknisi dari sheet TEKNISI terlebih dahulu!");
         return;
+    }
+
+    if (!tele || tele === '-') {
+        const tInfo = window.getTeknisiInfo(nik);
+        if (tInfo && tInfo.teleId && tInfo.teleId !== '-') {
+            tele = tInfo.teleId;
+        }
     }
 
     if (btn) {
@@ -3499,7 +3530,7 @@ window.submitQuickAssign = function (ticketId) {
         action: 'assign_ticket',
         ticketId: ticketId,
         teknisi: nik,
-        idTele: tele || "6874834483",
+        idTele: tele || "",
         sto: ticket ? ticket.sto : '-',
         rx: ticket ? ticket.rx : '-',
         tx: ticket ? ticket.tx : '-',
