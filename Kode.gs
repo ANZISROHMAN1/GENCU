@@ -971,7 +971,7 @@ function doGet(e) {
 
                       if(missing.length > 0) {
                           showMsg('⚠️ <b>Wajib Belum Lengkap:</b><br>• ' + missing.join('<br>• '), 'error');
-                          alert('⚠️ MANDATORY EVIDENCE FISIK BELUM LENGKAP:\n\nHarap lengkapi item berikut sebelum submit:\n• ' + missing.join('\n• '));
+                          alert('⚠️ MANDATORY EVIDENCE FISIK BELUM LENGKAP:\\n\\nHarap lengkapi item berikut sebelum submit:\\n• ' + missing.join('\\n• '));
                           if (firstMissingEl) {
                               firstMissingEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
                               try { firstMissingEl.focus(); } catch(e) {}
@@ -1034,7 +1034,7 @@ function doGet(e) {
                           if (res === "OK") {
                               document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;min-height:80vh;"><div class="card" style="text-align:center;"><h2 style="color: #10b981; font-size:40px; margin-bottom:10px;">✅</h2><h3 style="color: #374151;">Berhasil Terkirim!</h3><p style="color: #6b7280; font-size:14px;">Laporan evidence dan foto telah tersimpan ke sistem.</p></div></div>';
                           } else if (res && res.indexOf("TIKET_SUDAH_GCU_FISIK") !== -1) {
-                              alert("⚠️ PERINGATAN:\n" + res.replace("TIKET_SUDAH_GCU_FISIK: ", ""));
+                              alert("⚠️ PERINGATAN:\\n" + res.replace("TIKET_SUDAH_GCU_FISIK: ", ""));
                               window.location.reload();
                           } else {
                               showMsg('❌ Gagal: ' + res, 'error');
