@@ -917,35 +917,57 @@ function doGet(e) {
                       var fSalsim = document.getElementById('ev_salsim');
 
                       var missing = [];
-                      if(!penyebab) missing.push("Penyebab");
-                      if(!perbaikan) missing.push("Perbaikan");
-                      if(!segmen) missing.push("Segmen");
-                      if(!redamanVal) missing.push("Hasil Ukur Redaman di ODP");
-                      if(!fJalur || !fJalur.files || fJalur.files.length === 0) missing.push("Foto Jalur");
-                      if(!fOnt || !fOnt.files || fOnt.files.length === 0) missing.push("Foto Penempatan ONT");
-                      if(!fDc || !fDc.files || fDc.files.length === 0) missing.push("Foto Sambungan DC");
-                      if(!fLokasi || !fLokasi.files || fLokasi.files.length === 0) missing.push("Foto di Lokasi / Pelanggan");
-                      if(!fRedaman || !fRedaman.files || fRedaman.files.length === 0) missing.push("Foto Evidence Redaman ODP");
-                      if(!fSalsim || !fSalsim.files || fSalsim.files.length === 0) missing.push("Evidence Chat Salsim dari Pelanggan");
+                      var firstMissingEl = null;
+
+                      function checkField(val, name, el) {
+                          if (!val) {
+                              missing.push(name);
+                              if (!firstMissingEl && el) firstMissingEl = el;
+                              if (el) el.style.border = "2px solid #ef4444";
+                          } else if (el) {
+                              el.style.border = "1px solid #cbd5e1";
+                          }
+                      }
+
+                      function checkFile(fEl, name) {
+                          if (!fEl || !fEl.files || fEl.files.length === 0) {
+                              missing.push(name);
+                              if (!firstMissingEl && fEl) firstMissingEl = fEl;
+                              if (fEl) fEl.style.border = "2px solid #ef4444";
+                          } else if (fEl) {
+                              fEl.style.border = "1px solid #cbd5e1";
+                          }
+                      }
+
+                      checkField(penyebab, "Penyebab", document.getElementById('penyebab'));
+                      checkField(perbaikan, "Perbaikan", document.getElementById('perbaikan'));
+                      checkField(segmen, "Segmen", document.getElementById('segmen'));
+                      checkField(redamanVal, "Hasil Ukur Redaman di ODP", document.getElementById('redaman_odp'));
+                      checkFile(fJalur, "Foto Jalur");
+                      checkFile(fOnt, "Foto Penempatan ONT");
+                      checkFile(fDc, "Foto Sambungan DC");
+                      checkFile(fLokasi, "Foto di Lokasi / Pelanggan");
+                      checkFile(fRedaman, "Foto Evidence Redaman ODP");
+                      checkFile(fSalsim, "Evidence Chat Salsim dari Pelanggan");
 
                       if(document.getElementById('toggle_voice') && document.getElementById('toggle_voice').checked) {
-                          var fVoice = document.getElementById('ev_voice');
-                          if(!fVoice || !fVoice.files || fVoice.files.length === 0) missing.push("Foto Evidence Voice");
+                          checkFile(document.getElementById('ev_voice'), "Foto Evidence Voice");
                       }
                       if(document.getElementById('toggle_iptv') && document.getElementById('toggle_iptv').checked) {
-                          var fIptvCh = document.getElementById('ev_iptv_channel');
-                          var fIptvRem = document.getElementById('ev_iptv_remote');
-                          if(!fIptvCh || !fIptvCh.files || fIptvCh.files.length === 0) missing.push("Foto Evidence Channel IPTV");
-                          if(!fIptvRem || !fIptvRem.files || fIptvRem.files.length === 0) missing.push("Foto Evidence Remote IPTV");
+                          checkFile(document.getElementById('ev_iptv_channel'), "Foto Evidence Channel IPTV");
+                          checkFile(document.getElementById('ev_iptv_remote'), "Foto Evidence Remote IPTV");
                       }
                       if(document.getElementById('toggle_perangkat') && document.getElementById('toggle_perangkat').checked) {
-                          var fPerangkat = document.getElementById('ev_perangkat');
-                          if(!fPerangkat || !fPerangkat.files || fPerangkat.files.length === 0) missing.push("Foto Evidence Perangkat Tambahan");
+                          checkFile(document.getElementById('ev_perangkat'), "Foto Evidence Perangkat Tambahan");
                       }
 
                       if(missing.length > 0) {
-                          showMsg('⚠️ Mandatory Evidence Belum Lengkap! Harap lengkapi: ' + missing.join(', '), 'error');
+                          showMsg('⚠️ Mandatory Belum Lengkap: ' + missing.join(', '), 'error');
                           alert('⚠️ MANDATORY EVIDENCE FISIK BELUM LENGKAP:\n\nHarap lengkapi item berikut sebelum submit:\n• ' + missing.join('\n• '));
+                          if (firstMissingEl) {
+                              firstMissingEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                              firstMissingEl.focus();
+                          }
                           btn.innerText = 'Submit Evidence';
                           btn.disabled = false;
                           return;
