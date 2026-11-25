@@ -682,6 +682,11 @@ function doGet(e) {
                   </div>
 
                   <div class="form-group">
+                      <label>Upload Evidence Chat Salsim dari Pelanggan <span style="color:#ef4444;font-weight:700;">* Wajib</span></label>
+                      <input type="file" id="ev_salsim" name="ev_salsim_file" accept="image/*" style="padding:8px; border:1px solid #cbd5e1; border-radius:6px; width:100%; box-sizing:border-box;">
+                  </div>
+
+                  <div class="form-group">
                       <label>Note Kendala (Opsional)</label>
                       <textarea id="note_kendala" placeholder="Tuliskan kendala / note tambahan jika ada..." style="padding:8px; border:1px solid #cbd5e1; border-radius:6px; width:100%; box-sizing:border-box; min-height:80px; font-family:inherit;"></textarea>
                   </div>
@@ -909,6 +914,7 @@ function doGet(e) {
                       var fDc = document.getElementById('ev_dc_1');
                       var fLokasi = document.getElementById('ev_lokasi');
                       var fRedaman = document.getElementById('ev_redaman');
+                      var fSalsim = document.getElementById('ev_salsim');
 
                       var missing = [];
                       if(!penyebab) missing.push("Penyebab");
@@ -920,6 +926,7 @@ function doGet(e) {
                       if(!fDc || !fDc.files || fDc.files.length === 0) missing.push("Foto Sambungan DC");
                       if(!fLokasi || !fLokasi.files || fLokasi.files.length === 0) missing.push("Foto di Lokasi / Pelanggan");
                       if(!fRedaman || !fRedaman.files || fRedaman.files.length === 0) missing.push("Foto Evidence Redaman ODP");
+                      if(!fSalsim || !fSalsim.files || fSalsim.files.length === 0) missing.push("Evidence Chat Salsim dari Pelanggan");
 
                       if(document.getElementById('toggle_voice') && document.getElementById('toggle_voice').checked) {
                           var fVoice = document.getElementById('ev_voice');
@@ -954,6 +961,7 @@ function doGet(e) {
                       summary += "- GCU DC ("+dcCount+")\\n";
                       summary += "- SCC/TSC: " + (getVal('close_scc') || 'Sukses') + "\\n";
                       summary += "- Redaman ODP: " + (getVal('redaman_odp') || '-') + "\\n";
+                      summary += "- Chat Salsim: Dilampirkan\\n";
                       
                       var noteK = getVal('note_kendala');
                       if(noteK) {
@@ -1244,8 +1252,8 @@ function submitFisikBase64(payload) {
     }
 
     // Guard: Mandatory Evidence Fisik
-    if (!payload.ev_jalur_file || !payload.ev_ont_file || !payload.ev_lokasi_file || !payload.ev_redaman_file) {
-        return "Error: Evidence fisik belum lengkap (Foto Jalur, ONT, Lokasi, dan Redaman wajib di-upload).";
+    if (!payload.ev_jalur_file || !payload.ev_ont_file || !payload.ev_lokasi_file || !payload.ev_redaman_file || !payload.ev_salsim_file) {
+        return "Error: Evidence fisik belum lengkap (Foto Jalur, ONT, Lokasi, Redaman, dan Chat Salsim wajib di-upload).";
     }
 
     var lock = LockService.getScriptLock();
@@ -1280,6 +1288,11 @@ function submitFisikBase64(payload) {
         var urlIptvRemote = uploadB64(payload.ev_iptv_remote_file, "IPTV_Remote");
         var urlPerangkat = uploadB64(payload.ev_perangkat_file, "Perangkat_Tambahan");
         var urlRedaman = uploadB64(payload.ev_redaman_file, "Redaman_ODP");
+        var urlSalsim = uploadB64(payload.ev_salsim_file, "Chat_Salsim");
+
+        if (urlSalsim !== "-") {
+            summary = summary.replace("- Chat Salsim: Dilampirkan", "- Chat Salsim: [" + urlSalsim + "]");
+        }
         
         var dcLinks = [];
         for (var i = 1; i <= dcCount; i++) {
@@ -1319,6 +1332,7 @@ function submitFisikBase64(payload) {
         if (urlIptvRemote !== "-") colMap["FOTO IPTV REMOTE"] = urlIptvRemote;
         if (urlPerangkat !== "-") colMap["FOTO PERANGKAT TAMBAHAN"] = urlPerangkat;
         if (urlRedaman !== "-") colMap["FOTO REDAMAN ODP"] = urlRedaman;
+        if (urlSalsim !== "-") colMap["FOTO CHAT SALSIM DARI PELANGGAN"] = urlSalsim;
 
         for (var i = 1; i <= dcCount; i++) {
             if (dcLinks[i-1] !== "-") colMap["FOTO DC " + i] = dcLinks[i-1];
@@ -1415,6 +1429,7 @@ function submitFisikToGAS(formObject) {
         var urlVoice = uploadBlob(formObject.ev_voice_file, "Voice");
         var urlIptvChannel = uploadBlob(formObject.ev_iptv_channel_file, "IPTV_Channel");
         var urlIptvRemote = uploadBlob(formObject.ev_iptv_remote_file, "IPTV_Remote");
+        var urlSalsim = uploadBlob(formObject.ev_salsim_file, "Chat_Salsim");
         
         var dcLinks = [];
         for (var i = 1; i <= dcCount; i++) {
@@ -1438,6 +1453,9 @@ function submitFisikToGAS(formObject) {
         if (urlIptvChannel !== "-" || urlIptvRemote !== "-") {
             summary = summary.replace(/- IPTV: Channel \((Aman|Tidak Aman)\), Remote \((Normal|Tidak Normal)\)/, 
                 "- IPTV: Channel ($1) [" + urlIptvChannel + "], Remote ($2) [" + urlIptvRemote + "]");
+        }
+        if (urlSalsim !== "-") {
+            summary = summary.replace("- Chat Salsim: Dilampirkan", "- Chat Salsim: [" + urlSalsim + "]");
         }
 
         // Submit to sheet

@@ -1983,7 +1983,7 @@ window.getParsedEvidence = function(ticket) {
         let bUpper = b.toUpperCase();
         
         let isPickup = bUpper.includes("PICKED UP BY");
-        let isFisik = bUpper.match(/EVIDENCE FISIK|GCU FISIK|ASSIGNED|PENYEBAB\s*:|PERBAIKAN\s*:|SEGMEN\s*:|GCU JALUR|GCU ONT|GCU DC|SCC\/TSC|REDAMAN ODP/i);
+        let isFisik = bUpper.match(/EVIDENCE FISIK|GCU FISIK|ASSIGNED|PENYEBAB\s*:|PERBAIKAN\s*:|SEGMEN\s*:|GCU JALUR|GCU ONT|GCU DC|SCC\/TSC|REDAMAN ODP|CHAT SALSIM|SALSIM/i);
         let isLogic = bUpper.match(/WAITING APPROVAL KORLAP|EKSEKUSI LOGIC|PINDAH CHANNEL|CHECKLIST NAT|ENABLE IPV6|FIREWALL MEDIUM|CEK ONT|CEK FPP|CEK ACS|CEK CHANNEL|CEK ISOLIR|CEK STB|CEK VOICE|LAYANAN ACS VOICE|SUMMARY ACS|KLIK VRF|VRF|KONEKSI LAN|MAC ADDRESS|STATUS ISOLIR|REDAMAN \(SPEK|DATIN/i);
         
         if (isPickup) {
@@ -5080,7 +5080,7 @@ window.renderKonselingGaulDashboard = function () {
         // 1. Evidence Fisik yang sah (pernah disubmit teknisi fisik)
         if (allText.includes("EVIDENCE FISIK SUBMITTED") || allText.includes("GCU FISIK SUBMITTED")) return true;
         if (t.evFisik && t.evFisik.trim() !== "" && t.evFisik.trim() !== "-" && t.evFisik.trim() !== "null") return true;
-        if (t.photos && Object.keys(t.photos).some(k => /JALUR|ONT|DC|LOKASI|REDAMAN/i.test(k))) return true;
+        if (t.photos && Object.keys(t.photos).some(k => /JALUR|ONT|DC|LOKASI|REDAMAN|SALSIM/i.test(k))) return true;
 
         // 2. Evidence Logic yang sah (pernah dieksekusi / disubmit helpdesk logic)
         if (allText.includes("SOLVED VIA GCU LOGIC") || allText.includes("EVIDENCE LOGIC SUBMITTED")) return true;
@@ -5097,7 +5097,7 @@ window.renderKonselingGaulDashboard = function () {
         let allText = [t.actionHistory || "", t.evFisik || ""].join(" ").toUpperCase();
         if (allText.includes("EVIDENCE FISIK SUBMITTED") || allText.includes("GCU FISIK SUBMITTED")) return true;
         if (t.evFisik && t.evFisik.trim() !== "" && t.evFisik.trim() !== "-" && t.evFisik.trim() !== "null") return true;
-        if (t.photos && Object.keys(t.photos).some(k => /JALUR|ONT|DC|LOKASI|REDAMAN/i.test(k))) return true;
+        if (t.photos && Object.keys(t.photos).some(k => /JALUR|ONT|DC|LOKASI|REDAMAN|SALSIM/i.test(k))) return true;
         return false;
     }
 
