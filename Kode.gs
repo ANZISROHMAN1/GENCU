@@ -623,7 +623,7 @@ function doGet(e) {
                   <h3>GCU (Evidence Foto)</h3>
                   
                   <div class="form-group">
-                      <label>Evidence Jalur</label>
+                      <label>Evidence Jalur <span style="color:#ef4444;font-weight:700;">* Wajib</span></label>
                       <input type="file" id="ev_jalur_link" name="ev_jalur_file" accept="image/*" style="padding:8px; border:1px solid #cbd5e1; border-radius:6px; width:100%; box-sizing:border-box;">
                       <div class="switch-container">
                           <span class="switch-label">Status Jalur:</span>
@@ -750,9 +750,9 @@ function doGet(e) {
               </div>
 
               <br><br><br>
-              <div id="statusMsg" style="display:none; position:fixed; top:0; left:0; right:0; padding:15px; z-index:9999; font-size:14px; font-weight:600; text-align:center;"></div>
+              <div id="statusMsg" style="display:none; position:fixed; bottom:85px; left:15px; right:15px; padding:14px 18px; border-radius:12px; z-index:99999; font-size:14px; font-weight:700; text-align:center; box-shadow:0 10px 25px rgba(0,0,0,0.25);"></div>
               <div class="btn-submit-container">
-                  <button type="submit">Submit Evidence</button>
+                  <button type="button" id="btnSubmitEvidence" onclick="submitForm(); return false;">Submit Evidence</button>
                   <div style="text-align:center; margin-top:5px; font-size:10px; color:#94a3b8;">v2.3-file-upload</div>
               </div>
           </div>
@@ -900,7 +900,7 @@ function doGet(e) {
               async function submitForm() {
                   try {
                       showMsg('Memproses data...', 'loading');
-                      var btn = document.querySelector('button');
+                      var btn = document.getElementById('btnSubmitEvidence') || document.querySelector('button');
                       btn.innerText = 'Mengkompresi Foto...';
                       btn.disabled = true;
 
@@ -923,9 +923,13 @@ function doGet(e) {
                           if (!val) {
                               missing.push(name);
                               if (!firstMissingEl && el) firstMissingEl = el;
-                              if (el) el.style.border = "2px solid #ef4444";
+                              if (el) {
+                                  el.style.border = "2px solid #ef4444";
+                                  el.style.backgroundColor = "#fee2e2";
+                              }
                           } else if (el) {
                               el.style.border = "1px solid #cbd5e1";
+                              el.style.backgroundColor = "";
                           }
                       }
 
@@ -933,9 +937,13 @@ function doGet(e) {
                           if (!fEl || !fEl.files || fEl.files.length === 0) {
                               missing.push(name);
                               if (!firstMissingEl && fEl) firstMissingEl = fEl;
-                              if (fEl) fEl.style.border = "2px solid #ef4444";
+                              if (fEl) {
+                                  fEl.style.border = "2px solid #ef4444";
+                                  fEl.style.backgroundColor = "#fee2e2";
+                              }
                           } else if (fEl) {
                               fEl.style.border = "1px solid #cbd5e1";
+                              fEl.style.backgroundColor = "";
                           }
                       }
 
@@ -962,11 +970,11 @@ function doGet(e) {
                       }
 
                       if(missing.length > 0) {
-                          showMsg('⚠️ Mandatory Belum Lengkap: ' + missing.join(', '), 'error');
+                          showMsg('⚠️ <b>Wajib Belum Lengkap:</b><br>• ' + missing.join('<br>• '), 'error');
                           alert('⚠️ MANDATORY EVIDENCE FISIK BELUM LENGKAP:\n\nHarap lengkapi item berikut sebelum submit:\n• ' + missing.join('\n• '));
                           if (firstMissingEl) {
                               firstMissingEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                              firstMissingEl.focus();
+                              try { firstMissingEl.focus(); } catch(e) {}
                           }
                           btn.innerText = 'Submit Evidence';
                           btn.disabled = false;
@@ -1042,8 +1050,12 @@ function doGet(e) {
                       runner.submitFisikBase64(payload);
                   } catch (err) {
                       showMsg('❌ ERROR: ' + err.message, 'error');
-                      document.querySelector('button').disabled = false;
-                      document.querySelector('button').innerText = 'Submit Evidence';
+                      alert('❌ ERROR SUBMIT: ' + err.message);
+                      var btnErr = document.getElementById('btnSubmitEvidence') || document.querySelector('button');
+                      if (btnErr) {
+                          btnErr.disabled = false;
+                          btnErr.innerText = 'Submit Evidence';
+                      }
                   }
               }
               
@@ -1068,7 +1080,7 @@ function doGet(e) {
                               dt.items.add(file);
                               targetInput.files = dt.files;
                               showMsg('✅ Gambar berhasil ditempel (paste) ke input: ' + (targetInput.name || targetInput.id), 'loading');
-                              setTimeout(function() { document.getElementById('msgBox').classList.add('hidden'); }, 2000);
+                              setTimeout(function() { var mEl = document.getElementById('statusMsg'); if (mEl) mEl.style.display = 'none'; }, 2000);
                           }
                       }
                   }
